@@ -1,0 +1,26 @@
+# KiCad
+hw/**/*-backups/
+hw/**/*.kicad_prl
+hw/**/fp-info-cache
+hw/**/_autosave-*
+hw/**/*.bak
+
+# F/W 빌드 산출물
+fw/build/
+fw/**/Debug/
+fw/**/Release/
+fw/**/*.elf
+fw/**/*.bin
+fw/**/*.hex
+fw/**/*.map
+fw/**/*.o
+fw/**/*.d
+
+# CubeMX 생성 캐시
+fw/cube/.mxproject
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
