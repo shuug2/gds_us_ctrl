@@ -20,7 +20,9 @@ add_compile_options(
     -ffunction-sections -fdata-sections
     -fno-common
     -fstack-usage
-    $<$<CONFIG:Debug>:-Og;-g3;-gdwarf-2>
+    $<$<CONFIG:Debug>:-Og>
+    $<$<CONFIG:Debug>:-g3>
+    $<$<CONFIG:Debug>:-gdwarf-2>
     $<$<CONFIG:Release>:-O2>
     $<$<CONFIG:MinSizeRel>:-Os>
 )
