@@ -1,6 +1,6 @@
-# RESUME — Phase 1+2 Bootstrap Implementation (Chunk 10부터)
+# RESUME — Phase 1+2 Bootstrap Implementation (Chunk 11부터)
 
-> **중단 시각**: 2026-05-03 (Chunk 9 PASS 직후, Phase 2 modules 추가)
+> **중단 시각**: 2026-05-03 (Chunk 10 PASS-WITH-NOTES 직후, Phase 2 통합 완료 — main + IRQ + CMakeLists)
 > **재개 시점**: 사용자 새 세션 시작 시
 > **스킬 흐름**: `superpowers:subagent-driven-development` (Chunk별 fresh subagent + 정식 review는 substantive 코드 chunk에서만)
 
@@ -16,10 +16,10 @@ claude
 새 세션 시작 후 한 줄 입력:
 
 ```
-RESUME 읽고 Chunk 10부터 진행
+RESUME 읽고 Chunk 11부터 진행
 ```
 
-SessionStart 훅이 본 파일 자동 로드. Chunk 10은 Phase 2 통합 (main rewrite + TIM11 IRQ wiring + CMakeLists update — plan tasks 21-23).
+SessionStart 훅이 본 파일 자동 로드. Chunk 11은 Phase 2 build verify (mechanical, controller-direct — plan task 24). 빌드 성공 후 Chunk 12 (HW verify, 사용자 PAUSE) 대기.
 
 ---
 
@@ -33,8 +33,8 @@ SessionStart 훅이 본 파일 자동 로드. Chunk 10은 Phase 2 통합 (main r
 | **Main repo** | `/Users/tknoh/dev/work/gds_us_ctrl/` (사용 ✗) |
 | **Branch** | `feat/phase1-2-bootstrap` |
 | **Base** | `main @ 73027c8` |
-| **Tip** | (Chunk 9 RESUME update commit — 본 commit) |
-| **Ahead of main** | 25 commits |
+| **Tip** | (Chunk 10 RESUME update commit — 본 commit) |
+| **Ahead of main** | 29 commits |
 
 ### 1.2 산출 문서
 
@@ -62,6 +62,8 @@ SessionStart 훅이 본 파일 자동 로드. Chunk 10은 Phase 2 통합 (main r
 | 8 | Phase 2 periph + drivers (tasks 13-16) | `463a772`, `b85c81f`, `988ac88`, `9ed1da6` |
 | — | RESUME Chunk 8 PASS | `fbebde7` |
 | 9 | Phase 2 modules (tasks 17-20) | `7c1e6ca`, `d9149f5`, `6ba6094`, `e20cd0c` |
+| — | RESUME Chunk 9 PASS | `159b094` |
+| 10 | Phase 2 통합 (tasks 21-23) | `de03986`, `fdf04aa`, `a2a2d68` |
 
 **Phase 1 빌드 결과**: FLASH 3860 B (2.94%), RAM 1584 B (4.83%), elf/bin/hex/map 4 산출물 정상.
 
@@ -117,7 +119,7 @@ Cortex-M4 r0p1은 **HW breakpoint 6개 한계**. fault handler 모두 + main에 
 
 | # | Chunk | Plan tasks | 비고 |
 |---|-------|------------|------|
-| 10 | Phase 2 main + irq + CMakeLists update | 21-23 | main Phase 2 form + TIM11 IRQ + CMakeLists 확장 — 마지막 substantive Phase 2 코드 |
+| 11 | Phase 2 build verify | 24 | controller-direct, `env -u STM32_TOOLCHAIN cmake -B fw/build -G Ninja fw/` 후 `cmake --build fw/build`; FLASH/RAM 사용량·warning 없음 확인 |
 | 10 | Phase 2 main + irq + CMakeLists update | 21-23 | main Phase 2 form + TIM11 IRQ + CMakeLists 확장 |
 | 11 | Phase 2 build verify | 24 | controller-direct |
 | 12 | Phase 2 HW verify | 25 | **🛑 USER PAUSE** — ST-LINK + 보드 필요 (OpenOCD는 §2.3에서 이미 설치됨) |
@@ -133,21 +135,36 @@ Cortex-M4 r0p1은 **HW breakpoint 6개 한계**. fault handler 모두 + main에 
 cd /Users/tknoh/dev/work/gds_us_ctrl-phase12 && pwd
 git branch --show-current   # → feat/phase1-2-bootstrap
 git status                  # → working tree clean
-git log --oneline main..HEAD | head -8  # → Chunk 9 RESUME update + e20cd0c 6ba6094 d9149f5 7c1e6ca fbebde7 9ed1da6 ...
+git log --oneline main..HEAD | head -10  # → Chunk 10 RESUME update + a2a2d68 fdf04aa de03986 159b094 e20cd0c 6ba6094 d9149f5 7c1e6ca ...
 ```
 
 불일치 시 사용자에게 보고하고 정지.
 
-### 4.2 Chunk 10 진입
+### 4.2 Chunk 11 진입
 
-Phase 2 마지막 substantive code chunk. dispatch 권장 (subagent-driven). plan tasks 21-23:
-- task 21: `fw/src/main.c` Phase 2 형태 재작성 — `app_init()` + 슈퍼루프 `app_loop_iter()` + 기존 board_init/usart6_init/tim11_init 호출 순서 유지
-- task 22: `fw/src/irq.c`에 `TIM1_TRG_COM_TIM11_IRQHandler()` 추가 — HAL_TIM_IRQHandler 위임 + `sys_tick_handle_irq()` 콜백 (또는 spec이 명시한 wrapper 형식)
-- task 23: `fw/CMakeLists.txt` 확장 — sources 리스트에 `src/periph.c` `src/board.c` `src/sys_tick.c` `src/app.c` `drivers/usart.c` `drivers/tim.c` `drivers/mon_usart6.c` 추가, include path는 기존 `include` 그대로
+Mechanical build verify — controller-direct (subagent dispatch 불필요). plan task 24:
 
-reference: `docs/superpowers/specs/2026-04-26-phase1-2-bootstrap-design.md` Phase 2 절, plan tasks 21-23 (lines ~1209–). spec §2.1 genex defect는 이미 fix됨, 추가 변경 불필요.
+```bash
+cd /Users/tknoh/dev/work/gds_us_ctrl-phase12
+rm -rf fw/build   # 클린 빌드 권장 (Phase 1 캐시 잔존 우려)
+env -u STM32_TOOLCHAIN cmake -B fw/build -G Ninja fw/
+env -u STM32_TOOLCHAIN cmake --build fw/build
+```
 
-### 4.3 Chunk 10 dispatch 가드 (재사용 권장 prompt 가드 라인)
+성공 기준:
+- 0 warnings 0 errors
+- `fw/build/gds_us_ctrl.elf` + .bin + .hex + .map 생성
+- `--print-memory-usage` 출력의 FLASH/RAM 사용량 확인 (Phase 1: 3860B/2.94% / 1584B/4.83% 기준치). Phase 2는 약간 증가 예상 — 현재 FLASH 12-16% / RAM 6-10% 정도 추정.
+- `arm-none-eabi-nm fw/build/gds_us_ctrl.elf | grep -E "TIM1_TRG_COM_TIM11_IRQHandler|HAL_TIM_PeriodElapsedCallback|app_loop_iter|sys_tick"` — 심볼 다 보여야 함.
+
+문제 발생 시:
+- §2.1 genex 결함은 이미 fix됨 (8d67a7d). 다른 genex 에러면 spec/plan 갱신 필요.
+- §2.2 STM32_TOOLCHAIN 우회는 위 `env -u` 사용.
+- vendor에 없는 HAL 모듈 컴파일 에러 → CMakeLists.txt HAL_SOURCES 확인.
+
+빌드 PASS 시 Chunk 12 (HW verify, 사용자 PAUSE — ST-LINK 연결 + OpenOCD attach 필요)로 진입.
+
+### 4.3 Chunk 11 dispatch 가드 (controller-direct이지만 참고용)
 
 ```
 - Work from: /Users/tknoh/dev/work/gds_us_ctrl-phase12 only.
@@ -168,6 +185,8 @@ reference: `docs/superpowers/specs/2026-04-26-phase1-2-bootstrap-design.md` Phas
 **Chunk 8 review 결과** (2026-05-03): PASS. 4 commits, 5 files (hal_conf modify + periph.h/c + usart.c + tim.c), 모두 plan verbatim 일치. TIM11 prescaler 95 + period 999 → 1 kHz @ 96 MHz 수치 검증 완료. 단일 정의 디시플린(`huart6`/`htim11` in periph.c only) 유지.
 
 **Chunk 9 review 결과** (2026-05-03): PASS. 4 commits, 8 새 파일 (board.h/c, sys_tick.h/c, mon.h + drivers/mon_usart6.c, app.h/c). 모두 plan verbatim. `CTRL_OSC_PINS` PIN_11 의도적 제외 확인, `s_ms` volatile + Cortex-M4 atomic read 디시플린, mon CRLF 라인 종결, app cadence wraparound-safe `(uint32_t)(now - prev) >= 1000`. TIM SR flag clear는 Chunk 10 IRQ wrapper 책임으로 deferred (correct).
+
+**Chunk 10 review 결과** (2026-05-03): PASS-WITH-NOTES. 3 commits, 3 modified files (main.c overwrite, irq.c append, CMakeLists 3-edit). 초기화 순서 `HAL_Init → clock_init → usart6_init → tim11_init → board_init → app_init` 검증, IRQ symbol `TIM1_TRG_COM_TIM11_IRQHandler`이 vendor startup file weak alias와 일치 확인, `-u _printf_float` 링크 옵션 spec 준수 (defensive — `mon_printf` future 사용 대비). **Non-blocking note**: `fw/CMakeLists.txt:68` 주석 `# 어플리케이션 — Phase 1 sources`가 GLOB 변경 후 stale — Chunk 13 doc sync 시 정정 권장 (plan 범위 외).
 
 ---
 
