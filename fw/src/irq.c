@@ -13,3 +13,16 @@ void PendSV_Handler(void)     { /* unused */ }
 void SysTick_Handler(void) { HAL_IncTick(); }
 
 void Error_Handler(void) { __disable_irq(); while (1) {} }
+
+#include "periph.h"
+#include "sys_tick.h"
+
+void TIM1_TRG_COM_TIM11_IRQHandler(void) {
+    HAL_TIM_IRQHandler(&htim11);
+}
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
+    if (htim->Instance == TIM11) {
+        sys_tick_handle_irq();
+    }
+}
