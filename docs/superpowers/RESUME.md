@@ -1,6 +1,7 @@
-# RESUME — Phase 1+2 Bootstrap Implementation (Chunk 11부터)
+# RESUME — Phase 1+2 Bootstrap Implementation (Chunk 12부터)
 
-> **중단 시각**: 2026-05-03 (Chunk 10 PASS-WITH-NOTES 직후, Phase 2 통합 완료 — main + IRQ + CMakeLists)
+> **중단 시각**: 2026-05-03 (Chunk 11 PASS 직후, Phase 2 빌드 검증 완료 — FLASH 16.83% / RAM 7.69%)
+> **🛑 사용자 PAUSE 필요**: Chunk 12는 ST-LINK + 보드 + USB 시리얼 연결 후 진행
 > **재개 시점**: 사용자 새 세션 시작 시
 > **스킬 흐름**: `superpowers:subagent-driven-development` (Chunk별 fresh subagent + 정식 review는 substantive 코드 chunk에서만)
 
@@ -16,10 +17,10 @@ claude
 새 세션 시작 후 한 줄 입력:
 
 ```
-RESUME 읽고 Chunk 11부터 진행
+RESUME 읽고 Chunk 12부터 진행
 ```
 
-SessionStart 훅이 본 파일 자동 로드. Chunk 11은 Phase 2 build verify (mechanical, controller-direct — plan task 24). 빌드 성공 후 Chunk 12 (HW verify, 사용자 PAUSE) 대기.
+SessionStart 훅이 본 파일 자동 로드. Chunk 12는 Phase 2 HW verify — ST-LINK 연결 + `make flash` + USB 시리얼 (115200 8N1) 모니터링으로 banner / 1Hz hello / PB3 heartbeat 확인 (plan task 25).
 
 ---
 
@@ -33,8 +34,8 @@ SessionStart 훅이 본 파일 자동 로드. Chunk 11은 Phase 2 build verify (
 | **Main repo** | `/Users/tknoh/dev/work/gds_us_ctrl/` (사용 ✗) |
 | **Branch** | `feat/phase1-2-bootstrap` |
 | **Base** | `main @ 73027c8` |
-| **Tip** | (Chunk 10 RESUME update commit — 본 commit) |
-| **Ahead of main** | 29 commits |
+| **Tip** | (Chunk 11 RESUME update commit — 본 commit) |
+| **Ahead of main** | 31 commits |
 
 ### 1.2 산출 문서
 
@@ -64,8 +65,13 @@ SessionStart 훅이 본 파일 자동 로드. Chunk 11은 Phase 2 build verify (
 | 9 | Phase 2 modules (tasks 17-20) | `7c1e6ca`, `d9149f5`, `6ba6094`, `e20cd0c` |
 | — | RESUME Chunk 9 PASS | `159b094` |
 | 10 | Phase 2 통합 (tasks 21-23) | `de03986`, `fdf04aa`, `a2a2d68` |
+| — | RESUME Chunk 10 PASS | `190e890` |
+| — | **spec defect fix** (TIM_AUTORELOAD_PRELOAD typo) | `de0c35f` |
+| 11 | **Phase 2 build verify ✅ (PASS)** | (no commit; controller-direct) |
 
 **Phase 1 빌드 결과**: FLASH 3860 B (2.94%), RAM 1584 B (4.83%), elf/bin/hex/map 4 산출물 정상.
+
+**Phase 2 빌드 결과** (Chunk 11, 2026-05-03): FLASH **22060 B (16.83%)** / 128 KB, RAM **2520 B (7.69%)** / 32 KB. text=21572 / data=476 / bss=2052. elf/bin/hex/map 4 산출물 정상. 핵심 심볼 (`main`, `app_init`, `app_loop_iter`, `tim11_init`, `usart6_init`, `board_init`, `sys_tick_init`, `sys_tick_handle_irq`, `TIM1_TRG_COM_TIM11_IRQHandler`, `HAL_TIM_PeriodElapsedCallback`) 모두 .text 위치 확인. Linker 경고: nano libc stubs (`_close/_fstat/_getpid/...`) — `--gc-sections`으로 strip 예상; RWX LOAD segment — 임베디드 ELF 표준.
 
 **Phase 1 HW 검증 결과** (Chunk 7, 2026-05-03):
 - ST-LINK V3J15M7B5S1 (API v3, VID:PID 0483:374F), Target Vcc 3.28 V
@@ -78,6 +84,10 @@ SessionStart 훅이 본 파일 자동 로드. Chunk 11은 Phase 2 build verify (
 ---
 
 ## 2. 발견된 이슈 (다음 세션이 알아야 함)
+
+### 2.0 spec/plan 결함 — `TIM_AUTORELOAD_PRELOAD_DISABLE` 매크로 오타 (해결됨, Chunk 11)
+
+plan task 16 본문 + spec Phase 2 절에 `TIM_AUTORELOADPRELOAD_DISABLE` (no underscore between AUTORELOAD and PRELOAD) 표기. vendor HAL 실제 매크로는 `TIM_AUTORELOAD_PRELOAD_DISABLE` (밑줄 분리). gcc reject (`'TIM_AUTORELOADPRELOAD_DISABLE' undeclared`). **해결**: commit `de0c35f` — `fw/drivers/tim.c` 한 줄 수정. plan/spec 본문은 미수정 (Chunk 13 doc sync에서 정정 예정).
 
 ### 2.1 spec 결함 — generator expression 빌드 블로커 (해결됨)
 
@@ -119,7 +129,8 @@ Cortex-M4 r0p1은 **HW breakpoint 6개 한계**. fault handler 모두 + main에 
 
 | # | Chunk | Plan tasks | 비고 |
 |---|-------|------------|------|
-| 11 | Phase 2 build verify | 24 | controller-direct, `env -u STM32_TOOLCHAIN cmake -B fw/build -G Ninja fw/` 후 `cmake --build fw/build`; FLASH/RAM 사용량·warning 없음 확인 |
+| 12 | Phase 2 HW verify | 25 | **🛑 USER PAUSE** — ST-LINK + 보드 + USB 시리얼 (PC6/PC7 연결) 필요. `cmake --build fw/build --target flash` 후 USB 시리얼 115200 8N1 모니터로 banner `[boot] gds_us_ctrl phase2 ready` + `[t=N ms] hello` 1Hz 확인, PB3 heartbeat 1Hz 토글 확인 |
+| 13 | Doc sync + graphify | 26-30 | CLAUDE.md (100→96 MHz), pinmap, changelog, RESUME archive, **spec/plan에 §2.0 AUTORELOAD_PRELOAD 정정 + §2.1 genex 정정 + §2.5 HW BP 한계 반영**, graphify 재생성 |
 | 10 | Phase 2 main + irq + CMakeLists update | 21-23 | main Phase 2 form + TIM11 IRQ + CMakeLists 확장 |
 | 11 | Phase 2 build verify | 24 | controller-direct |
 | 12 | Phase 2 HW verify | 25 | **🛑 USER PAUSE** — ST-LINK + 보드 필요 (OpenOCD는 §2.3에서 이미 설치됨) |
@@ -135,36 +146,43 @@ Cortex-M4 r0p1은 **HW breakpoint 6개 한계**. fault handler 모두 + main에 
 cd /Users/tknoh/dev/work/gds_us_ctrl-phase12 && pwd
 git branch --show-current   # → feat/phase1-2-bootstrap
 git status                  # → working tree clean
-git log --oneline main..HEAD | head -10  # → Chunk 10 RESUME update + a2a2d68 fdf04aa de03986 159b094 e20cd0c 6ba6094 d9149f5 7c1e6ca ...
+git log --oneline main..HEAD | head -10  # → Chunk 11 RESUME update + de0c35f (AUTORELOAD fix) 190e890 a2a2d68 fdf04aa de03986 ...
 ```
 
 불일치 시 사용자에게 보고하고 정지.
 
-### 4.2 Chunk 11 진입
+### 4.2 Chunk 12 진입 (USER PAUSE)
 
-Mechanical build verify — controller-direct (subagent dispatch 불필요). plan task 24:
+🛑 **사용자 준비 필요**:
+- ST-LINK V3 연결 (USB)
+- STM32F410RBT 보드 전원 ON
+- USB-시리얼 어댑터 연결: PC6 (USART6_TX) → 어댑터 RX, PC7 (USART6_RX) → 어댑터 TX, GND 공통
+- 시리얼 모니터 115200 8N1 (예: `screen /dev/tty.usbserial-* 115200` 또는 `picocom -b 115200 /dev/tty.usbserial-*`)
 
+작업 흐름:
 ```bash
 cd /Users/tknoh/dev/work/gds_us_ctrl-phase12
-rm -rf fw/build   # 클린 빌드 권장 (Phase 1 캐시 잔존 우려)
-env -u STM32_TOOLCHAIN cmake -B fw/build -G Ninja fw/
-env -u STM32_TOOLCHAIN cmake --build fw/build
+env -u STM32_TOOLCHAIN cmake --build fw/build --target flash
+# 또는 직접:
+# openocd -f fw/openocd/stm32f410.cfg -c "program fw/build/gds_us_ctrl.elf verify reset exit"
 ```
 
-성공 기준:
-- 0 warnings 0 errors
-- `fw/build/gds_us_ctrl.elf` + .bin + .hex + .map 생성
-- `--print-memory-usage` 출력의 FLASH/RAM 사용량 확인 (Phase 1: 3860B/2.94% / 1584B/4.83% 기준치). Phase 2는 약간 증가 예상 — 현재 FLASH 12-16% / RAM 6-10% 정도 추정.
-- `arm-none-eabi-nm fw/build/gds_us_ctrl.elf | grep -E "TIM1_TRG_COM_TIM11_IRQHandler|HAL_TIM_PeriodElapsedCallback|app_loop_iter|sys_tick"` — 심볼 다 보여야 함.
+성공 기준 (시리얼 + 보드 관찰):
+- 부팅 직후 banner 1행: `[boot] gds_us_ctrl phase2 ready\r\n`
+- 이후 1초 간격으로 `[t=N ms] hello\r\n` (N은 millisecond, 약 1000씩 증가)
+- PB3 핀 LED/스코프로 1 Hz 토글 (50% duty)
+- HardFault / Error_Handler 미히트 (CPU 정지 없음)
 
-문제 발생 시:
-- §2.1 genex 결함은 이미 fix됨 (8d67a7d). 다른 genex 에러면 spec/plan 갱신 필요.
-- §2.2 STM32_TOOLCHAIN 우회는 위 `env -u` 사용.
-- vendor에 없는 HAL 모듈 컴파일 에러 → CMakeLists.txt HAL_SOURCES 확인.
+문제 발생 시 OpenOCD + GDB attach (RESUME §2.5 HW BP 한계 주의):
+```bash
+# 터미널 A
+openocd -f fw/openocd/stm32f410.cfg
+# 터미널 B
+arm-none-eabi-gdb fw/build/gds_us_ctrl.elf -x fw/openocd/debug.gdb
+# break 등록은 Error_Handler + HardFault_Handler + main 정도까지만 (6 HW BP 한계)
+```
 
-빌드 PASS 시 Chunk 12 (HW verify, 사용자 PAUSE — ST-LINK 연결 + OpenOCD attach 필요)로 진입.
-
-### 4.3 Chunk 11 dispatch 가드 (controller-direct이지만 참고용)
+### 4.3 Chunk 12 dispatch 가드 (controller-direct이지만 참고용)
 
 ```
 - Work from: /Users/tknoh/dev/work/gds_us_ctrl-phase12 only.
@@ -187,6 +205,8 @@ env -u STM32_TOOLCHAIN cmake --build fw/build
 **Chunk 9 review 결과** (2026-05-03): PASS. 4 commits, 8 새 파일 (board.h/c, sys_tick.h/c, mon.h + drivers/mon_usart6.c, app.h/c). 모두 plan verbatim. `CTRL_OSC_PINS` PIN_11 의도적 제외 확인, `s_ms` volatile + Cortex-M4 atomic read 디시플린, mon CRLF 라인 종결, app cadence wraparound-safe `(uint32_t)(now - prev) >= 1000`. TIM SR flag clear는 Chunk 10 IRQ wrapper 책임으로 deferred (correct).
 
 **Chunk 10 review 결과** (2026-05-03): PASS-WITH-NOTES. 3 commits, 3 modified files (main.c overwrite, irq.c append, CMakeLists 3-edit). 초기화 순서 `HAL_Init → clock_init → usart6_init → tim11_init → board_init → app_init` 검증, IRQ symbol `TIM1_TRG_COM_TIM11_IRQHandler`이 vendor startup file weak alias와 일치 확인, `-u _printf_float` 링크 옵션 spec 준수 (defensive — `mon_printf` future 사용 대비). **Non-blocking note**: `fw/CMakeLists.txt:68` 주석 `# 어플리케이션 — Phase 1 sources`가 GLOB 변경 후 stale — Chunk 13 doc sync 시 정정 권장 (plan 범위 외).
+
+**Chunk 11 결과** (2026-05-03): PASS. clean build (`rm -rf fw/build` → cmake configure → ninja build). 빌드 중 spec defect 1건 발견 (§2.0 AUTORELOAD_PRELOAD 매크로 오타) — controller-direct fix commit `de0c35f`로 봉합 후 재빌드 클린. 산출물 + 심볼 + 메모리 사용량 모두 §1.3 Phase 2 빌드 결과 참조.
 
 ---
 
