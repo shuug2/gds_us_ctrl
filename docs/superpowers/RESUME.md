@@ -1,6 +1,6 @@
-# RESUME — Phase 1+2 Bootstrap Implementation (Chunk 8부터)
+# RESUME — Phase 1+2 Bootstrap Implementation (Chunk 9부터)
 
-> **중단 시각**: 2026-05-03 (Chunk 7 PASS 직후, Phase 1 HW verify 완료)
+> **중단 시각**: 2026-05-03 (Chunk 8 PASS 직후, Phase 2 periph + drivers 통합)
 > **재개 시점**: 사용자 새 세션 시작 시
 > **스킬 흐름**: `superpowers:subagent-driven-development` (Chunk별 fresh subagent + 정식 review는 substantive 코드 chunk에서만)
 
@@ -16,10 +16,10 @@ claude
 새 세션 시작 후 한 줄 입력:
 
 ```
-RESUME 읽고 Chunk 8부터 진행
+RESUME 읽고 Chunk 9부터 진행
 ```
 
-SessionStart 훅이 본 파일 자동 로드. Chunk 8은 첫 substantive Phase 2 작업 (UART/TIM enable + periph + drivers).
+SessionStart 훅이 본 파일 자동 로드. Chunk 9는 Phase 2 모듈 (board, sys_tick, mon, app — plan tasks 17-20).
 
 ---
 
@@ -33,8 +33,8 @@ SessionStart 훅이 본 파일 자동 로드. Chunk 8은 첫 substantive Phase 2
 | **Main repo** | `/Users/tknoh/dev/work/gds_us_ctrl/` (사용 ✗) |
 | **Branch** | `feat/phase1-2-bootstrap` |
 | **Base** | `main @ 73027c8` |
-| **Tip** | (Chunk 7 RESUME update commit — 본 commit) |
-| **Ahead of main** | 15 commits |
+| **Tip** | (Chunk 8 RESUME update commit — 본 commit) |
+| **Ahead of main** | 20 commits |
 
 ### 1.2 산출 문서
 
@@ -58,6 +58,8 @@ SessionStart 훅이 본 파일 자동 로드. Chunk 8은 첫 substantive Phase 2
 | 6 | OpenOCD config | `7f4fcf4` |
 | — | RESUME Chunk 7 checkpoint | `befad7f` |
 | 7 | **Phase 1 HW verify ✅ (PASS)** | (no commit; controller-direct) |
+| — | RESUME Chunk 7 PASS | `c42e1fd` |
+| 8 | Phase 2 periph + drivers (tasks 13-16) | `463a772`, `b85c81f`, `988ac88`, `9ed1da6` |
 
 **Phase 1 빌드 결과**: FLASH 3860 B (2.94%), RAM 1584 B (4.83%), elf/bin/hex/map 4 산출물 정상.
 
@@ -113,8 +115,7 @@ Cortex-M4 r0p1은 **HW breakpoint 6개 한계**. fault handler 모두 + main에 
 
 | # | Chunk | Plan tasks | 비고 |
 |---|-------|------------|------|
-| 8 | Phase 2 hal_conf + periph + drivers | 13-16 | 첫 substantive Phase 2 작업 — UART/TIM enable, periph.h/c, drivers/usart.c, drivers/tim.c |
-| 9 | Phase 2 modules | 17-20 | board, sys_tick, mon, app |
+| 9 | Phase 2 modules | 17-20 | board, sys_tick, mon, app — 두 번째 substantive Phase 2 작업 |
 | 10 | Phase 2 main + irq + CMakeLists update | 21-23 | main Phase 2 form + TIM11 IRQ + CMakeLists 확장 |
 | 11 | Phase 2 build verify | 24 | controller-direct |
 | 12 | Phase 2 HW verify | 25 | **🛑 USER PAUSE** — ST-LINK + 보드 필요 (OpenOCD는 §2.3에서 이미 설치됨) |
@@ -130,22 +131,22 @@ Cortex-M4 r0p1은 **HW breakpoint 6개 한계**. fault handler 모두 + main에 
 cd /Users/tknoh/dev/work/gds_us_ctrl-phase12 && pwd
 git branch --show-current   # → feat/phase1-2-bootstrap
 git status                  # → working tree clean
-git log --oneline main..HEAD | head -3  # → Chunk 7 update commit, befad7f, 7f4fcf4 보여야 함
+git log --oneline main..HEAD | head -6  # → Chunk 8 RESUME update + 9ed1da6 988ac88 b85c81f 463a772 c42e1fd ...
 ```
 
 불일치 시 사용자에게 보고하고 정지.
 
-### 4.2 Chunk 8 진입
+### 4.2 Chunk 9 진입
 
-Phase 2 첫 substantive code chunk. dispatch 권장 (subagent-driven). plan tasks 13-16:
-- task 13: `fw/vendor/Core/Inc/stm32f4xx_hal_conf.h` 에서 USART6 + TIM11 module enable (`HAL_UART_MODULE_ENABLED`, `HAL_TIM_MODULE_ENABLED`)
-- task 14: `fw/include/periph.h` 작성 — `huart6`, `htim11` extern declaration
-- task 15: `fw/src/periph.c` 작성 — `huart6`, `htim11` 단일 정의
-- task 16: `fw/drivers/usart.c` + `fw/drivers/tim.c` 작성 — `usart6_init()`, `tim11_init()`
+Phase 2 두 번째 substantive code chunk. dispatch 권장 (subagent-driven). plan tasks 17-20:
+- task 17: `fw/include/board.h` + `fw/src/board.c` — `board_init()`, `board_heartbeat_toggle()` (PB3 heartbeat + CTRL_OSC0..4 safe LOW)
+- task 18: `fw/include/sys_tick.h` + `fw/src/sys_tick.c` — TIM11 1 kHz tick counter, `sys_tick_inc()`, `sys_tick_get()`
+- task 19: `fw/include/mon.h` + `fw/src/mon.c` — UART blocking print helpers
+- task 20: `fw/include/app.h` + `fw/src/app.c` — `app_init()` + `app_loop()` (board/usart6/tim11 init + heartbeat 1 Hz + UART log)
 
-reference: `docs/superpowers/specs/2026-04-26-phase1-2-bootstrap-design.md` 의 Phase 2 절.
+reference: `docs/superpowers/specs/2026-04-26-phase1-2-bootstrap-design.md` Phase 2 절, plan tasks 17-20 (lines ~978–).
 
-### 4.3 Chunk 8 dispatch 가드 (재사용 권장 prompt 가드 라인)
+### 4.3 Chunk 9 dispatch 가드 (재사용 권장 prompt 가드 라인)
 
 ```
 - Work from: /Users/tknoh/dev/work/gds_us_ctrl-phase12 only.
@@ -160,8 +161,10 @@ reference: `docs/superpowers/specs/2026-04-26-phase1-2-bootstrap-design.md` 의 
 ### 4.4 review 정책
 
 - mechanical config (Chunks 6, 11)·trivial 단일 파일은 정식 spec/quality reviewer subagent 생략 (controller 직접 검증).
-- substantive 코드 chunk (8, 9, 10)는 정식 spec compliance reviewer subagent dispatch 권장.
+- substantive 코드 chunk (8 ✅, 9, 10)는 정식 spec compliance reviewer subagent dispatch 권장.
 - code quality reviewer는 사용자 요청 또는 큰 코드 변경 후 한 번에 묶어 실행 (Chunk 13 직전 등).
+
+**Chunk 8 review 결과** (2026-05-03): PASS. 4 commits, 5 files (hal_conf modify + periph.h/c + usart.c + tim.c), 모두 plan verbatim 일치. TIM11 prescaler 95 + period 999 → 1 kHz @ 96 MHz 수치 검증 완료. 단일 정의 디시플린(`huart6`/`htim11` in periph.c only) 유지.
 
 ---
 
