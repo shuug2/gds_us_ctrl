@@ -47,6 +47,10 @@ set(HAL_SOURCES
     ${VENDOR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ex.c
     ${VENDOR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c
     ${VENDOR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma_ex.c
+    # Phase 2:
+    ${VENDOR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c
+    ${VENDOR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim.c
+    ${VENDOR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim_ex.c
 )
 
 add_library(stm32_hal STATIC
@@ -62,11 +66,7 @@ target_include_directories(stm32_hal PUBLIC
 target_compile_options(stm32_hal PRIVATE -Wno-unused-parameter)
 
 # 어플리케이션 — Phase 1 sources
-set(APP_SOURCES
-    src/main.c
-    src/clock.c
-    src/irq.c
-)
+file(GLOB APP_SOURCES src/*.c drivers/*.c)
 set(STARTUP ${VENDOR}/startup_stm32f410rbtx.s)
 set(LDSCRIPT ${VENDOR}/STM32F410RBTX_FLASH.ld)
 
@@ -83,6 +83,7 @@ target_link_options(${PROJECT_NAME}.elf PRIVATE
     -Wl,-Map=${PROJECT_NAME}.map,--cref
     -Wl,--print-memory-usage
     --specs=nano.specs
+    -u _printf_float
     -lc -lm -lnosys
 )
 
