@@ -1,6 +1,6 @@
-# RESUME — Phase 1+2 Bootstrap Implementation (Chunk 9부터)
+# RESUME — Phase 1+2 Bootstrap Implementation (Chunk 10부터)
 
-> **중단 시각**: 2026-05-03 (Chunk 8 PASS 직후, Phase 2 periph + drivers 통합)
+> **중단 시각**: 2026-05-03 (Chunk 9 PASS 직후, Phase 2 modules 추가)
 > **재개 시점**: 사용자 새 세션 시작 시
 > **스킬 흐름**: `superpowers:subagent-driven-development` (Chunk별 fresh subagent + 정식 review는 substantive 코드 chunk에서만)
 
@@ -16,10 +16,10 @@ claude
 새 세션 시작 후 한 줄 입력:
 
 ```
-RESUME 읽고 Chunk 9부터 진행
+RESUME 읽고 Chunk 10부터 진행
 ```
 
-SessionStart 훅이 본 파일 자동 로드. Chunk 9는 Phase 2 모듈 (board, sys_tick, mon, app — plan tasks 17-20).
+SessionStart 훅이 본 파일 자동 로드. Chunk 10은 Phase 2 통합 (main rewrite + TIM11 IRQ wiring + CMakeLists update — plan tasks 21-23).
 
 ---
 
@@ -33,8 +33,8 @@ SessionStart 훅이 본 파일 자동 로드. Chunk 9는 Phase 2 모듈 (board, 
 | **Main repo** | `/Users/tknoh/dev/work/gds_us_ctrl/` (사용 ✗) |
 | **Branch** | `feat/phase1-2-bootstrap` |
 | **Base** | `main @ 73027c8` |
-| **Tip** | (Chunk 8 RESUME update commit — 본 commit) |
-| **Ahead of main** | 20 commits |
+| **Tip** | (Chunk 9 RESUME update commit — 본 commit) |
+| **Ahead of main** | 25 commits |
 
 ### 1.2 산출 문서
 
@@ -60,6 +60,8 @@ SessionStart 훅이 본 파일 자동 로드. Chunk 9는 Phase 2 모듈 (board, 
 | 7 | **Phase 1 HW verify ✅ (PASS)** | (no commit; controller-direct) |
 | — | RESUME Chunk 7 PASS | `c42e1fd` |
 | 8 | Phase 2 periph + drivers (tasks 13-16) | `463a772`, `b85c81f`, `988ac88`, `9ed1da6` |
+| — | RESUME Chunk 8 PASS | `fbebde7` |
+| 9 | Phase 2 modules (tasks 17-20) | `7c1e6ca`, `d9149f5`, `6ba6094`, `e20cd0c` |
 
 **Phase 1 빌드 결과**: FLASH 3860 B (2.94%), RAM 1584 B (4.83%), elf/bin/hex/map 4 산출물 정상.
 
@@ -115,7 +117,7 @@ Cortex-M4 r0p1은 **HW breakpoint 6개 한계**. fault handler 모두 + main에 
 
 | # | Chunk | Plan tasks | 비고 |
 |---|-------|------------|------|
-| 9 | Phase 2 modules | 17-20 | board, sys_tick, mon, app — 두 번째 substantive Phase 2 작업 |
+| 10 | Phase 2 main + irq + CMakeLists update | 21-23 | main Phase 2 form + TIM11 IRQ + CMakeLists 확장 — 마지막 substantive Phase 2 코드 |
 | 10 | Phase 2 main + irq + CMakeLists update | 21-23 | main Phase 2 form + TIM11 IRQ + CMakeLists 확장 |
 | 11 | Phase 2 build verify | 24 | controller-direct |
 | 12 | Phase 2 HW verify | 25 | **🛑 USER PAUSE** — ST-LINK + 보드 필요 (OpenOCD는 §2.3에서 이미 설치됨) |
@@ -131,22 +133,21 @@ Cortex-M4 r0p1은 **HW breakpoint 6개 한계**. fault handler 모두 + main에 
 cd /Users/tknoh/dev/work/gds_us_ctrl-phase12 && pwd
 git branch --show-current   # → feat/phase1-2-bootstrap
 git status                  # → working tree clean
-git log --oneline main..HEAD | head -6  # → Chunk 8 RESUME update + 9ed1da6 988ac88 b85c81f 463a772 c42e1fd ...
+git log --oneline main..HEAD | head -8  # → Chunk 9 RESUME update + e20cd0c 6ba6094 d9149f5 7c1e6ca fbebde7 9ed1da6 ...
 ```
 
 불일치 시 사용자에게 보고하고 정지.
 
-### 4.2 Chunk 9 진입
+### 4.2 Chunk 10 진입
 
-Phase 2 두 번째 substantive code chunk. dispatch 권장 (subagent-driven). plan tasks 17-20:
-- task 17: `fw/include/board.h` + `fw/src/board.c` — `board_init()`, `board_heartbeat_toggle()` (PB3 heartbeat + CTRL_OSC0..4 safe LOW)
-- task 18: `fw/include/sys_tick.h` + `fw/src/sys_tick.c` — TIM11 1 kHz tick counter, `sys_tick_inc()`, `sys_tick_get()`
-- task 19: `fw/include/mon.h` + `fw/src/mon.c` — UART blocking print helpers
-- task 20: `fw/include/app.h` + `fw/src/app.c` — `app_init()` + `app_loop()` (board/usart6/tim11 init + heartbeat 1 Hz + UART log)
+Phase 2 마지막 substantive code chunk. dispatch 권장 (subagent-driven). plan tasks 21-23:
+- task 21: `fw/src/main.c` Phase 2 형태 재작성 — `app_init()` + 슈퍼루프 `app_loop_iter()` + 기존 board_init/usart6_init/tim11_init 호출 순서 유지
+- task 22: `fw/src/irq.c`에 `TIM1_TRG_COM_TIM11_IRQHandler()` 추가 — HAL_TIM_IRQHandler 위임 + `sys_tick_handle_irq()` 콜백 (또는 spec이 명시한 wrapper 형식)
+- task 23: `fw/CMakeLists.txt` 확장 — sources 리스트에 `src/periph.c` `src/board.c` `src/sys_tick.c` `src/app.c` `drivers/usart.c` `drivers/tim.c` `drivers/mon_usart6.c` 추가, include path는 기존 `include` 그대로
 
-reference: `docs/superpowers/specs/2026-04-26-phase1-2-bootstrap-design.md` Phase 2 절, plan tasks 17-20 (lines ~978–).
+reference: `docs/superpowers/specs/2026-04-26-phase1-2-bootstrap-design.md` Phase 2 절, plan tasks 21-23 (lines ~1209–). spec §2.1 genex defect는 이미 fix됨, 추가 변경 불필요.
 
-### 4.3 Chunk 9 dispatch 가드 (재사용 권장 prompt 가드 라인)
+### 4.3 Chunk 10 dispatch 가드 (재사용 권장 prompt 가드 라인)
 
 ```
 - Work from: /Users/tknoh/dev/work/gds_us_ctrl-phase12 only.
@@ -165,6 +166,8 @@ reference: `docs/superpowers/specs/2026-04-26-phase1-2-bootstrap-design.md` Phas
 - code quality reviewer는 사용자 요청 또는 큰 코드 변경 후 한 번에 묶어 실행 (Chunk 13 직전 등).
 
 **Chunk 8 review 결과** (2026-05-03): PASS. 4 commits, 5 files (hal_conf modify + periph.h/c + usart.c + tim.c), 모두 plan verbatim 일치. TIM11 prescaler 95 + period 999 → 1 kHz @ 96 MHz 수치 검증 완료. 단일 정의 디시플린(`huart6`/`htim11` in periph.c only) 유지.
+
+**Chunk 9 review 결과** (2026-05-03): PASS. 4 commits, 8 새 파일 (board.h/c, sys_tick.h/c, mon.h + drivers/mon_usart6.c, app.h/c). 모두 plan verbatim. `CTRL_OSC_PINS` PIN_11 의도적 제외 확인, `s_ms` volatile + Cortex-M4 atomic read 디시플린, mon CRLF 라인 종결, app cadence wraparound-safe `(uint32_t)(now - prev) >= 1000`. TIM SR flag clear는 Chunk 10 IRQ wrapper 책임으로 deferred (correct).
 
 ---
 
