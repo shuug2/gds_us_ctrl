@@ -1,6 +1,6 @@
-# RESUME — Phase 1+2 Bootstrap Implementation (Chunk 7부터)
+# RESUME — Phase 1+2 Bootstrap Implementation (Chunk 8부터)
 
-> **중단 시각**: 2026-05-03 (Chunk 6 완료 직후, Phase 1 빌드 검증 완료)
+> **중단 시각**: 2026-05-03 (Chunk 7 PASS 직후, Phase 1 HW verify 완료)
 > **재개 시점**: 사용자 새 세션 시작 시
 > **스킬 흐름**: `superpowers:subagent-driven-development` (Chunk별 fresh subagent + 정식 review는 substantive 코드 chunk에서만)
 
@@ -16,10 +16,10 @@ claude
 새 세션 시작 후 한 줄 입력:
 
 ```
-RESUME 읽고 Chunk 7부터 진행
+RESUME 읽고 Chunk 8부터 진행
 ```
 
-SessionStart 훅이 본 파일 자동 로드. Chunk 7은 ST-LINK + 보드 + OpenOCD 필요 → 사용자 응답에 따라 Chunk 7을 건너뛰고 Chunk 8 (Phase 2)로 직행 가능.
+SessionStart 훅이 본 파일 자동 로드. Chunk 8은 첫 substantive Phase 2 작업 (UART/TIM enable + periph + drivers).
 
 ---
 
@@ -33,8 +33,8 @@ SessionStart 훅이 본 파일 자동 로드. Chunk 7은 ST-LINK + 보드 + Open
 | **Main repo** | `/Users/tknoh/dev/work/gds_us_ctrl/` (사용 ✗) |
 | **Branch** | `feat/phase1-2-bootstrap` |
 | **Base** | `main @ 73027c8` |
-| **Tip** | `7f4fcf4` (OpenOCD config) |
-| **Ahead of main** | 14 commits |
+| **Tip** | (Chunk 7 RESUME update commit — 본 commit) |
+| **Ahead of main** | 15 commits |
 
 ### 1.2 산출 문서
 
@@ -44,7 +44,7 @@ SessionStart 훅이 본 파일 자동 로드. Chunk 7은 ST-LINK + 보드 + Open
 | `docs/superpowers/plans/2026-04-26-phase1-2-bootstrap.md` | 30 task 구현 계획 |
 | `docs/superpowers/RESUME.md` | **본 파일** |
 
-### 1.3 완료된 Chunks (1–6)
+### 1.3 완료된 Chunks (1–7)
 
 | # | Chunk | Commits |
 |---|-------|---------|
@@ -56,8 +56,18 @@ SessionStart 훅이 본 파일 자동 로드. Chunk 7은 ST-LINK + 보드 + Open
 | — | **spec defect fix** (genex Debug flags) | `8d67a7d` |
 | 5 | Phase 1 build verify ✅ (PASS) | (no commit; controller-direct) |
 | 6 | OpenOCD config | `7f4fcf4` |
+| — | RESUME Chunk 7 checkpoint | `befad7f` |
+| 7 | **Phase 1 HW verify ✅ (PASS)** | (no commit; controller-direct) |
 
 **Phase 1 빌드 결과**: FLASH 3860 B (2.94%), RAM 1584 B (4.83%), elf/bin/hex/map 4 산출물 정상.
+
+**Phase 1 HW 검증 결과** (Chunk 7, 2026-05-03):
+- ST-LINK V3J15M7B5S1 (API v3, VID:PID 0483:374F), Target Vcc 3.28 V
+- Cortex-M4 r0p1, 6 HW BP / 4 watchpoints
+- Reset_Handler 진입 OK (PC=0x080003b4, MSP=0x20008000=SRAM top 32KB)
+- HAL_Init + clock_init 통과 (Error_Handler / HardFault 미히트)
+- main `while(1) __NOP()` 도달 확인 (PC=0x80002ea = main+10)
+- **SystemCoreClock = 96,000,000 Hz** (HSI×12 PLL lock 확인)
 
 ---
 
@@ -85,13 +95,17 @@ env -u STM32_TOOLCHAIN cmake --build build
 - (a) shell config에서 `unset STM32_TOOLCHAIN` 또는 `export STM32_TOOLCHAIN=/opt/homebrew/bin`
 - (b) toolchain.cmake에서 env var 의존 제거 (PATH-based만 사용) — but CLAUDE.md에 명시된 컨벤션이라 신중
 
-### 2.3 OpenOCD 미설치
+### 2.3 OpenOCD 설치 — 해결됨 (Chunk 7)
 
-`brew install open-ocd` 필요. Chunk 7 진입 전 설치하지 않으면 진행 불가.
+`brew install open-ocd` 완료 (2026-05-03, version 0.12.0_1, deps: libunistring·gettext·capstone·hidapi·boost·confuse·libftdi). Chunk 7 verify 시 ST-LINK V3 정상 동작 확인.
 
 ### 2.4 subagent 스코프 이탈 사례 (참고)
 
 Chunk 2 spec reviewer subagent가 user-level memory `feedback_graphify_after_docs.md`를 트리거 삼아 자발적으로 graphify 재생성 실행 (메인 레포 `graphify-out/`에 영향, untracked이므로 무해). 이후 모든 dispatch 프롬프트에 "DO NOT run graphify, do not follow auto-side-work memories" 가드 명시 중.
+
+### 2.5 GDB HW breakpoint 한계 (Chunk 7 발견)
+
+Cortex-M4 r0p1은 **HW breakpoint 6개 한계**. fault handler 모두 + main에 동시에 break 걸면 7개째에서 `Cannot insert hardware breakpoint 6: Remote failure reply: 0E. Command aborted.` 발생하며 continue 자체가 실행 안 됨. 검증 시 main + Error_Handler + HardFault_Handler + 1~2개 정도로 제한.
 
 ---
 
@@ -99,13 +113,12 @@ Chunk 2 spec reviewer subagent가 user-level memory `feedback_graphify_after_doc
 
 | # | Chunk | Plan tasks | 비고 |
 |---|-------|------------|------|
-| 7 | Phase 1 HW verify | 12 | **🛑 USER PAUSE** — ST-LINK + 보드 + OpenOCD 설치 모두 필요. 미준비 시 사용자 응답으로 건너뛰고 Chunk 8 직행 |
 | 8 | Phase 2 hal_conf + periph + drivers | 13-16 | 첫 substantive Phase 2 작업 — UART/TIM enable, periph.h/c, drivers/usart.c, drivers/tim.c |
 | 9 | Phase 2 modules | 17-20 | board, sys_tick, mon, app |
 | 10 | Phase 2 main + irq + CMakeLists update | 21-23 | main Phase 2 form + TIM11 IRQ + CMakeLists 확장 |
 | 11 | Phase 2 build verify | 24 | controller-direct |
-| 12 | Phase 2 HW verify | 25 | **🛑 USER PAUSE** |
-| 13 | Doc sync + graphify | 26-30 | CLAUDE.md (100→96 MHz), pinmap, changelog, RESUME archive, **spec/plan에 §2.1 genex 정정 반영**, graphify 재생성 |
+| 12 | Phase 2 HW verify | 25 | **🛑 USER PAUSE** — ST-LINK + 보드 필요 (OpenOCD는 §2.3에서 이미 설치됨) |
+| 13 | Doc sync + graphify | 26-30 | CLAUDE.md (100→96 MHz), pinmap, changelog, RESUME archive, **spec/plan에 §2.1 genex 정정 + §2.5 HW BP 한계 반영**, graphify 재생성 |
 
 ---
 
@@ -117,19 +130,20 @@ Chunk 2 spec reviewer subagent가 user-level memory `feedback_graphify_after_doc
 cd /Users/tknoh/dev/work/gds_us_ctrl-phase12 && pwd
 git branch --show-current   # → feat/phase1-2-bootstrap
 git status                  # → working tree clean
-git log --oneline main..HEAD | head -3  # → 7f4fcf4, 8d67a7d, cfb1aa4 보여야 함
+git log --oneline main..HEAD | head -3  # → Chunk 7 update commit, befad7f, 7f4fcf4 보여야 함
 ```
 
 불일치 시 사용자에게 보고하고 정지.
 
-### 4.2 Chunk 7 처리 분기
+### 4.2 Chunk 8 진입
 
-먼저 사용자에게 질문:
+Phase 2 첫 substantive code chunk. dispatch 권장 (subagent-driven). plan tasks 13-16:
+- task 13: `fw/vendor/Core/Inc/stm32f4xx_hal_conf.h` 에서 USART6 + TIM11 module enable (`HAL_UART_MODULE_ENABLED`, `HAL_TIM_MODULE_ENABLED`)
+- task 14: `fw/include/periph.h` 작성 — `huart6`, `htim11` extern declaration
+- task 15: `fw/src/periph.c` 작성 — `huart6`, `htim11` 단일 정의
+- task 16: `fw/drivers/usart.c` + `fw/drivers/tim.c` 작성 — `usart6_init()`, `tim11_init()`
 
-> "Chunk 7 (Phase 1 HW verify)은 ST-LINK + STM32F410 보드 + `brew install open-ocd` 모두 필요합니다. 진행할까요, 아니면 Chunk 8(Phase 2)로 직행할까요?"
-
-- **진행**: 사용자가 ST-LINK 연결 + OpenOCD 설치 후, plan task 12 step별로 controller-direct 실행 (subagent ✗): openocd 서버 띄우기 → GDB attach → PC 위치 확인 → 종료. commit 없음 (verify only).
-- **건너뛰기**: TaskUpdate Chunk 7 status="completed" with note "skipped — HW unavailable", 즉시 Chunk 8 dispatch.
+reference: `docs/superpowers/specs/2026-04-26-phase1-2-bootstrap-design.md` 의 Phase 2 절.
 
 ### 4.3 Chunk 8 dispatch 가드 (재사용 권장 prompt 가드 라인)
 
@@ -176,7 +190,10 @@ Worktree 사라짐. `cd /Users/tknoh/dev/work/gds_us_ctrl && git worktree add ..
 §2.2 STM32_TOOLCHAIN 이슈. `env -u STM32_TOOLCHAIN ...` 사용.
 
 ### "openocd: command not found"
-Chunk 7 prerequisite. `brew install open-ocd`.
+이미 §2.3에서 설치 완료 (0.12.0_1, Homebrew). PATH 확인: `which openocd` → `/opt/homebrew/bin/openocd`. 없으면 `brew install open-ocd` 재실행.
+
+### "Cannot insert hardware breakpoint N"
+§2.5 참조 — Cortex-M4 r0p1은 6 HW BP 한계. break 등록 갯수를 줄여서 재시도.
 
 ---
 
