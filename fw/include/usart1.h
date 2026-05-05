@@ -33,4 +33,9 @@ bool usart1_rx_pop(uint8_t *out_byte);
  */
 uint16_t usart1_rx_drop_count(void);
 
+/* USART ORE/FE/NE/PE 발생 누적 — HAL_UART_ErrorCallback 진입 횟수.
+ * ORE 등 발생 시 콜백에서 플래그 클리어 + RX 재무장 처리. 정상 통신에서 0 기대.
+ */
+uint16_t usart1_rx_error_count(void);
+
 #endif /* GDS_USART1_H_ */

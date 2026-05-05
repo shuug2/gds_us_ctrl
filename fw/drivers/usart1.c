@@ -17,6 +17,7 @@ static volatile uint8_t  s_rx_ring[RX_RING_SIZE];
 static volatile uint8_t  s_rx_head;                     /* IRQ writer */
 static volatile uint8_t  s_rx_tail;                     /* loop reader */
 static volatile uint16_t s_rx_drop_count;               /* full / 재무장 실패 누적 */
+static volatile uint16_t s_rx_error_count;              /* ORE/FE/NE/PE 누적 (ErrorCallback 진입 횟수) */
 
 extern void Error_Handler(void);                        /* fw/src/clock.c 정의 */
 
@@ -53,9 +54,10 @@ void usart1_init(void)
     HAL_NVIC_EnableIRQ(USART1_IRQn);
 
     /* 5. ring 클리어 */
-    s_rx_head       = 0;
-    s_rx_tail       = 0;
-    s_rx_drop_count = 0;
+    s_rx_head        = 0;
+    s_rx_tail        = 0;
+    s_rx_drop_count  = 0;
+    s_rx_error_count = 0;
 
     /* 6. 첫 RX 무장 — __enable_irq 후 byte 도착 시 콜백 발화 */
     if (HAL_UART_Receive_IT(&huart1, (uint8_t *)&s_rx_byte, 1) != HAL_OK) {
@@ -86,6 +88,11 @@ uint16_t usart1_rx_drop_count(void)
     return s_rx_drop_count;
 }
 
+uint16_t usart1_rx_error_count(void)
+{
+    return s_rx_error_count;
+}
+
 /* HAL 콜백 — periph 핸들이 USART1 인 경우만 동작.
  * mon_usart6 (USART6) 도 같은 콜백 시그니처를 공유하므로 instance 분기 필요.
  */
@@ -103,5 +110,27 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *h)
     }
     if (HAL_UART_Receive_IT(&huart1, (uint8_t *)&s_rx_byte, 1) != HAL_OK) {
         s_rx_drop_count++;                              /* 재무장 실패 — R5 가시화 */
+    }
+}
+
+/* HAL UART error 경로 — vendor stm32f4xx_hal_uart.c 의 HAL_UART_IRQHandler 가
+ * SR 의 ORE/FE/NE/PE 비트 발견 시 UART_EndRxTransfer (RXNEIE clear) 후 본 콜백 호출.
+ * 이 경로에서는 HAL_UART_RxCpltCallback 발화하지 않으므로 여기서 명시적 재무장 필수.
+ * 미구현 시 ORE 한 번 → RX 영구 정지 (samd20 결함 미커버 영역, code reviewer HIGH).
+ */
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *h)
+{
+    if (h->Instance != USART1) {
+        return;
+    }
+    s_rx_error_count++;
+    /* ORE/FE/NE/PE 플래그 클리어 — vendor 매크로는 SR 읽기 + DR 읽기 시퀀스 */
+    __HAL_UART_CLEAR_OREFLAG(h);
+    __HAL_UART_CLEAR_FEFLAG(h);
+    __HAL_UART_CLEAR_NEFLAG(h);
+    __HAL_UART_CLEAR_PEFLAG(h);
+    /* RX 재무장 — 실패 시 drop_count 로 가시화 (R5 의 일반화) */
+    if (HAL_UART_Receive_IT(&huart1, (uint8_t *)&s_rx_byte, 1) != HAL_OK) {
+        s_rx_drop_count++;
     }
 }
