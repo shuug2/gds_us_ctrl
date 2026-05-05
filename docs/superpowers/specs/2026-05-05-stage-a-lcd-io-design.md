@@ -81,7 +81,7 @@
 
 ```
 main.c → HAL_Init → clock_init → usart6_init → usart1_init → tim11_init →
-         board_init → dgus_init → sys_tick_init → __enable_irq → app_init → loop
+         board_init → dgus_init → app_init → loop
 
 app_init() ─→ mon_puts (banner)
             ─→ #if DGUS_DEMO_RESET_ON_BOOT: dgus_reset_lcd
@@ -351,15 +351,13 @@ usart1_init()           ← 신규: GPIO AF + NVIC + 첫 RX 무장
 tim11_init()
 board_init()
 dgus_init()             ← 신규: 파서 상태머신 클리어
-sys_tick_init()
-__enable_irq()
-app_init()
+app_init()              ← Phase 2 형식: 내부에서 sys_tick_init + mon_init 호출
 ```
 
 근거:
 - `usart1_init`은 `tim11_init` 전에 — mon banner 시점부터 LCD 살아 있어야 첫 frame을 안전하게 받음
 - `dgus_init`은 `app_init` 직전에 — app 첫 cadence 전 파서 idle 보장
-- 모든 IRQ는 `__enable_irq()` 후 동시 활성 (Phase 2 디시플린)
+- IRQ 활성: ARM Cortex-M 리셋 직후 PRIMASK clear 상태로 IRQ 이미 enable. Phase 2 가 explicit `__enable_irq()` 없이 동작하던 디시플린 그대로 유지 (USART6 IRQ 정상 동작 입증). USART1 IRQ는 `usart1_init` 의 `HAL_UART_Receive_IT` 시점부터 발화 가능 — 첫 byte는 RX 링(64 byte)에 쌓이고 파서는 `app_loop_iter`(즉 `dgus_init` 완료 이후) 의 `dgus_rx_poll` 에서만 실행되므로 race-free
 
 ### 4.2 mon banner 갱신 (`app_init`)
 
