@@ -348,7 +348,7 @@ void tim11_init(void) {
     htim11.Init.CounterMode       = TIM_COUNTERMODE_UP;
     htim11.Init.Period            = 999;    /* 1 MHz / 1000 = 1 kHz IRQ */
     htim11.Init.ClockDivision     = TIM_CLOCKDIVISION_DIV1;
-    htim11.Init.AutoReloadPreload = TIM_AUTORELOADPRELOAD_DISABLE;
+    htim11.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
     if (HAL_TIM_Base_Init(&htim11) != HAL_OK) Error_Handler();
 
     HAL_NVIC_SetPriority(TIM1_TRG_COM_TIM11_IRQn, 5, 0);
