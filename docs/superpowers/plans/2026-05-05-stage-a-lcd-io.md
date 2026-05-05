@@ -977,7 +977,7 @@ Expected: Phase 2 의 `app_init` (banner `[boot] gds_us_ctrl phase2 ready`) + `a
 ```c
 void app_init(void)
 {
-    mon_puts("[boot] gds_us_ctrl stage-a-lcd ready\r\n");
+    mon_writeln("[boot] gds_us_ctrl stage-a-lcd ready");
     mon_printf("[lcd] usart1@115200 ring=64 prio=5\r\n");
 
 #if DGUS_DEMO_RESET_ON_BOOT
