@@ -5,8 +5,7 @@
  *
  * 호출자: fw/drivers/dgus_lcd.c 만. 다른 모듈에서 직접 호출 ✗.
  */
-#ifndef GDS_USART1_H_
-#define GDS_USART1_H_
+#pragma once
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -37,5 +36,3 @@ uint16_t usart1_rx_drop_count(void);
  * ORE 등 발생 시 콜백에서 플래그 클리어 + RX 재무장 처리. 정상 통신에서 0 기대.
  */
 uint16_t usart1_rx_error_count(void);
-
-#endif /* GDS_USART1_H_ */

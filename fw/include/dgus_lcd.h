@@ -7,8 +7,7 @@
  *   LEN = CMD(1) + ADDR(2) + payload byte 수. 유효 범위 [4, 26].
  *   Wire = big-endian (samd20 동일).
  */
-#ifndef GDS_DGUS_LCD_H_
-#define GDS_DGUS_LCD_H_
+#pragma once
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -101,5 +100,3 @@ uint16_t dgus_tx_timeout_count(void);
 #define DGUS_DEMO_BOOT_PAGE      LCD_RUN_STD    /* 9 — VAR_POWER 시각화되는 페이지 */
 #define DGUS_DEMO_UPTIME_VP      VAR_POWER      /* 0x1110 — U16 (wrap @ 65535초) */
 #define DGUS_DEMO_RESET_ON_BOOT  0              /* 0=skip / 1=부팅 시 LCD 풀-재시작 */
-
-#endif /* GDS_DGUS_LCD_H_ */

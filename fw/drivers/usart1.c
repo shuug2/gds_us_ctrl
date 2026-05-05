@@ -5,9 +5,10 @@
  *
  * 호출자: fw/drivers/dgus_lcd.c 만 (단일 정의 디시플린).
  */
-#include "usart1.h"
-#include "periph.h"
 #include "stm32f4xx_hal.h"
+#include "periph.h"
+#include "clock.h"   /* Error_Handler */
+#include "usart1.h"
 
 /* 64 = 2의 거듭제곱 → mask 분기 없음 */
 #define RX_RING_SIZE  64
@@ -18,8 +19,6 @@ static volatile uint8_t  s_rx_head;                     /* IRQ writer */
 static volatile uint8_t  s_rx_tail;                     /* loop reader */
 static volatile uint16_t s_rx_drop_count;               /* full / 재무장 실패 누적 */
 static volatile uint16_t s_rx_error_count;              /* ORE/FE/NE/PE 누적 (ErrorCallback 진입 횟수) */
-
-extern void Error_Handler(void);                        /* fw/src/clock.c 정의 */
 
 void usart1_init(void)
 {
