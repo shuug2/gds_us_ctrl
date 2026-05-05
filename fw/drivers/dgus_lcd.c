@@ -181,3 +181,91 @@ void dgus_read_var(uint8_t var)
     uint8_t pl[1] = { 1 };
     send_frame(DGUS_CMD_RD, (uint16_t)var, pl, 1);
 }
+
+/*--------------------------------------------------------------
+ * RX 파서 상태머신
+ *
+ * 프레임: 5A A5 LEN [LEN bytes = cmd + addr_h + addr_l + payload]
+ * LEN ∈ [4, 26]. 그 외 → 폐기 + drop 카운터.
+ * 프레임 mid-stream 50 ms timeout (벽시계 sys_tick_get_ms).
+ *--------------------------------------------------------------*/
+
+#define DGUS_LEN_MIN          4
+#define DGUS_LEN_MAX          26
+#define DGUS_FRAME_TIMEOUT_MS 50
+
+/* 1바이트 처리. true 리턴 시 out 에 완성 프레임 적재. */
+static bool parser_step(uint8_t b, dgus_frame_t *out)
+{
+    switch (s_parse_state) {
+
+    case PS_IDLE:
+        if (b == DGUS_SYNC1) {
+            s_parse_state = PS_GOT_5A;
+        }
+        return false;
+
+    case PS_GOT_5A:
+        if (b == DGUS_SYNC2) {
+            s_parse_state    = PS_GOT_HEADER;
+            s_frame_start_ms = sys_tick_get_ms();
+        } else if (b == DGUS_SYNC1) {
+            /* 연속 0x5A: PS_GOT_5A 유지 */
+        } else {
+            s_parse_state = PS_IDLE;
+        }
+        return false;
+
+    case PS_GOT_HEADER:
+        /* 이 byte 가 LEN */
+        if (b < DGUS_LEN_MIN || b > DGUS_LEN_MAX) {
+            s_dgus_rx_drop_count++;                     /* samd20 결함 #1 회피 */
+            s_parse_state = PS_IDLE;
+            return false;
+        }
+        s_bytes_remaining = b;
+        s_frame_idx       = 0;
+        s_parse_state     = PS_COLLECTING;
+        return false;
+
+    case PS_COLLECTING:
+        /* 벽시계 timeout — samd20 결함 #2 회피 */
+        if ((uint32_t)(sys_tick_get_ms() - s_frame_start_ms) > DGUS_FRAME_TIMEOUT_MS) {
+            s_dgus_rx_drop_count++;
+            s_parse_state = PS_IDLE;
+            return false;
+        }
+        s_frame_buf[s_frame_idx++] = b;
+        s_bytes_remaining--;
+        if (s_bytes_remaining == 0) {
+            /* 프레임 완성 — frame_buf 매핑:
+             *   [0] = cmd, [1] = addr_h, [2] = addr_l, [3..] = payload
+             *   payload 길이 = LEN - 3 = s_frame_idx - 3
+             */
+            out->cmd      = s_frame_buf[0];
+            out->vp_addr  = (uint16_t)((s_frame_buf[1] << 8) | s_frame_buf[2]);
+            out->data_len = (uint8_t)(s_frame_idx - 3);
+            for (uint8_t i = 0; i < out->data_len && i < DGUS_MAX_DATA; i++) {
+                out->data[i] = s_frame_buf[3 + i];
+            }
+            s_parse_state = PS_IDLE;
+            return true;
+        }
+        return false;
+    }
+    /* unreachable */
+    s_parse_state = PS_IDLE;
+    return false;
+}
+
+bool dgus_rx_poll(dgus_frame_t *out)
+{
+    uint8_t b;
+    /* ring 을 한 프레임 완성될 때까지, 또는 비울 때까지 소비 */
+    while (usart1_rx_pop(&b)) {
+        if (parser_step(b, out)) {
+            return true;
+        }
+    }
+    return false;
+}
