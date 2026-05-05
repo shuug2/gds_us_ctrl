@@ -162,7 +162,7 @@ mechanical 옮기기 + spec reviewer 사이클:
 4. **spec compliance reviewer subagent dispatch** — 검증 포인트:
    - 4 상태 전이 spec §3.4 verbatim 일치 (특히 PS_GOT_5A 에서 연속 0x5A 처리: state 유지)
    - PS_GOT_HEADER 에서 LEN ∈ [4, 26] 검증, 범위 외 → drop counter 증가 + IDLE 복귀 (samd20 결함 #1 회피)
-   - PS_COLLECTING 에서 `sys_tick_ms()` 벽시계 50ms timeout (samd20 결함 #2 회피, byte-counted ✗)
+   - PS_COLLECTING 에서 `sys_tick_get_ms()` 벽시계 50ms timeout (samd20 결함 #2 회피, byte-counted ✗)
    - frame_buf 매핑: [0]=cmd, [1]=addr_h, [2]=addr_l, [3..]=payload. `data_len = LEN - 3`
    - vp_addr big-endian 조립 `(frame_buf[1] << 8) | frame_buf[2]`
    - `out->data` copy 시 `i < data_len && i < DGUS_MAX_DATA` 이중 가드
