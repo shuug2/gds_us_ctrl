@@ -52,7 +52,7 @@
 | `fw/drivers/dgus_lcd.c` | DGUS 프레임 빌더 + RX 파서. USART1 raw API 만 의존 |
 | `fw/src/periph.c` | huart1 단일 정의 (단일 정의 디시플린) |
 | `fw/src/irq.c` | USART1_IRQHandler weak override |
-| `fw/src/main.c` | init 순서: HAL_Init → clock → usart6 → **usart1** → tim11 → board → **dgus** → sys_tick → __enable_irq → app |
+| `fw/src/main.c` | init 순서: HAL_Init → clock → usart6 → **usart1** → tim11 → board → **dgus** → app (Phase 2 form: sys_tick_init 은 app_init 내부) |
 | `fw/src/app.c` | mon banner + dgus_set_page + 매 iter RX drain + 1Hz dgus_write_u16 cadence |
 
 ---
@@ -894,7 +894,7 @@ git -c commit.gpgsign=false commit -m "feat: dgus_lcd.c RX parser state machine 
 grep -n "init\|enable_irq\|app_loop_iter" fw/src/main.c
 ```
 
-Expected: Phase 2 순서 — `HAL_Init / clock_init / usart6_init / tim11_init / board_init / sys_tick_init / __enable_irq / app_init / for(;;) app_loop_iter`.
+Expected: Phase 2 순서 — `HAL_Init / clock_init / usart6_init / tim11_init / board_init / app_init / while(1) app_loop_iter` (Phase 2 form: sys_tick_init 은 app_init 내부에서 호출, explicit `__enable_irq()` 없음).
 
 - [ ] **Step 2: include 추가 + init 호출 삽입**
 
@@ -919,12 +919,9 @@ int main(void)
     board_init();
     dgus_init();        /* Stage A: DGUS 프로토콜 레이어 상태 클리어 */
 
-    sys_tick_init();
-    __enable_irq();
+    app_init();         /* Phase 2 form: 내부에서 sys_tick_init + mon_init */
 
-    app_init();
-
-    for (;;) {
+    while (1) {
         app_loop_iter();
     }
 }
