@@ -367,7 +367,7 @@ Phase 2: `[boot] gds_us_ctrl phase2 ready\r\n`
 추가 1회성 라인:
 ```
 [lcd] usart1@115200 ring=64 prio=5
-[lcd] init ok, set_page=9 (LCD_RUN_STD), uptime VP=0x1110 (VAR_POWER)
+[lcd] init ok, set_page=9, uptime VP=0x1110
 ```
 
 ### 4.3 데모 cadence + 타깃 (configurable)
