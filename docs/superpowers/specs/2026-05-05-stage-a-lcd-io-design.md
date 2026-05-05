@@ -287,7 +287,7 @@ typedef enum { PS_IDLE, PS_GOT_5A, PS_GOT_HEADER, PS_COLLECTING } parse_state_t;
 전이:
 ```
 PS_IDLE       byte==0x5A  → PS_GOT_5A
-PS_GOT_5A     byte==0xA5  → PS_GOT_HEADER (frame_start_ms = sys_tick_ms())
+PS_GOT_5A     byte==0xA5  → PS_GOT_HEADER (frame_start_ms = sys_tick_get_ms())
               byte==0x5A  → PS_GOT_5A          (안전: 연속 5A)
               else        → PS_IDLE
 PS_GOT_HEADER byte=LEN, 4≤LEN≤26 → PS_COLLECTING (bytes_remaining=LEN, idx=0)
@@ -296,7 +296,7 @@ PS_COLLECTING:
               frame_buf[idx++] = byte; bytes_remaining--;
               if (bytes_remaining == 0):
                   frame 완성 → dgus_frame_t에 매핑, PS_IDLE 복귀, true 리턴
-              elif ((sys_tick_ms() - frame_start_ms) > 50):
+              elif ((sys_tick_get_ms() - frame_start_ms) > 50):
                   PS_IDLE + s_dgus_rx_drop_count++
 ```
 
@@ -388,7 +388,7 @@ Phase 2: `[boot] gds_us_ctrl phase2 ready\r\n`
 
 ```c
 void app_loop_iter(void) {
-    uint32_t now = sys_tick_ms();
+    uint32_t now = sys_tick_get_ms();
 
     /* 1. RX drain — 매 iter 호출, 비어 있으면 즉시 false 리턴 */
     dgus_frame_t f;
