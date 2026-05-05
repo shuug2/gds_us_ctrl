@@ -58,10 +58,12 @@
 
 ### USART1 — LCD 통신
 
-| Pin | Net Name | Signal | 설명 |
-|-----|----------|--------|------|
-| PA9 | LCD_TX | USART1_TX | LCD 시리얼 TX |
-| PA10 | LCD_RX | USART1_RX | LCD 시리얼 RX |
+> **상태**: Stage A 구현 완료 (2026-05-06). DGUS T5L LCD 와 115200 8N1 양방향 통신. AF7 + IT 1-byte RX (`HAL_UART_Receive_IT` + 64-byte ring) + 폴링 TX (10 ms timeout). 상세 설계: `docs/superpowers/specs/2026-05-05-stage-a-lcd-io-design.md`.
+
+| Pin | Net Name | Signal | AF | 설명 |
+|-----|----------|--------|----|------|
+| PA9 | LCD_TX | USART1_TX | AF7 | DGUS LCD 시리얼 TX (Stage A 활성) |
+| PA10 | LCD_RX | USART1_RX | AF7 | DGUS LCD 시리얼 RX (Stage A 활성, IT byte 모드) |
 
 ### USART6 — 모니터링 + Modbus RTU (이중 역할, 단계별 전환)
 
