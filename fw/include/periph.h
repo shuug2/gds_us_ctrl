@@ -3,4 +3,5 @@
 #include "stm32f4xx_hal.h"
 
 extern UART_HandleTypeDef huart6;
+extern UART_HandleTypeDef huart1;   /* USART1 — DGUS LCD (Stage A) */
 extern TIM_HandleTypeDef  htim11;
