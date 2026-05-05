@@ -83,7 +83,7 @@
 main.c → HAL_Init → clock_init → usart6_init → usart1_init → tim11_init →
          board_init → dgus_init → app_init → loop
 
-app_init() ─→ mon_puts (banner)
+app_init() ─→ mon_writeln (banner)
             ─→ #if DGUS_DEMO_RESET_ON_BOOT: dgus_reset_lcd
             ─→ dgus_set_page(DGUS_DEMO_BOOT_PAGE)
 
@@ -415,7 +415,7 @@ void app_loop_iter(void) {
 
 ```c
 void app_init(void) {
-    mon_puts("[boot] gds_us_ctrl stage-a-lcd ready\r\n");
+    mon_writeln("[boot] gds_us_ctrl stage-a-lcd ready");
     mon_printf("[lcd] usart1@115200 ring=64 prio=5\r\n");
 
 #if DGUS_DEMO_RESET_ON_BOOT
