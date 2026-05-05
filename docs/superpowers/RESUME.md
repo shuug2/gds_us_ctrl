@@ -1,10 +1,10 @@
-# RESUME — Stage A LCD I/O Bring-up (Task 9부터 재개)
+# RESUME — Stage A LCD I/O Bring-up (Task 10부터 재개)
 
-> **중단 시각**: 2026-05-05 (Chunk C 종료, Task 1-8 완료, Task 9 main.c init 시작 직전)
-> **다음**: Task 9 — `fw/src/main.c` init 시퀀스에 USART1 + DGUS 추가 (substantive, spec reviewer 필수)
+> **중단 시각**: 2026-05-05 (Task 9 완료, Task 10 시작 직전)
+> **다음**: Task 10 — `fw/src/app.c` banner 갱신 + 1Hz LCD cadence (substantive, spec reviewer 필수)
 > **재개 시점**: 사용자 새 세션 시작 시
 > **스킬 흐름**: `superpowers:subagent-driven-development` (Task별 fresh subagent + review)
-> **세션 진입 first-step**: `/graphify` (사용자 메모리 `feedback_graphify_after_docs` 정책 — Task 8 에서 코드/spec/plan 변경됨, graph 재생성 후 Task 9 진입)
+> **세션 진입 first-step**: `/graphify` (사용자 메모리 `feedback_graphify_after_docs` 정책 — Task 9 에서 코드/spec/plan 변경됨, graph 재생성 후 Task 10 진입). 단 vendor 포함 corpus 가 막대하므로 사용자 결정 필요 — 이전 세션은 사용자가 graphify 스킵 채택.
 
 ---
 
@@ -38,9 +38,9 @@ SessionStart 훅이 본 파일 자동 로드 (.claude/settings.json). 진입 절
 | **Main repo** | `/Users/tknoh/dev/work/gds_us_ctrl/` (사용 ✗) |
 | **Branch** | `feat/stage-a-lcd-io` |
 | **Base** | `main @ b8afe1c` (Phase 1+2 merge) |
-| **마지막 코드 commit** | `e330226 feat: dgus_lcd.c RX parser state machine + dgus_rx_poll` (Task 8) |
+| **마지막 코드 commit** | `15aa74c feat: wire usart1_init + dgus_init into main init sequence` (Task 9) |
 | **Tip (본 RESUME 갱신 후)** | 본 commit |
-| **Ahead of main** | 17 commits (4 doc 초기 + 8 code + 5 doc 정정/RESUME 갱신) |
+| **Ahead of main** | 21 commits (4 doc 초기 + 9 code + 8 doc 정정/RESUME 갱신) |
 
 ### 1.2 산출 문서
 
@@ -73,8 +73,8 @@ SessionStart 훅이 본 파일 자동 로드 (.claude/settings.json). 진입 절
 | 6 | `fw/drivers/dgus_lcd.c` skeleton + 카운터 | spec reviewer (묶음) | `6ebe8f9` | ✅ |
 | 7 | dgus_lcd.c TX 빌더 9개 | spec reviewer ✅ (Task 6+7 묶음 20/20) | `4d8baa2` | ✅ |
 | 8 | dgus_lcd.c RX 파서 상태머신 | spec reviewer ✅ (12/12) | `e330226` | ✅ |
-| **9** | **`fw/src/main.c` init 시퀀스** | **spec reviewer** | — | **▶ 다음** |
-| 10 | `fw/src/app.c` banner + cadence | spec reviewer | — | 대기 |
+| 9 | `fw/src/main.c` init 시퀀스 | spec reviewer ✅ (10/10) | `15aa74c` | ✅ |
+| **10** | **`fw/src/app.c` banner + cadence** | **spec reviewer** | — | **▶ 다음** |
 | 11 | Build verify (FLASH/RAM/symbol nm) | controller-direct | — | 대기 |
 | 12 | HW verify (banner / 페이지 / VP / RX / drop=0) | controller-direct + 사용자 시각 | — | 대기 |
 | 13 | Doc sync + RESUME archive | controller-direct | — | 대기 |
@@ -84,7 +84,9 @@ SessionStart 훅이 본 파일 자동 로드 (.claude/settings.json). 진입 절
 - **Task 4** (`286d908`, `usart1.c` 107 LOC): 13/13 체크리스트 ✅ verbatim 준수, drift 0건. CRITICAL/HIGH/MEDIUM/LOW 0.
 - **Task 6+7 묶음** (`6ebe8f9` + `4d8baa2`, `dgus_lcd.c` skeleton + TX 빌더 9개): 20/20 체크리스트 ✅. samd20 ref 9 함수 풀 패리티 의미적·payload 형식 동등성 확인. CRITICAL/HIGH/MEDIUM/LOW 0.
 - **Task 8** (`e330226`, dgus_lcd.c RX 파서 88 LOC): 12/12 체크리스트 ✅. 4 상태 전이, LEN bound, 50ms 벽시계 timeout, frame_buf 매핑, vp_addr BE, payload 이중 가드 모두 spec §3.4/§3.7 일치. PS_COLLECTING 연산 순서 (timeout vs store) 가 spec 의사코드와 다르나 §3.7 #2 normative ("벽시계 ms") frozen, 의사코드 sketch 라 의미적 동등 판정. CRITICAL/HIGH/MEDIUM 0, LOW 1 (RESUME 안내문 잔여 typo, 즉시 정정 `20354f0`).
+- **Task 9** (`15aa74c`, main.c init 시퀀스 +5 LOC): 10/10 체크리스트 ✅ APPROVE. spec §4.1 init 순서 verbatim, usart1_init/dgus_init 위치, race-free 분석, Phase 1+2 init call drift 0, sys_tick_init/__enable_irq explicit 부재, app.c 미수정 (Task 10 분리), include 추가, 빌드 sanity 메타 모두 ✅. CRITICAL/HIGH/MEDIUM/LOW 0. 추가 spec/plan 정정 권고 없음.
 - **발견된 spec/plan 결함 (Task 8)**: spec §3.4/§4.4 + plan Task 8/Task 10 의 함수명 typo `sys_tick_ms` → 실제는 `sys_tick_get_ms` (Phase 1+2 source of truth). Phase 2 정정 패턴 (`de0c35f` AUTORELOAD typo / `8d67a7d` genex 패턴) 처럼 spec(`3e60675`) + plan(`7adede8`) + RESUME(`20354f0`) 별도 commit 으로 정정. 코드는 정정된 함수명으로 first-time commit (`e330226`).
+- **발견된 spec/plan 결함 (Task 9)**: spec §1.3 콜그래프 + §4.1 init order + 근거 bullet 의 explicit `sys_tick_init()` / `__enable_irq()` 호출 단정이 Phase 2 reality 와 불일치 (실제 Phase 2 는 sys_tick_init 을 app_init 내부에서 호출, explicit `__enable_irq()` 부재 — Cortex-M PRIMASK 리셋 직후 clear 디시플린에 의존). spec(`4353f19`) + plan(`85d11d9`) 두 정정 commit 후 코드(`15aa74c`) 반영하는 Task 8 패턴 미러로 처리. spec §4.1 근거 bullet 도 race 분석 (HAL_UART_Receive_IT 시점 ↔ dgus_init 시점) 으로 갱신.
 
 ### 1.6 advisor 가이드 (이전 세션 기록)
 
@@ -120,11 +122,10 @@ editor 의 clangd 진단이 `stm32f4xx_hal.h` / `uint8_t` 등 unknown 으로 ✗
 
 | # | Task | 비고 |
 |---|------|------|
-| **9** | `fw/src/main.c` init 시퀀스에 USART1 + DGUS 추가 | plan 라인 887 부근 verbatim. `usart1_init()` → `dgus_init()` 호출 추가 (Phase 1+2 의 `mon_usart_init` 뒤). spec §4.1 init 순서 일치. **spec compliance reviewer subagent 필수**. |
-| 10 | `fw/src/app.c` banner + 1Hz cadence | plan 라인 ~1000 부근. `app_init` 에서 banner + LCD reset(option) + set_page. `app_loop_iter` 에서 1Hz uptime → VAR_POWER write + RX drain + echo drop + RD log. spec §4.2-4.5. **spec reviewer**. |
+| **10** | **`fw/src/app.c` banner + 1Hz cadence** | plan 라인 956 부근. `app_init` 에서 banner 갱신 (`stage-a-lcd ready` + 2 LCD 라인) + LCD reset(option) + set_page. `app_loop_iter` 에서 1Hz uptime → VAR_POWER write + RX drain + echo drop + RD log. spec §4.2-4.5. **spec compliance reviewer subagent 필수**. |
 | 11 | Build verify | FLASH/RAM 사용량, `nm` 으로 `dgus_*` / `usart1_*` symbol export 확인. spec §6.2 acceptance. controller-direct + 사용자 보고. |
 
-> Task 9 → Task 10 → Task 11 (build verify) → **이 시점 사용자 보고** → Task 12 (HW verify, 사용자 시각 확인 필수) → Task 13 (doc sync + RESUME archive).
+> Task 10 → Task 11 (build verify) → **이 시점 사용자 보고** → Task 12 (HW verify, 사용자 시각 확인 필수) → Task 13 (doc sync + RESUME archive).
 
 ---
 
@@ -161,33 +162,42 @@ git log --oneline main..HEAD | head -20
 
 ### 4.2 진입
 
-1. **`/graphify` 실행** — 코드 / spec / plan / RESUME 변경 (Task 8 commits) 반영. 사용자 메모리 `feedback_graphify_after_docs` 정책. 산출물 `graphify-out/` (untracked, 무관).
-2. `superpowers:subagent-driven-development` 스킬 호출. plan (`docs/superpowers/plans/2026-05-05-stage-a-lcd-io.md`) Task 9 (라인 884~ 부근) 부터 진행.
+1. **`/graphify` 실행** (사용자 결정) — corpus 임계 초과로 사용자에게 옵션 제시. 이전 세션은 vendor 포함 비용 회피 목적으로 스킵 채택 (사용자 메모리 `feedback_graphify_after_docs` 의 정책 자체는 유지, 매 세션 강제 아님).
+2. `superpowers:subagent-driven-development` 스킬 호출. plan (`docs/superpowers/plans/2026-05-05-stage-a-lcd-io.md`) Task 10 (라인 956~) 부터 진행.
 
-본격 시작 전 advisor 1회 호출해 Task 9 핵심 검증 포인트 합의 (spec §4.1 init 순서, mon log banner 갱신 dependency).
+본격 시작 전 advisor 1회 호출해 Task 10 핵심 검증 포인트 합의 (spec §4.2 banner 형식, §4.3 데모 cadence, §4.4 app_loop_iter RX drain + echo drop + RD log 패턴, sys_tick_get_ms 사용).
 
-### 4.3 Task 9 진행 절차
+### 4.3 Task 10 진행 절차
 
 mechanical 옮기기 + spec reviewer 사이클:
 
-1. plan §Task 9 §Step 1 의 변경 (`fw/src/main.c` init 시퀀스) 을 Edit 으로 적용
-2. `env -u STM32_TOOLCHAIN arm-none-eabi-gcc -c -fsyntax-only ... -x c fw/src/main.c` exit=0 확인
-3. `git add fw/src/main.c && git -c commit.gpgsign=false commit -m "..."`
-4. **spec compliance reviewer subagent dispatch** — 검증 포인트:
-   - spec §4.1 init 순서 verbatim 일치 (clock → sys_tick → mon_usart → usart1 → dgus → app)
-   - `usart1_init()` 가 `dgus_init()` 보다 먼저 (RX ring 책임은 usart1_init, dgus 는 자기 상태만)
-   - Phase 1+2 의 기존 init call (mon_usart_init 등) 보존, drift 0
+1. plan §Task 10 §Step 1~ 의 변경 (`fw/src/app.c` banner 갱신 + 1Hz cadence) 을 Edit 으로 적용
+2. `env -u STM32_TOOLCHAIN arm-none-eabi-gcc -c -fsyntax-only ... -x c fw/src/app.c` exit=0 확인
+3. `git add fw/src/app.c && git -c commit.gpgsign=false commit -m "..."`
+4. **spec compliance reviewer subagent dispatch** — §4.4 dispatch 가드 그대로. 검증 포인트:
+   - banner 라인 verbatim 일치 (spec §4.2: `[boot] gds_us_ctrl stage-a-lcd ready` + `[lcd] usart1@115200 ring=64 prio=5` + `[lcd] init ok, set_page=9 (LCD_RUN_STD), uptime VP=0x1110 (VAR_POWER)`)
+   - app_init: `dgus_set_page(LCD_RUN_STD)` + (옵션) `DGUS_DEMO_RESET_ON_BOOT` gate `dgus_reset_lcd()` 호출 위치
+   - app_loop_iter: 매 iter `while (dgus_rx_poll(&f))` drain + `dgus_is_echo` skip + non-echo 는 `mon_printf("[lcd] rx ...")` log
+   - 1Hz cadence: `(now - prev_lcd_tick) >= 1000` 시 `dgus_write_u16(0x1110, secs)` (spec §4.3-4.4)
+   - sys_tick_get_ms 사용 (sys_tick_ms 아님, Task 8 정정 적용된 함수명)
    - reviewer 가 issues flag 시 implementer (controller-direct) 가 fix → 재 commit → 재 dispatch
-5. ✅ 후 Task 10 진행
+5. ✅ 후 Task 11 진행
 
-### 4.3a Task 8 (완료) 참조
+### 4.3a Task 8/9 (완료) 참조
 
-Task 8 처리 절차 — 향후 RX 파서 디버깅 / archive 시 참고:
+Task 8/9 처리 패턴 — 향후 디버깅 / archive 시 참고:
 
-1. plan §Task 8 §Step 1 verbatim 으로 `fw/drivers/dgus_lcd.c` 끝(TX 빌더 뒤)에 추가 (`#define DGUS_LEN_MIN/MAX`, `parser_step`, `dgus_rx_poll`)
+**Task 8 (`e330226`)** RX 파서 88 LOC:
+1. plan §Task 8 §Step 1 verbatim 으로 `fw/drivers/dgus_lcd.c` 끝에 추가
 2. 빌드 sanity 에서 `sys_tick_ms` typo 노출 → spec / plan / RESUME / 코드 모두 `sys_tick_get_ms` 로 정정 (4 commits: `3e60675` spec, `7adede8` plan, `e330226` code, `20354f0` RESUME followup)
-3. spec reviewer subagent (general-purpose) dispatch → 12/12 ✅ APPROVE, CRITICAL/HIGH/MEDIUM 0, LOW 1 (RESUME 안내문 잔여 typo, 즉시 정정)
-4. PS_COLLECTING 연산 순서 (timeout vs store) divergence 는 (a) 의미적 동등 판정 — spec §3.7 #2 normative ("벽시계 ms") frozen, §3.4 의사코드 sketch
+3. spec reviewer subagent → 12/12 ✅ APPROVE, LOW 1 (RESUME 잔여 typo, 즉시 정정)
+4. PS_COLLECTING 연산 순서 (timeout vs store) divergence 는 의미적 동등 판정
+
+**Task 9 (`15aa74c`)** main.c init +5 LOC:
+1. plan §Task 9 §Step 1 점검 단계에서 spec §1.3/§4.1 의 explicit `sys_tick_init()` / `__enable_irq()` 단정이 Phase 2 reality 와 불일치 노출 (Phase 2 의 sys_tick_init 은 app_init 내부, explicit __enable_irq 부재 — Cortex-M PRIMASK 리셋 직후 clear 디시플린)
+2. advisor 자문 후 Task 8 정정 패턴 미러로 처리: spec(`4353f19`) + plan(`85d11d9`) 정정 후 코드(`15aa74c`) 반영. spec §4.1 근거 bullet 도 race 분석 (HAL_UART_Receive_IT 시점 ↔ dgus_init 시점) 으로 재작성
+3. spec reviewer subagent → 10/10 ✅ APPROVE, CRITICAL/HIGH/MEDIUM/LOW 0, 추가 정정 없음
+4. 배운 점: spec §4.1 처럼 "Phase X 디시플린" 단정 라인은 실제 코드와 cross-check 필수 — typo 보다 큰 구조 drift 가 잠복 가능
 
 ### 4.4 Subagent dispatch 가드 (모든 reviewer dispatch)
 
@@ -233,7 +243,8 @@ Task 8 처리 절차 — 향후 RX 파서 디버깅 / archive 시 참고:
 | 응답 언어 | 한국어 |
 | Task 1-7 spec drift | 없음 (reviewer 2회 모두 ✅ APPROVE) |
 | Task 8 spec drift | `sys_tick_ms` → `sys_tick_get_ms` (Phase 2 정정 패턴, 3 commit). reviewer 12/12 ✅ APPROVE |
-| 세션 진입 first-step | `/graphify` (Task 8 종료 시점부터) |
+| Task 9 spec drift | spec §1.3/§4.1 의 explicit `sys_tick_init()` / `__enable_irq()` 단정 제거 (Phase 2 reality 정합). spec(`4353f19`) + plan(`85d11d9`) 정정 후 코드(`15aa74c`). reviewer 10/10 ✅ APPROVE |
+| 세션 진입 first-step | `/graphify` (corpus 결정 사용자 확인 필요 — vendor 포함시 3M 단어, 이전 세션 스킵 채택) |
 
 ---
 
