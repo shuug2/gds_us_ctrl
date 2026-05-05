@@ -1,7 +1,7 @@
-# RESUME — Phase 1+2 Bootstrap Implementation (Chunk 12부터)
+# RESUME — Phase 1+2 Bootstrap Implementation (Chunk 13부터)
 
-> **중단 시각**: 2026-05-03 (Chunk 11 PASS 직후, Phase 2 빌드 검증 완료 — FLASH 16.83% / RAM 7.69%)
-> **🛑 사용자 PAUSE 필요**: Chunk 12는 ST-LINK + 보드 + USB 시리얼 연결 후 진행
+> **중단 시각**: 2026-05-05 (Chunk 12 PASS 직후, Phase 2 HW 검증 완료 — banner + 1Hz hello + PB3 heartbeat 모두 관찰됨)
+> **다음**: Chunk 13 — Doc sync + graphify 재생성 (CLAUDE.md 100→96 MHz, pinmap, changelog, spec/plan defect 정정, RESUME archive)
 > **재개 시점**: 사용자 새 세션 시작 시
 > **스킬 흐름**: `superpowers:subagent-driven-development` (Chunk별 fresh subagent + 정식 review는 substantive 코드 chunk에서만)
 
@@ -20,7 +20,7 @@ claude
 RESUME 읽고 Chunk 12부터 진행
 ```
 
-SessionStart 훅이 본 파일 자동 로드. Chunk 12는 Phase 2 HW verify — ST-LINK 연결 + `make flash` + USB 시리얼 (115200 8N1) 모니터링으로 banner / 1Hz hello / PB3 heartbeat 확인 (plan task 25).
+SessionStart 훅이 본 파일 자동 로드. Chunk 13은 doc sync + graphify 재생성 — CLAUDE.md (100→96 MHz), pinmap, changelog, RESUME archive, spec/plan defect 정정 (§2.0/§2.1/§2.5), graphify 재실행 (controller-direct, 보드 불필요).
 
 ---
 
@@ -45,7 +45,7 @@ SessionStart 훅이 본 파일 자동 로드. Chunk 12는 Phase 2 HW verify — 
 | `docs/superpowers/plans/2026-04-26-phase1-2-bootstrap.md` | 30 task 구현 계획 |
 | `docs/superpowers/RESUME.md` | **본 파일** |
 
-### 1.3 완료된 Chunks (1–7)
+### 1.3 완료된 Chunks (1–12)
 
 | # | Chunk | Commits |
 |---|-------|---------|
@@ -68,6 +68,8 @@ SessionStart 훅이 본 파일 자동 로드. Chunk 12는 Phase 2 HW verify — 
 | — | RESUME Chunk 10 PASS | `190e890` |
 | — | **spec defect fix** (TIM_AUTORELOAD_PRELOAD typo) | `de0c35f` |
 | 11 | **Phase 2 build verify ✅ (PASS)** | (no commit; controller-direct) |
+| — | RESUME Chunk 11 PASS | `59d6e66` |
+| 12 | **Phase 2 HW verify ✅ (PASS)** | (no commit; controller-direct) |
 
 **Phase 1 빌드 결과**: FLASH 3860 B (2.94%), RAM 1584 B (4.83%), elf/bin/hex/map 4 산출물 정상.
 
@@ -80,6 +82,14 @@ SessionStart 훅이 본 파일 자동 로드. Chunk 12는 Phase 2 HW verify — 
 - HAL_Init + clock_init 통과 (Error_Handler / HardFault 미히트)
 - main `while(1) __NOP()` 도달 확인 (PC=0x80002ea = main+10)
 - **SystemCoreClock = 96,000,000 Hz** (HSI×12 PLL lock 확인)
+
+**Phase 2 HW 검증 결과** (Chunk 12, 2026-05-05):
+- Flash: `openocd -f fw/openocd/stm32f410.cfg -c "program ... verify reset exit"` — Programming Finished + Verified OK + Resetting Target. Device ID 0x10006458, flash size 128 KiB.
+- 칩 상태 (gdb attach + `monitor halt` 후 reg/mem 직접 dump): PC = `app_loop_iter+2` (0x0800385e), xPSR=0x81000000 (Thread mode, fault 없음), MSP=0x20007FF0. CFSR=0, HFSR=0 → fault 진입 흔적 없음.
+- TIM11 1 kHz 틱: `s_ms` 1.2초 동안 69167 → 70388 (+1221) → **약 1018 Hz** (gdb halt overhead 포함, 정상 범위).
+- PB3 heartbeat: GPIOB ODR(0x40020414) 250ms 간격 8회 샘플 = `0,0,8,8,8,8,0,0` → bit 3 토글 패턴 관찰. 사용자 직접 LED 점멸 확인 ✅.
+- USART6: SR=0x000000C0 (TC=1, TXE=1 → 송신 완료), BRR=0x341 (96 MHz/833 = 115 246 baud, 목표 대비 ~0.04% 오차), CR1=0x200C (UE+TE+RE), GPIOC MODER bits[15:12]=AF, AFRL bits[31:24]=AF8 → PC6/PC7 USART6 mux 정확. 사용자 시리얼 터미널로 banner `[boot] gds_us_ctrl phase2 ready` + 1 Hz `[t=N ms] hello` 직접 관찰 확인 ✅.
+- RCC: AHB1ENR=0x00000006 (GPIOB+GPIOC 클럭 ON), APB2ENR=0x00048020 (USART6 + SYSCFG + TIM11 클럭 ON).
 
 ---
 
@@ -129,12 +139,7 @@ Cortex-M4 r0p1은 **HW breakpoint 6개 한계**. fault handler 모두 + main에 
 
 | # | Chunk | Plan tasks | 비고 |
 |---|-------|------------|------|
-| 12 | Phase 2 HW verify | 25 | **🛑 USER PAUSE** — ST-LINK + 보드 + USB 시리얼 (PC6/PC7 연결) 필요. `cmake --build fw/build --target flash` 후 USB 시리얼 115200 8N1 모니터로 banner `[boot] gds_us_ctrl phase2 ready` + `[t=N ms] hello` 1Hz 확인, PB3 heartbeat 1Hz 토글 확인 |
-| 13 | Doc sync + graphify | 26-30 | CLAUDE.md (100→96 MHz), pinmap, changelog, RESUME archive, **spec/plan에 §2.0 AUTORELOAD_PRELOAD 정정 + §2.1 genex 정정 + §2.5 HW BP 한계 반영**, graphify 재생성 |
-| 10 | Phase 2 main + irq + CMakeLists update | 21-23 | main Phase 2 form + TIM11 IRQ + CMakeLists 확장 |
-| 11 | Phase 2 build verify | 24 | controller-direct |
-| 12 | Phase 2 HW verify | 25 | **🛑 USER PAUSE** — ST-LINK + 보드 필요 (OpenOCD는 §2.3에서 이미 설치됨) |
-| 13 | Doc sync + graphify | 26-30 | CLAUDE.md (100→96 MHz), pinmap, changelog, RESUME archive, **spec/plan에 §2.1 genex 정정 + §2.5 HW BP 한계 반영**, graphify 재생성 |
+| 13 | Doc sync + graphify | 26-30 | CLAUDE.md (100→96 MHz), pinmap, changelog, RESUME archive, **spec/plan에 §2.0 AUTORELOAD_PRELOAD 정정 + §2.1 genex 정정 + §2.5 HW BP 한계 반영**, graphify 재생성. controller-direct, 보드 불필요. |
 
 ---
 
@@ -151,38 +156,21 @@ git log --oneline main..HEAD | head -10  # → Chunk 11 RESUME update + de0c35f 
 
 불일치 시 사용자에게 보고하고 정지.
 
-### 4.2 Chunk 12 진입 (USER PAUSE)
+### 4.2 Chunk 13 진입 (controller-direct, 보드 불필요)
 
-🛑 **사용자 준비 필요**:
-- ST-LINK V3 연결 (USB)
-- STM32F410RBT 보드 전원 ON
-- USB-시리얼 어댑터 연결: PC6 (USART6_TX) → 어댑터 RX, PC7 (USART6_RX) → 어댑터 TX, GND 공통
-- 시리얼 모니터 115200 8N1 (예: `screen /dev/tty.usbserial-* 115200` 또는 `picocom -b 115200 /dev/tty.usbserial-*`)
+작업 항목 (plan tasks 26–30):
+- `CLAUDE.md` `100 MHz` → `96 MHz` (Phase 1 HW verify에서 PLL=HSI×12=96 MHz 확정)
+- `docs/pinmap.md` USART6 / TIM11 / PB3 heartbeat 등 Phase 2 신규 핀 사용 반영
+- `docs/changelog.md` Phase 1+2 bootstrap 완료 항목 추가 (Chunks 1–12 요약)
+- `docs/superpowers/specs/2026-04-26-phase1-2-bootstrap-design.md` defect 정정:
+  - §2.0 `TIM_AUTORELOADPRELOAD_DISABLE` → `TIM_AUTORELOAD_PRELOAD_DISABLE`
+  - §2.1 CMake genex Debug flags semicolon 처리 정정
+  - §2.5 Cortex-M4 r0p1 6 HW BP 한계 메모 추가
+- `docs/superpowers/plans/2026-04-26-phase1-2-bootstrap.md` 상응 정정
+- `docs/superpowers/RESUME.md` archive (`docs/superpowers/historical/` 또는 main repo의 stale pointer만 유지)
+- `graphify-out/` 재생성 (메인 레포에서 `/graphify` 실행, worktree 변경사항 반영)
 
-작업 흐름:
-```bash
-cd /Users/tknoh/dev/work/gds_us_ctrl-phase12
-env -u STM32_TOOLCHAIN cmake --build fw/build --target flash
-# 또는 직접:
-# openocd -f fw/openocd/stm32f410.cfg -c "program fw/build/gds_us_ctrl.elf verify reset exit"
-```
-
-성공 기준 (시리얼 + 보드 관찰):
-- 부팅 직후 banner 1행: `[boot] gds_us_ctrl phase2 ready\r\n`
-- 이후 1초 간격으로 `[t=N ms] hello\r\n` (N은 millisecond, 약 1000씩 증가)
-- PB3 핀 LED/스코프로 1 Hz 토글 (50% duty)
-- HardFault / Error_Handler 미히트 (CPU 정지 없음)
-
-문제 발생 시 OpenOCD + GDB attach (RESUME §2.5 HW BP 한계 주의):
-```bash
-# 터미널 A
-openocd -f fw/openocd/stm32f410.cfg
-# 터미널 B
-arm-none-eabi-gdb fw/build/gds_us_ctrl.elf -x fw/openocd/debug.gdb
-# break 등록은 Error_Handler + HardFault_Handler + main 정도까지만 (6 HW BP 한계)
-```
-
-### 4.3 Chunk 12 dispatch 가드 (controller-direct이지만 참고용)
+### 4.3 Chunk 13 dispatch 가드
 
 ```
 - Work from: /Users/tknoh/dev/work/gds_us_ctrl-phase12 only.
@@ -207,6 +195,8 @@ arm-none-eabi-gdb fw/build/gds_us_ctrl.elf -x fw/openocd/debug.gdb
 **Chunk 10 review 결과** (2026-05-03): PASS-WITH-NOTES. 3 commits, 3 modified files (main.c overwrite, irq.c append, CMakeLists 3-edit). 초기화 순서 `HAL_Init → clock_init → usart6_init → tim11_init → board_init → app_init` 검증, IRQ symbol `TIM1_TRG_COM_TIM11_IRQHandler`이 vendor startup file weak alias와 일치 확인, `-u _printf_float` 링크 옵션 spec 준수 (defensive — `mon_printf` future 사용 대비). **Non-blocking note**: `fw/CMakeLists.txt:68` 주석 `# 어플리케이션 — Phase 1 sources`가 GLOB 변경 후 stale — Chunk 13 doc sync 시 정정 권장 (plan 범위 외).
 
 **Chunk 11 결과** (2026-05-03): PASS. clean build (`rm -rf fw/build` → cmake configure → ninja build). 빌드 중 spec defect 1건 발견 (§2.0 AUTORELOAD_PRELOAD 매크로 오타) — controller-direct fix commit `de0c35f`로 봉합 후 재빌드 클린. 산출물 + 심볼 + 메모리 사용량 모두 §1.3 Phase 2 빌드 결과 참조.
+
+**Chunk 12 결과** (2026-05-05): PASS. controller-direct, no commits (HW verify only). 5월 3일 빌드 산출물(elf 882684 B, 22060 B 코드) 그대로 flash. ST-LINK V3 (`/dev/cu.usbmodem14203`) + USB-시리얼 어댑터 (`/dev/cu.usbserial-AB0MLYXA`, FTDI). gdb register cache 함정: `info registers pc`는 stale, **`monitor reg pc` 또는 `monitor halt` 직후 출력만 신뢰**. 진단 흐름은 §1.3 Phase 2 HW 검증 결과 참조 — banner / 1Hz hello / PB3 heartbeat / no fault 4건 모두 확인.
 
 ---
 
