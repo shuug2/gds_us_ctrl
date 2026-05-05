@@ -1164,30 +1164,42 @@ screen /dev/cu.usbserial-XXXXXXXX 115200
 
 실패 시: Phase 2 회귀 가능성 — `usart6_init` / `clock_init` 변경 ✗ 확인. `git diff main..HEAD -- fw/src/clock.c fw/drivers/usart.c fw/drivers/mon_usart6.c` 가 비어있어야 함.
 
-- [ ] **Step 3: LCD 페이지 전환 시각 확인**
+- [ ] **Step 3: LCD wire-level 명령 valid 인식 (spec §6.3 6c)**
 
-부팅 후 LCD 가 `LCD_RUN_STD` (페이지 9) 화면으로 즉시 전환되는지 눈으로 확인.
+GDB attach 후 USART1 측 wire 명령이 LCD 에 도달 + LCD 가 echo 응답하는지 검증. **visible 페이지 변화는 acceptance 외 (Stage A scope 외, spec §0.3 의 Stage B application 데이터 셋업 의존)**.
 
-실패 시 (LCD 페이지 변화 ✗):
-- **R1 (AF7) 진단**: GDB attach 후 GPIOA AFRH dump
-  ```
-  monitor halt
-  monitor mdw 0x40020024 1     # AFRH (PA8-PA15)
-  ```
-  Expected bits: PA9 = AFRH[7:4] = 0x7, PA10 = AFRH[11:8] = 0x7. 다른 값이면 AF 번호 spec 정정.
-- **R2 (HMI) 진단**: USART1 BRR/CR1 dump 정상이어도 LCD 가 다른 HMI 라면 페이지 9 정의 다름. samd20 HMI 가 보드에 플래시되어 있는지 사용자 확인.
-  ```
-  monitor mdw 0x40011008 1     # USART1 BRR — Expected 0x341 (96 MHz / 115200)
-  monitor mdw 0x4001100C 1     # USART1 CR1 — Expected 0x200C (UE+TE+RE)
-  ```
+```bash
+openocd -f fw/openocd/stm32f410.cfg \
+  -c "init" -c "halt" \
+  -c "echo {== GPIOA AFRH (PA9/PA10 = AF7) ==}" \
+  -c "mdw 0x40020024 1" \
+  -c "echo {  Expected: bits[7:4]=PA9=0x7, bits[11:8]=PA10=0x7}" \
+  -c "echo {== USART1 BRR + CR1 ==}" \
+  -c "mdw 0x40011008 1" \
+  -c "mdw 0x4001100C 1" \
+  -c "echo {  BRR Expected: 0x341 (96 MHz / 833 ≈ 115246), CR1: 0x202C (UE+RXNEIE+TE+RE)}" \
+  -c "echo {== s_rx_ring (마지막 받은 byte 들 — DGUS WR-echo 패턴 5A A5 03 82 4F 4B 반복 기대) ==}" \
+  -c "mdb 0x20000398 64" \
+  -c "resume" -c "exit"
+```
 
-- [ ] **Step 4: uptime VP tick 시각 확인**
+PASS 조건:
+- AFRH=0x...770 (PA9/PA10 모두 AF7 ✓)
+- BRR=0x341, CR1=0x202C (USART1 정상 설정)
+- s_rx_ring 에 `5A A5 03 82 4F 4B` (DGUS WR-echo "OK") 패턴이 1Hz 로 반복 적재 — LCD 가 매 set_page/write_u16 명령에 응답한다는 입증
 
-LCD `VAR_POWER` 필드 (페이지 9 의 power 값 표시 영역) 가 1초마다 1, 2, 3, ... 증가하는지 확인.
+실패 시:
+- echo 미수신 (ring 비어있음 또는 garbage) → R1 (AF7) / 결선 / baud rate mismatch 진단
+- AFRH bits 가 0x7 아닌 값 → spec §0.2 GPIO AF 정정
 
-실패 시 (mon 은 정상이지만 LCD 미반영):
-- **R3 (echo) 진단**: 페이지 9 가 VAR_POWER 를 시각화하지 않을 수 있음. `DGUS_DEMO_UPTIME_VP` 를 `LV_OUTPUT (0x1170)` 등으로 변경 → 빌드 → flash → 재시도. 또는 페이지 변경.
-- echo 가 RD(0x83) 로 오면 mon 에 자기 WR 가 끊임없이 출력. samd20 HMI 설정 확인.
+- [ ] **Step 4: mon-side cadence (spec §6.3 6d)**
+
+mon 시리얼 터미널에 1Hz 로 `[t=N ms] hello uptime=N` 출력 (uptime 1, 2, 3, ... 증가) 확인. **LCD 측 VAR_POWER 시각 변화는 acceptance 외 (Stage A scope 외, Stage B 의존)**.
+
+USART1 TX 측 동작은 Step 3 의 echo 수신으로 입증됨 — wire 측 write_u16 명령이 매초 LCD 에 도달.
+
+실패 시 (mon hello 라인 부재):
+- Phase 2 회귀 가능성 — `usart6_init` / `clock_init` 변경 ✗ 확인. `git diff main..HEAD -- fw/src/clock.c fw/drivers/usart.c fw/drivers/mon_usart6.c` 가 비어있어야 함.
 
 - [ ] **Step 5: RX 터치 이벤트 검증**
 
@@ -1207,21 +1219,31 @@ LCD 화면의 터치 키 (예: 페이지 9 의 RUN/STOP 버튼) 를 누름. mon 
   - = 0: 터치 키가 0x83 frame 을 보내지 ✗ (HMI 설정 의존). 사용자 HMI 확인.
   - > 0: ring full 또는 재무장 실패. R4/R5 진단 — NVIC priority 재조정 또는 ring 사이즈 확장.
 
-- [ ] **Step 6: drop counter 5 분 동작 확인**
+- [ ] **Step 6: drop counter 5 분 동작 확인 (spec §6.3 6f)**
 
-5 분간 보드를 정상 동작 시킨 후 GDB attach 하여 모든 drop counter 가 0 인지 확인:
+5 분간 보드를 정상 동작 시킨 후 GDB attach 하여 drop counter 검증:
+```bash
+openocd -f fw/openocd/stm32f410.cfg \
+  -c "init" -c "halt" \
+  -c "mdh 0x20000392 1" -c "echo {  usart1_rx_drop_count}" \
+  -c "mdh 0x20000390 1" -c "echo {  usart1_rx_error_count}" \
+  -c "mdh 0x20000340 1" -c "echo {  dgus_rx_drop_count (echo 누적분 허용)}" \
+  -c "mdh 0x2000036e 1" -c "echo {  dgus_tx_timeout_count}" \
+  -c "resume" -c "exit"
 ```
-monitor halt
-print usart1_rx_drop_count()
-print dgus_rx_drop_count()
-print dgus_tx_timeout_count()
-```
 
-Expected: 모두 0.
+(주소는 build 마다 약간 다를 수 있으므로 `arm-none-eabi-nm fw/build/gds_us_ctrl.elf | grep s_*_count` 로 재확인.)
 
-> 0 이면 진단:
+PASS 조건:
+- `usart1_rx_drop_count = 0`
+- `usart1_rx_error_count = 0` (HAL_UART_ErrorCallback 진입 없음 — 정상 통신에서 ORE/FE/NE 부재)
+- `dgus_tx_timeout_count = 0`
+- `dgus_rx_drop_count` ≈ 운영시간 (sec) — DGUS WR-echo (LEN=3) 가 `DGUS_LEN_MIN=4` 보다 작아 의도적 drop. 1Hz cadence × 운영시간 ≈ 누적값. 더 큰 값이면 다른 사유 (LEN > 26, timeout) drop 의심
+
+> 진단 실패 시:
 - usart1_rx_drop_count > 0 → R4 (NVIC) 또는 R5 (재무장 실패)
-- dgus_rx_drop_count > 0 → LEN 무경계 또는 50 ms timeout — 노이즈/케이블 의심
+- usart1_rx_error_count > 0 → ORE/FE/NE — 노이즈/baud mismatch/케이블 의심
+- dgus_rx_drop_count >> 운영시간 → LCD 가 다른 frame 형식 송신 중 (LEN > 26 또는 sync 패턴 다름)
 - dgus_tx_timeout_count > 0 → LCD 비응답. HAL_TIMEOUT path 정상 동작 (fault 진입 ✗) 자체는 ✓
 
 - [ ] **Step 7: no-fault 확인**
