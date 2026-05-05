@@ -776,7 +776,7 @@ git -c commit.gpgsign=false commit -m "feat: dgus_lcd.c TX builders (9-fn samd20
  *
  * 프레임: 5A A5 LEN [LEN bytes = cmd + addr_h + addr_l + payload]
  * LEN ∈ [4, 26]. 그 외 → 폐기 + drop 카운터.
- * 프레임 mid-stream 50 ms timeout (벽시계 sys_tick_ms).
+ * 프레임 mid-stream 50 ms timeout (벽시계 sys_tick_get_ms).
  *--------------------------------------------------------------*/
 
 #define DGUS_LEN_MIN          4
@@ -797,7 +797,7 @@ static bool parser_step(uint8_t b, dgus_frame_t *out)
     case PS_GOT_5A:
         if (b == DGUS_SYNC2) {
             s_parse_state    = PS_GOT_HEADER;
-            s_frame_start_ms = sys_tick_ms();
+            s_frame_start_ms = sys_tick_get_ms();
         } else if (b == DGUS_SYNC1) {
             /* 연속 0x5A: PS_GOT_5A 유지 */
         } else {
@@ -819,7 +819,7 @@ static bool parser_step(uint8_t b, dgus_frame_t *out)
 
     case PS_COLLECTING:
         /* 벽시계 timeout — samd20 결함 #2 회피 */
-        if ((uint32_t)(sys_tick_ms() - s_frame_start_ms) > DGUS_FRAME_TIMEOUT_MS) {
+        if ((uint32_t)(sys_tick_get_ms() - s_frame_start_ms) > DGUS_FRAME_TIMEOUT_MS) {
             s_dgus_rx_drop_count++;
             s_parse_state = PS_IDLE;
             return false;
@@ -1000,7 +1000,7 @@ void app_init(void)
 ```c
 void app_loop_iter(void)
 {
-    uint32_t now = sys_tick_ms();
+    uint32_t now = sys_tick_get_ms();
 
     /* 1. LCD RX drain — 매 iter 호출. ring 비어 있으면 dgus_rx_poll 즉시 false (저비용). */
     dgus_frame_t f;
