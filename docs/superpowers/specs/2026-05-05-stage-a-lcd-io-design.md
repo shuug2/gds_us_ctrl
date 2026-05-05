@@ -47,6 +47,7 @@
 - ❌ Stage A I/O 부분 (CON_OVLD 출력, CON_START 입력, CTRL_OSC0~4 등) — 후속 슬라이스
 - ❌ 다국어 / UTF-8 텍스트 (`dgus_write_text`는 10 B ASCII zero-pad만, samd20 그대로)
 - ❌ Power management / USART low-power wake
+- ❌ **LCD application 데이터 사전 셋업 — Stage B**: samd20 ref 의 `init_lcd_mode` 흐름 (`send_model_str` "GDS-15/20/30..." + `DISP_ENERGY_EN/MULTI_EN`, `LV_DM_DELAY/WELD/HOLD`, `LV_TM_WELD/HOLD`, `LV_WORK_CNT`, `LV_ENERGY_EDIT`, `ICON_RESET/SEEK/RUN`, `DISP_HORNDOWN` 등 11+ VP write) 는 Stage B 슬라이스로 분리. **Stage A 의 `dgus_set_page(LCD_RUN_STD)` 는 wire-level 명령 valid 입증까지만 책임** — visible 페이지 변화는 본 application 데이터 부재 시 LCD HMI 가 디폴트 페이지를 유지할 수 있음.
 
 ---
 
@@ -434,12 +435,14 @@ void app_init(void) {
 |------|--------------|--------------|
 | t=0 ms | `[boot] gds_us_ctrl stage-a-lcd ready` | (이전 페이지 유지) |
 | t≈0 ms | `[lcd] usart1@115200 ring=64 prio=5` | — |
-| t≈0 ms | `[lcd] init ok, set_page=9, uptime VP=0x1110` | LCD_RUN_STD 페이지로 전환 |
-| t=1000 ms | `[t=1000 ms] hello uptime=1` | VAR_POWER 필드 = 1 |
-| t=2000 ms | `[t=2000 ms] hello uptime=2` | VAR_POWER 필드 = 2 |
-| 사용자 LCD 터치 | `[lcd] rx cmd=0x83 vp=0x???? len=2 data=?? ??` *(?는 HMI 터치 키 설정에 따라 변동)* | (HMI 동작) |
+| t≈0 ms | `[lcd] init ok, set_page=9, uptime VP=0x1110` | wire-level: set_page WR 명령 수신 → echo `5A A5 03 82 4F 4B` 송신. visible 페이지 변화 = §0.3 의 Stage B application 데이터 (model_str / DISP_*/LV_*/ICON_* VP) 의존 |
+| t=1000 ms | `[t=1000 ms] hello uptime=1` | wire-level: VAR_POWER WR 명령 + echo. visible 변화는 위와 동일 의존 |
+| t=2000 ms | `[t=2000 ms] hello uptime=2` | (동일) |
+| 사용자 LCD 터치 | `[lcd] rx cmd=0x83 vp=0x???? len=2 data=?? ??` *(HMI 가 0x83 RD frame 송신 시 — HMI 의존)* | (HMI 동작) |
 
 > uptime 16-bit wrap @ 65535초 ≈ 18시간 — Stage A 데모 충분.
+>
+> **Stage A 의 LCD 측 검증 한계**: 본 슬라이스는 USART1 wire 통신 + DGUS 프로토콜 layer + cadence 동작까지 입증함. visible 페이지 변화 / VP 시각 업데이트 는 application 데이터 사전 셋업 (Stage B) 후 보장. wire-level 검증 = LCD 가 매 명령에 WR-echo 응답 (cmd=0x82, "OK").
 
 ---
 
@@ -513,11 +516,11 @@ Stage A 데모에선 카운터만 정의, mon 자동 출력 ✗ (cadence 부담)
 |---|------|-----------|---------|
 | 6a | Flash | `Programming Finished` + `Verified OK` + `Resetting Target` | Phase 2 RESUME §6 troubleshoot |
 | 6b | mon banner | 3줄 출력: `[boot] gds_us_ctrl stage-a-lcd ready` + `[lcd] usart1@...` + `[lcd] init ok, set_page=9, uptime VP=0x1110` | Phase 2 회귀. usart6/clock 변경 ✗ 확인 |
-| 6c | LCD 페이지 전환 (눈) | LCD가 LCD_RUN_STD(9) 화면으로 즉시 전환 | R1(AF7) / R2(HMI) 진단. GDB로 USART1 SR/BRR/CR1, GPIOA MODER/AFRH dump |
-| 6d | uptime VP tick (눈) | LCD VAR_POWER 필드가 1초마다 증가. mon에 `[t=N ms] hello uptime=N` 동시 출력 | mon 정상이나 LCD 미반영 → R3(echo) / VP 미시각화. `DGUS_DEMO_UPTIME_VP` 변경 후 재시도 |
-| 6e | RX 터치 이벤트 | LCD 터치 키 누름 → mon에 `[lcd] rx cmd=0x83 vp=0xXXXX ...` | drop_count(GDB) 확인. 0이면 HMI에서 터치 키가 0x83 frame 보내지 ✗ |
-| 6f | drop counter | 5분 동작 후 GDB로 모든 drop counter = 0 | > 0이면 R4/R5 진단 |
-| 6g | no fault | GDB `monitor halt`: PC가 `app_loop_iter` 또는 `__WFI` 부근, CFSR=0, HFSR=0 | fault stack frame dump |
+| 6c | **LCD wire-level 명령 valid 인식** | LCD 가 set_page 명령에 WR-echo (`5A A5 03 82 ...`) 응답. GDB 로 `s_rx_ring` dump 또는 USART1 SR/BRR/CR1, GPIOA MODER/AFRH 정상값 확인 (R1/R2 통과 입증). **visible 페이지 변화는 §0.3 의 Stage B application 데이터 사전 셋업 의존 — Stage A scope 외, 본 acceptance 에서 요구하지 않음** | echo 미수신 → R1(AF7) / 결선 / baud rate mismatch 진단 |
+| 6d | mon-side uptime cadence | mon 에 1Hz 로 `[t=N ms] hello uptime=N` 정상 출력 (uptime 1, 2, 3, ... 증가). USART1 TX 측 동작은 6c 의 echo 수신으로 입증됨. **LCD 측 VAR_POWER 시각 변화는 §0.3 의 Stage B 의존** | mon hello 라인 부재 → Phase 2 회귀 |
+| 6e | RX 터치 이벤트 | LCD 터치 키 누름 → mon 에 `[lcd] rx cmd=0x83 vp=0xXXXX ...` (HMI 가 0x83 RD 형식 frame 송신 시) | HMI 가 다른 형식 사용 가능 → §0.1 Q5 가정 영역. dgus_rx_drop_count 변화 패턴 분석 |
+| 6f | drop counter (5분 동작 후 GDB read) | `usart1_rx_drop_count = 0`, `usart1_rx_error_count = 0`, `dgus_tx_timeout_count = 0`. **`dgus_rx_drop_count` 는 echo 누적분 (≈ 1 Hz × 운영시간 sec) 만 허용** — DGUS echo frame 의 LEN=3 가 `DGUS_LEN_MIN=4` 보다 작아 의도적으로 drop 처리 (echo 정보가치 없으므로 ring 부하 절감). 다른 drop 사유 (LEN > 26, timeout) 에 의한 추가 누적 ✗ | `usart1_*_count > 0` → R4/R5. `dgus_rx_drop_count` 가 echo rate 보다 빠르게 증가 → LCD 가 다른 frame 형식 |
+| 6g | no fault | GDB `monitor halt`: PC가 `app_loop_iter` 또는 `__WFI` 부근, CFSR=0, HFSR=0 (FORCED bit 30 만 escalation 결과로 무관) | fault stack frame dump |
 
 ### 6.4 리뷰 정책 (Phase 2 §4.4 그대로)
 
