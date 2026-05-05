@@ -160,12 +160,14 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *h) {
     if (h->Instance != USART1) return;
     uint8_t next = (s_rx_head + 1) & (RX_RING_SIZE - 1);
     if (next == s_rx_tail) {
-        s_rx_drop_count++;
+        s_rx_drop_count++;                      /* ring full — byte 폐기 */
     } else {
         s_rx_ring[s_rx_head] = s_rx_byte;
         s_rx_head = next;
     }
-    HAL_UART_Receive_IT(&huart1, (uint8_t *)&s_rx_byte, 1);
+    if (HAL_UART_Receive_IT(&huart1, (uint8_t *)&s_rx_byte, 1) != HAL_OK) {
+        s_rx_drop_count++;                      /* 재무장 실패 — R5 가시화 */
+    }
 }
 ```
 
@@ -289,13 +291,13 @@ PS_GOT_5A     byte==0xA5  → PS_GOT_HEADER (frame_start_ms = sys_tick_ms())
               byte==0x5A  → PS_GOT_5A          (안전: 연속 5A)
               else        → PS_IDLE
 PS_GOT_HEADER byte=LEN, 4≤LEN≤26 → PS_COLLECTING (bytes_remaining=LEN, idx=0)
-              else        → PS_IDLE + dgus_drop_count++
+              else        → PS_IDLE + s_dgus_rx_drop_count++
 PS_COLLECTING:
               frame_buf[idx++] = byte; bytes_remaining--;
               if (bytes_remaining == 0):
                   frame 완성 → dgus_frame_t에 매핑, PS_IDLE 복귀, true 리턴
               elif ((sys_tick_ms() - frame_start_ms) > 50):
-                  PS_IDLE + dgus_drop_count++
+                  PS_IDLE + s_dgus_rx_drop_count++
 ```
 
 `dgus_rx_poll(out)`:
@@ -315,10 +317,10 @@ PS_COLLECTING:
 
 ```c
 void dgus_init(void) {
-    s_parse_state     = PS_IDLE;
-    s_frame_idx       = 0;
-    s_bytes_remaining = 0;
-    s_dgus_drop_count = 0;
+    s_parse_state           = PS_IDLE;
+    s_frame_idx             = 0;
+    s_bytes_remaining       = 0;
+    s_dgus_rx_drop_count    = 0;
     s_dgus_tx_timeout_count = 0;
 }
 ```
@@ -329,7 +331,7 @@ USART1 / RX ring 책임은 `usart1_init`에 있음. dgus 레이어는 자기 상
 
 | samd20 결함 | Stage A 대응 | 위치 |
 |------------|-------------|------|
-| #1 LEN 무경계 → buffer overflow | LEN 4..26 검증 + drop_count++ | §3.1, §3.4 |
+| #1 LEN 무경계 → buffer overflow | LEN 4..26 검증 + `s_dgus_rx_drop_count++` | §3.1, §3.4 |
 | #2 timeout이 byte-counted (`comm_tick > 20`) | 벽시계 ms (`s_ms - frame_start_ms > 50`) | §3.4 |
 | #3 init `while (usart_init() != STATUS_OK) {}` 무한 retry | `HAL_UART_Init` 실패 시 `Error_Handler()` | §2.7 |
 | #4 shared TX buffer + 호출 중첩 race | TX 폴링 → caller block, 자연 직렬화 | §3.3 |
@@ -437,7 +439,7 @@ void app_init(void) {
 | t≈0 ms | `[lcd] init ok, set_page=9, uptime VP=0x1110` | LCD_RUN_STD 페이지로 전환 |
 | t=1000 ms | `[t=1000 ms] hello uptime=1` | VAR_POWER 필드 = 1 |
 | t=2000 ms | `[t=2000 ms] hello uptime=2` | VAR_POWER 필드 = 2 |
-| 사용자 LCD 터치 | `[lcd] rx cmd=0x83 vp=0xXXXX len=2 data=YY ZZ` | (HMI 동작) |
+| 사용자 LCD 터치 | `[lcd] rx cmd=0x83 vp=0x???? len=2 data=?? ??` *(?는 HMI 터치 키 설정에 따라 변동)* | (HMI 동작) |
 
 > uptime 16-bit wrap @ 65535초 ≈ 18시간 — Stage A 데모 충분.
 
@@ -452,8 +454,8 @@ void app_init(void) {
 | `HAL_UART_Init` 실패 | `usart1_init` | `Error_Handler()` 즉시 |
 | `HAL_UART_Transmit` `HAL_TIMEOUT` (LCD 케이블 빠짐) | `usart1_send_blocking` | status 반환, `dgus_tx_timeout_count++`. fault 진입 ✗ |
 | RX 링 full | `HAL_UART_RxCpltCallback` | byte 폐기 + `usart1_rx_drop_count++` |
-| RX LEN 무경계 (LEN < 4 or > 26) | 파서 GOT_HEADER | 프레임 폐기, IDLE 복귀, `dgus_rx_drop_count++` |
-| RX 프레임 mid-stream 50 ms 타임아웃 | 파서 COLLECTING | 프레임 폐기, IDLE 복귀, `dgus_rx_drop_count++` |
+| RX LEN 무경계 (LEN < 4 or > 26) | 파서 GOT_HEADER | 프레임 폐기, IDLE 복귀, `s_dgus_rx_drop_count++` |
+| RX 프레임 mid-stream 50 ms 타임아웃 | 파서 COLLECTING | 프레임 폐기, IDLE 복귀, `s_dgus_rx_drop_count++` |
 | 미지의 CMD (0x82/0x83 외) | 파서 완성 후 | caller에 노출 (필터링 ✗), mon log에 출력 |
 
 ### 5.2 관측성 카운터
@@ -474,7 +476,7 @@ Stage A 데모에선 카운터만 정의, mon 자동 출력 ✗ (cadence 부담)
 | R2 | samd20 HMI가 보드 LCD에 미플래시 | `set_page=9` → 빈 화면 | 첫 HW verify chunk 결과 사용자 시각 확인. 차이 발견 시 `DGUS_DEMO_*` 한 줄 수정 |
 | R3 | DGUS WR echo 동작이 HMI에 따라 다를 수 있음 | echo가 RD(0x83)로 오면 필터 ✗, mon noisy | 시스템 동작엔 무해. HMI 설정 확인 후 정책 조정 |
 | R4 | NVIC USART1+TIM11 둘 다 prio 5 → ISR 길어지면 byte 손실 | `usart1_rx_drop_count` 증가 | 양 ISR 모두 < 5 µs 추정. drop_count > 0 지속 시 priority 재조정 |
-| R5 | `HAL_UART_Receive_IT` 재무장 실패 시 RX 영구 정지 | byte 미수신 + drop_count도 ✗ | callback에서 반환값 체크 + 실패 시 mon log + drop_count 증가 |
+| R5 | `HAL_UART_Receive_IT` 재무장 실패 시 RX 영구 정지 | byte 미수신 + 침묵 | callback에서 반환값 체크, 실패 시 `s_rx_drop_count++` (chunk 6f가 0 검증으로 가시화). HAL은 한 핸들 한 RX-IT만 추적하므로 1바이트 단위 재무장에서 충돌 가능성 ✗ — 안전 |
 | R6 | `s_ms` 32-bit wrap (49.7일) | uptime 표시는 16-bit 캐스팅으로 의도적 (18시간). RX timeout 비교는 wrap-safe uint32_t 차분 | wraparound-safe 비교 사용 (Phase 2 cadence 패턴 동일) |
 | R7 | `STM32_TOOLCHAIN` env var stale 빌드 실패 | build chunk 즉시 실패 | dispatch guard에 `env -u STM32_TOOLCHAIN cmake ...` 강제 |
 
@@ -492,7 +494,7 @@ Stage A 데모에선 카운터만 정의, mon 자동 출력 ✗ (cadence 부담)
 | 4 | App 통합 | `fw/src/main.c` init 순서 + `fw/src/app.c` 확장 + CMakeLists 확인 | partial build | spec compliance reviewer subagent |
 | 5 | Build verify | (산출 ✗) | `env -u STM32_TOOLCHAIN cmake ... && cmake --build`. FLASH/RAM 측정. 신규 심볼 nm 확인 | controller-direct |
 | 6 | HW verify | (산출 ✗) | flash + LCD 시각 확인 + mon log + 터치 RX 검증 (§6.3) | controller-direct + 사용자 시각 확인 |
-| 7 | Doc sync + RESUME archive | `docs/pinmap.md` USART1, `docs/changelog.md`, `docs/superpowers/historical/2026-MM-DD-RESUME.md` | doc 검토 | controller-direct |
+| 7 | Doc sync + RESUME archive | `docs/pinmap.md` USART1, `docs/changelog.md`, `docs/superpowers/historical/<chunk-7-실행-일자>-RESUME.md` (Phase 1+2 패턴 — 실행 시점에 ISO 날짜로 채움) | doc 검토 | controller-direct |
 
 총 7 chunk. 추정 commit 수 9~12.
 
