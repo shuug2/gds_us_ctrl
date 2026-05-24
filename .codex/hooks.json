@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "F=\"docs/superpowers/RESUME.md\"; [ -f \"$F\" ] && jq -Rs --arg msg \"📌 RESUME.md 자동 로드 — 이전 세션 일시 중단 가이드. 재개 시작 키워드: 'RESUME 읽고 brainstorming 재개'\" '{systemMessage: $msg, hookSpecificOutput: {hookEventName: \"SessionStart\", additionalContext: (\"=== docs/superpowers/RESUME.md (auto-loaded by SessionStart hook) ===\\n\" + . + \"\\n=== END ===\")}}' < \"$F\" || true",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
