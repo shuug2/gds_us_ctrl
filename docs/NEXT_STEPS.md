@@ -4,61 +4,62 @@
 
 ---
 
-## 1. 현재 상태 (2026-05-06 기준)
+## 1. 현재 상태 (2026-05-25 기준)
 
 ### 1.1 슬라이스 현황
 
-| Phase | 상태 | 브랜치 | tip | 비고 |
-|-------|------|--------|-----|------|
-| Phase 1+2 Bootstrap | ✅ main 머지 완료 (2026-05-05) | `main` | `b8afe1c` (merge) | 96 MHz HSI×12 + TIM11 1ms tick + USART6 mon + PB3 heartbeat |
-| **Stage A LCD I/O** | ✅ **종료, 머지 대기** | `feat/stage-a-lcd-io` | `23da1cb` | 33 commits ahead of main. DGUS LCD wire 통신 + 1Hz cadence 검증 |
-| Stage B (다음 슬라이스 후보 #1) | ⬜ 미시작 | — | — | LCD application 데이터 사전 셋업 (visible 페이지 변경 완성) |
-| Stage A I/O (후보 #2) | ⬜ 미시작 | — | — | CON_OVLD / CON_START / CTRL_OSC0~4 GPIO |
-| Stage C (후보 #3) | ⬜ 미시작 | — | — | Modbus RTU on USART6 |
+| Phase | 상태 | tip | 비고 |
+|-------|------|-----|------|
+| Phase 1+2 Bootstrap | ✅ main 머지 완료 (2026-05-05) | `b8afe1c` (merge) | 96 MHz HSI×12 + TIM11 1ms tick + USART6 mon + PB3 heartbeat |
+| Stage A LCD I/O | ✅ **main 머지 완료 (2026-05-25)** | `4651453` (merge), tag `hw-revA_fw-stage-a` | DGUS LCD wire 통신 + 1Hz cadence 검증. 33 commits 병합 |
+| **Stage B LCD app 데이터** | ▶️ **다음 세션 시작 (확정)** | — | LCD application 데이터 사전 셋업. visible 페이지 변경 완성. → **§4 진입 절차** |
+| Stage A I/O (후순위) | ⬜ 미시작 | — | CON_OVLD / CON_START / CTRL_OSC0~4 GPIO |
+| Stage C (후순위) | ⬜ 미시작 | — | Modbus RTU on USART6 |
 
-### 1.2 Stage A 작업 요약 (방금 종료)
+> **2026-05-25 머지/정리 세션 처리 내역**:
+> - Stage A 머지 전: `docs/requirements.md` 보강분 커밋(`e322644`), stale NEXT_STEPS/RESUME → `historical/` archive(`cea0c3a`)
+> - `--no-ff` 머지(`4651453`) + 태그 `hw-revA_fw-stage-a`, 빌드 검증 FLASH 18.94% / RAM 8.37% ✅
+> - repo 정리(`25fb41f`): `ref/`·`fw/cube/*.ioc`·`AGENTS.md`·`docs/fw_analysis.md`·`.claude`/`.codex` track, `graphify-out/` gitignore
+> - worktree `gds_us_ctrl-stageA` + 브랜치 `feat/stage-a-lcd-io` 삭제 — 현재 **`main` 단독, working tree clean**
+> - origin push ✗ (로컬만)
 
-- 33 commits, 13 Task 완료
-- 모든 substantive Task spec compliance reviewer ≥ 12/12 ✅ APPROVE
-- Code quality reviewer HIGH 1 (`HAL_UART_ErrorCallback` 미구현) + LOW 3 (Phase 2 일관성) 모두 fix
-- Build verify: FLASH 18.94% / RAM 8.37% / 7+ 심볼 export ✅
-- HW verify: wire-level + cadence + fault 검증 ✅. visible 페이지 변경은 Stage B 의존 (samd20 application 데이터 사전 셋업)
-- 발견된 4건의 spec/plan drift (`sys_tick_get_ms` typo / `sys_tick_init`,`__enable_irq` Phase 2 reality / `mon_writeln` API / visible 페이지 가정 오류) 모두 정정
+### 1.2 Stage A 작업 요약 (머지 완료)
 
-상세: **`docs/superpowers/historical/2026-05-06-RESUME.md`** (489 라인 — 전체 상태 + reviewer 결과 + drift 정정 + HW verify 결과 + 다음 슬라이스 권고).
+- 33 commits, 13 Task 완료. 모든 substantive Task spec compliance reviewer ≥ 12/12 ✅ APPROVE
+- Build: FLASH 18.94% / RAM 8.37%. HW verify: wire-level + cadence + fault ✅
+- visible 페이지 변경은 Stage B 의존 (samd20 application 데이터 사전 셋업)
+
+상세: **`docs/superpowers/historical/2026-05-06-RESUME.md`** (489 라인 — 전체 상태 + reviewer 결과 + drift 정정 + HW verify 결과).
 
 ---
 
 ## 2. 다음 세션 진입 시 First Step
 
-### 2.1 사전 점검 (자동)
+### 2.1 사전 점검
 
 ```bash
-cd /Users/tknoh/dev/work/gds_us_ctrl-stageA   # 또는 feat/stage-a-lcd-io 머지된 main repo
-pwd
-git branch --show-current
-git status                                     # working tree clean (.claude/ 만 untracked OK)
-git log --oneline main..HEAD | head -3         # 또는 main 머지된 경우 git log --oneline -3
+cd /Users/tknoh/dev/work/gds_us_ctrl   # main repo (stageA worktree 는 삭제됨)
+git status                             # working tree clean 기대
+git log --oneline -5
+git tag -l 'hw-revA*'                  # hw-revA_fw-stage-a 확인
 ```
 
-### 2.2 사용자 결정 필요 (가장 먼저)
+### 2.2 결정 완료 — 다음 슬라이스 = **Stage B**
 
-**Q: Stage A 머지 진행할 것인가?**
-- (A) **머지 + 새 슬라이스 시작** → 아래 §3 Stage A 머지 절차 → §4 슬라이스 선택
-- (B) **머지 보류 + Stage A worktree 에서 fix/follow-up** → drift, 알려진 이슈 추가 정정 등 (현재 시점엔 추가 follow-up 필요사항 없음 — 사용자 추가 요청만 처리)
-- (C) **머지 + 다른 작업** (Stage A 와 무관한 task)
+사용자 확정 (2026-05-25): **다음 세션은 Stage B 시작.** (머지 여부 / 슬라이스 선택은 이미 결정됨 — 추가 질문 불필요)
 
-**Q: 다음 슬라이스는 어느 것?**
-- (1) **Stage B** (권장) — LCD application 데이터 사전 셋업. Stage A 의 visible 페이지 변경 완성. samd20 ref `init_lcd_mode` 흐름 포팅
-- (2) Stage A I/O — CON_*/CTRL_OSC GPIO
-- (3) Stage C — Modbus RTU on USART6
-- (4) 본격 application 로직 (control loop, calibration, fault tree 등)
-
-권장: **(A) + (1)** — Stage A 머지 후 Stage B 시작이 자연스러운 진행.
+- Stage B = LCD application 데이터 사전 셋업 — samd20 `init_lcd_mode` 흐름 포팅, Stage A 의 visible 페이지 변경 완성
+- 진입 절차는 **§4** 그대로 따름. 정석 흐름:
+  1. 새 worktree 생성 (`feat/stage-b-lcd-app`)
+  2. `superpowers:brainstorming` — §4.2 의 Q1~Q5 결정점 탐색
+  3. spec 작성 + self-review → plan 작성
+  4. `superpowers:subagent-driven-development` 로 Task 1 부터 진행
 
 ---
 
-## 3. Stage A 머지 절차 (사용자 결정 시)
+## 3. Stage A 머지 절차 — ✅ 완료 (2026-05-25, 기록용)
+
+> 아래 절차로 머지 완료됨 (`4651453` + tag `hw-revA_fw-stage-a` + repo 정리 `25fb41f`). 다음 세션에서는 재실행 불필요 — 기록 보존용.
 
 ### 3.1 권장 흐름 — main repo 에서 직접 머지
 
@@ -253,5 +254,5 @@ openocd -f fw/openocd/stm32f410.cfg \
 
 ---
 
-> **본 문서 갱신 시점**: 2026-05-06 (Stage A 종료 직후)
-> **다음 갱신 시점**: 새 슬라이스 시작 전 또는 머지/worktree 정리 후
+> **본 문서 갱신 시점**: 2026-05-25 (Stage A 머지 + repo 정리 완료, Stage B 진입 대기)
+> **다음 갱신 시점**: Stage B brainstorming/spec 시작 시 (RESUME.md 새로 작성)
