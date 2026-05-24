@@ -1,5 +1,7 @@
 /* fw/src/irq.c */
 #include "stm32f4xx_hal.h"
+#include "periph.h"
+#include "sys_tick.h"
 
 void NMI_Handler(void)        { while (1) {} }
 void HardFault_Handler(void)  { while (1) {} }   /* TODO Stage A: register dump via mon_printf */
@@ -14,9 +16,6 @@ void SysTick_Handler(void) { HAL_IncTick(); }
 
 void Error_Handler(void) { __disable_irq(); while (1) {} }
 
-#include "periph.h"
-#include "sys_tick.h"
-
 void TIM1_TRG_COM_TIM11_IRQHandler(void) {
     HAL_TIM_IRQHandler(&htim11);
 }
@@ -25,4 +24,13 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
     if (htim->Instance == TIM11) {
         sys_tick_handle_irq();
     }
+}
+
+/* USART1 — DGUS LCD (Stage A).
+ * vendor startup 의 weak alias 를 override.
+ * HAL_UART_IRQHandler 가 RxCpltCallback (fw/drivers/usart1.c) 으로 분기.
+ */
+void USART1_IRQHandler(void)
+{
+    HAL_UART_IRQHandler(&huart1);
 }

@@ -1,7 +1,9 @@
-/* fw/src/main.c — Phase 2 form */
+/* fw/src/main.c — Stage A form (Phase 2 + USART1/DGUS LCD) */
 #include "stm32f4xx_hal.h"
 #include "clock.h"
 #include "app.h"
+#include "usart1.h"
+#include "dgus_lcd.h"
 
 extern void usart6_init(void);   /* drivers/usart.c */
 extern void tim11_init(void);    /* drivers/tim.c */
@@ -12,8 +14,10 @@ int main(void) {
     clock_init();      /* 96 MHz */
     /* TODO Stage A: iwdg_init(2000); */
     usart6_init();     /* PC6/PC7 + 115200 8N1 */
+    usart1_init();     /* Stage A: PA9/PA10 AF7 + NVIC + 첫 RX 무장 */
     tim11_init();      /* 1 kHz IRQ enabled, base not started yet */
     board_init();      /* GPIO out + CTRL_OSC0..4 LOW */
+    dgus_init();       /* Stage A: DGUS 프로토콜 레이어 상태 클리어 */
     app_init();        /* sys_tick start, mon banner */
 
     while (1) {
