@@ -57,6 +57,20 @@
 #define VAR_ENERGY       0x1113
 #define LV_OUTPUT        0x1170
 
+/* Stage B application VPs (samd20 dgus_lcd.h verbatim) */
+#define LV_ENERGY_EDIT   0x1202
+#define LV_DM_DELAY      0x1203
+#define LV_DM_WELD       0x1204
+#define LV_DM_HOLD       0x1205
+#define LV_TM_WELD       0x1206
+#define LV_TM_HOLD       0x1207
+#define DISP_HORNDOWN    0x1209
+#define DISP_ENERGY_EN   0x120a
+#define DISP_MULTI_EN    0x120b
+#define ICON_RESET       0x1150
+#define ICON_SEEK        0x1151
+#define ICON_RUN         0x1152
+
 /* (samd20 의 다른 VP 매크로들은 후속 슬라이스에서 추가. Stage A 데모 범위 외) */
 
 /*--------------------------------------------------------------
