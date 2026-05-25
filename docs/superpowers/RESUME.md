@@ -1,7 +1,7 @@
 # RESUME — 다음 세션
 
-> **상태 (2026-05-25)**: **Stage B LCD app 데이터 main 머지 완료** (`540008d`, tag `hw-revA_fw-stage-b`). FRAM(FM24C16B) config load + `init_lcd_mode` 포팅. HW 검증 통과. `main` 단독, working tree clean.
-> **다음 작업**: **ATmega16 FW 동작 ↔ I/O 신호 정밀 분석** (코드 슬라이스 전 선행 — 사용자 확정). kickoff: `docs/superpowers/2026-05-25-atmega16-analysis-kickoff.md`. 역변환 코드를 **비판적으로** 보고, **HW-시험으로 정정 가능한 가설 테이블**로 산출.
+> **상태 (2026-05-25)**: **ATmega16 FW 동작↔I/O 분석 완료** → `docs/superpowers/analysis/atmega16-io-behavior.md`. (Stage B는 `540008d`, tag `hw-revA_fw-stage-b`로 머지 완료.) `main` 단독.
+> **다음 작업**: **(선행) HW-verify 패스** → 분석문서 §7의 LOW/M 행(OSC 트리거 핀·ADC 채널·PC1)을 실측 승급. 그다음 **Stage D — Ultrasonic regulation core 흡수** (분석문서 §8). 코드 슬라이스 정석 흐름.
 
 ---
 
@@ -45,19 +45,31 @@ git tag -l 'hw-revA*'      # hw-revA_fw-stage-a, hw-revA_fw-stage-b
 
 ---
 
-## 다음 세션 = ATmega16 FW 분석 (선행 작업, 코드 ✗)
+## ATmega16 분석 결과 요약 (완료 — `docs/superpowers/analysis/atmega16-io-behavior.md`)
 
-**`docs/superpowers/2026-05-25-atmega16-analysis-kickoff.md`** 를 그대로 따름. 이건 *분석* 작업이라 brainstorm→spec→plan 의식 **생략** — kickoff가 spec, 산출물은 신호↔동작 가설 테이블(`docs/superpowers/analysis/atmega16-io-behavior.md`).
-- 비판적 독해 체크리스트 + confidence(H/M/L 3중확인 기준) + HW-verify 방법 고정셋.
-- scope: ADC센싱/출력(초음파)제어/main·ISR 흐름 = in / 7-seg·comm(IPC)·버튼 = out.
-- ✅ **구 회로도 확보**: `hw/schematics/usw_ctrl_v26_samd20.pdf` (V26 samd20+atmega16, PDF만/netlist 없음) — OLD 핀↔신호 매핑에 사용 (pdftoppm 렌더 후 판독).
+- **아키텍처 확정**: ATmega16 = 트리거+전류모니터링(실시간 레귤레이션), SAMD20 = UI+전체제어, OSC = 별도 보드. IPC = 순수 GPIO.
+- **디컴파일러 noise 정정**: C 헤더의 핀-역할 주석 대부분 추측. `display_*`(PORTD+PB2/3/4)는 **V26 미연결 = dead legacy**. `BUZ_M16`/`U1.xx` 등 net 주석 오류 다수.
+- **HIGH 확정 핀**: PA4=`M_START`(START in), PC0=`M_OVLD`(overload out). PORTD/PB2-4 미연결.
+- **핵심 단서**: `output_level_process` 누진 5비트(0x01→0x1F) ↔ V30 `OSC_OUT0..4` 1:1.
+- **미해소(최우선 HW-verify)**: ① OSC 트리거 물리 출력핀 ② ADC ch0/ch1 정체 ③ PC1 방향 충돌. (분석문서 §7)
 
-## 그 이후 코드 슬라이스 후보 (분석 뒤 결정)
+## 다음 세션 진입 (분석문서 §8 그대로)
 
-1. **Stage C — Modbus RTU on USART6** (속도/패리티는 EEPROM `comm_speed_idx`/`comm_parity_idx`, Stage B에서 FRAM 로드됨)
-2. **Stage A I/O** — CON_OVLD / CON_START / CTRL_OSC0~4 GPIO
-3. **scope-b LCD 확장** — `change_lcd_page` 문자열 포맷 + SETUP 페이지 (DGUS VP맵: `hw/lcd/dgus/README.md`)
-4. **ATmega16 흡수** — 초음파 실시간 제어 로직 (위 분석 산출물 기반)
+1. **(선행) HW-verify 패스** — §7 #1/#2/#3 OLD 보드 또는 V30 보드로 실측. scope/openocd. (BOOT0 워크어라운드 필요)
+2. **Stage D — Ultrasonic regulation core 흡수**:
+   - in: STM32 ADC(`SENS_OUT`/`SENS_CURR`) → adc avg
+   - proc: `lookup_table` 스케일 → `adc_scaled_value` → 누진 레벨 (`output_level_process` 포팅)
+   - out: `OSC_OUT0..4`(U2.28/29/33/34/35), `CON_OVLD`, `BUZZER`
+   - 명령 in: `B_START`/`B_RESET`(+SEEK) GPIO/EXTI
+   - cadence: TIM 2ms/10ms로 Timer0/Timer1 ISR 등가 (superloop+SysTick 위)
+   - 안전(overload) 직결 → **HW 실측 우선** 강제
+3. **비포팅**: 7-seg/`display_*`(dead), comm IPC(single MCU).
+
+## 그 외 대기 슬라이스
+
+- **Stage C — Modbus RTU on USART6** (속도/패리티 = FRAM `comm_speed_idx`/`comm_parity_idx`, Stage B 로드됨) — Stage D와 독립
+- **Stage A I/O** — CON_OVLD / CON_START / CTRL_OSC0~4 GPIO (Stage D와 일부 중첩)
+- **scope-b LCD 확장** — `change_lcd_page` + SETUP 페이지 (DGUS VP맵 `hw/lcd/dgus/README.md`)
 
 코드 슬라이스 정석 흐름: worktree → brainstorming → spec → plan → subagent/Codex 실행 → HW 검증 → 머지.
 

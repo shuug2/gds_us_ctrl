@@ -13,9 +13,11 @@
 | Phase 1+2 Bootstrap | ✅ main 머지 완료 (2026-05-05) | `b8afe1c` (merge) | 96 MHz HSI×12 + TIM11 1ms tick + USART6 mon + PB3 heartbeat |
 | Stage A LCD I/O | ✅ **main 머지 완료 (2026-05-25)** | `4651453` (merge), tag `hw-revA_fw-stage-a` | DGUS LCD wire 통신 + 1Hz cadence 검증. 33 commits 병합 |
 | Stage B LCD app 데이터 | ✅ **main 머지 완료 (2026-05-25)** | `540008d` (merge), tag `hw-revA_fw-stage-b` | FRAM(FM24C16B @0x50) config load + `init_lcd_mode` 포팅. HW 검증 통과(BOOT0 forced-jump). 7 commits. FLASH 22.30%/RAM 8.81% |
-| **Stage C (다음 후보)** | ⬜ 미시작 | — | Modbus RTU on USART6 |
-| Stage A I/O (후순위) | ⬜ 미시작 | — | CON_OVLD / CON_START / CTRL_OSC0~4 GPIO |
-| ATmega16 흡수 (후순위) | ⬜ 미시작 | — | 초음파 실시간 제어 로직 포팅 (`ref/atmega16` 분석) |
+| ATmega16 FW↔I/O 분석 | ✅ **완료 (2026-05-25)** | — | 산출물 `docs/superpowers/analysis/atmega16-io-behavior.md`. 핀별 가설 테이블 + 제어루프/ISR + V26→V30 매핑 + HW-verify 우선순위 |
+| **HW-verify 패스 (다음, 선행)** | ⬜ 미시작 | — | 분석 §7 #1(OSC 트리거 핀)·#2(ADC 채널)·#3(PC1) 실측 승급 |
+| **Stage D — Ultrasonic regulation 흡수** | ⬜ HW-verify 후 | — | 분석 §8. ADC→lookup→`output_level`→`OSC_OUT0..4`+`CON_OVLD`+`BUZZER` |
+| Stage C — Modbus RTU on USART6 | ⬜ 미시작 (Stage D와 독립) | — | 속도/패리티 = FRAM `comm_speed_idx`/`comm_parity_idx` |
+| Stage A I/O (Stage D와 일부 중첩) | ⬜ 미시작 | — | CON_OVLD / CON_START / CTRL_OSC0~4 GPIO |
 
 > **2026-05-25 머지/정리 세션 처리 내역**:
 > - Stage A 머지 전: `docs/requirements.md` 보강분 커밋(`e322644`), stale NEXT_STEPS/RESUME → `historical/` archive(`cea0c3a`)
