@@ -1,7 +1,7 @@
 # RESUME — 다음 세션
 
-> **상태 (2026-05-25)**: ATmega16 FW↔I/O 분석 완료 + **보드-진실 정정** (`analysis §0.1`). OSC 드라이브 매핑 **보드 직독 확정**: `CTRL_OSC0..4` ← mega16 PB1/PB0/PC4/PA7/PC7 (V30 PB2/PB10/PB12/PB13/PB14). **소스 오브 트루스 전환** — 1차=사용자 보드 측정+행동 재분석, 2차(약함)=디컴파일(함수명 무시). (Stage B는 `540008d`, tag `hw-revA_fw-stage-b`로 머지 완료.) `main` 단독, 문서 갱신 완료.
-> **다음 작업**: **사용자 HW 재측정 대기** — `analysis §0.1` B1~B5 (① 5 OSC핀 방향 in/out ② 극성·레벨↔비트 매핑 ③ 레귤레이션 전달함수 ④ ADC ch1(PA1) 정체 ⑤ `g_main_state` 0/1 두 출력모드). 사용자가 측정 + 행동 재분석 제공 예정. **수령 후 Stage D brainstorming 재개**. Stage D 코딩은 측정 전까지 보류.
+> **상태 (2026-05-25)**: Stage D **프레이밍 확정 + slice 1 선택**. ATmega16 흡수 = **제어 함수 흡수이지 1:1 IO 이전이 아님** (사용자 2026-05-25 명시, 2회 강조). 단일 STM32가 SAMD20+M16 역할 모두 보유 → **명령 IPC는 내부화로 소멸**: M_START(PA4)/M_SEEK(PA5)/M_RESET(PA6) = 내부 `us_start/seek/reset()` 호출, M_OVLD(PC0) = 내부 플래그(옵션: CON_OVLD/PB3 외부 출력). **외부 물리 I/O로 남는 것** = ADC 센스(PA0=출력세기 피드백, PA1=ch1), **OSC 드라이브 출력**(누진 레벨 → OSC_OUT0..4 / CN2), buzzer/solenoid. ⇒ PB1/PB0/PC4/PA7/PC7 in/out 논쟁은 무의미해짐(M16 내부 핀 quirk). **측정 게이트(B1~B5) 해제** — 사용자 지시: 동작은 펌웨어 분석에서 도출, 물리 의미(B3)는 flag만 하고 코딩 차단 안 함.
+> **다음 작업**: **Stage D slice 1 = 레귤레이션 코어** (사용자 선택). spec-first. 브랜치 `feat/stage-d-osc-pin-io` (이전 핀-I/O 스펙 `2026-05-25-stage-d-osc-pin-io-design.md`은 **RETIRED** — 프레이밍 오류, 배너 추가됨. 검증된 사실은 보존). 슬라이스1 내용 ↓ STEP 0.
 
 ---
 
@@ -9,21 +9,32 @@
 
 ```bash
 cd /Users/tknoh/dev/work/gds_us_ctrl
-git status                 # clean 기대 (tip = 9cac85c docs: ATmega16 board-truth correction)
-git log --oneline -6
-git tag -l 'hw-revA*'      # hw-revA_fw-stage-a, hw-revA_fw-stage-b
+git checkout feat/stage-d-osc-pin-io   # slice 작업 브랜치 (main에 미머지)
+git log --oneline -3                    # tip = 825ab7c (RETIRED 핀-IO 스펙 + 배너)
+git tag -l 'hw-revA*'                   # hw-revA_fw-stage-a, hw-revA_fw-stage-b
 ```
 
-### ⛔ STEP 0 — 측정 게이트 (Stage D 코딩 차단 중)
+### ▶ STEP 0 — Stage D slice 1: 레귤레이션 코어 (spec-first, 측정 게이트 해제됨)
 
-이 세션은 **사용자 HW 재측정 대기** 상태로 멈춤. 새 세션 첫 행동:
+새 세션 첫 행동: 위 브랜치 체크아웃 → **slice 1 spec 작성** (`docs/superpowers/specs/`) → 사용자 리뷰 → `writing-plans` → 구현. (brainstorming은 이미 완료 — 프레이밍/슬라이스 확정.)
 
-1. **사용자가 `analysis §0.1` B1~B5 측정/행동 재분석을 제공했는가?**
-   - **제공됨** → 값을 `analysis/atmega16-io-behavior.md` §0.1 B1~B5 표에 채우고 → **Stage D brainstorming 재개** (spec 작성). 결정 완료분: 1슬라이스(피드백 루프, 모듈경계로만 분할) · 코드포팅 먼저+머지前 실측 · 안전경계 옵션 측정 후 재논의.
-   - **아직 안 됨** → 측정 항목(B1~B5) 다시 안내하고 대기. 코딩 착수 금지.
-2. 측정과 무관하게 착수 가능한 **Stage D 구조부**(원하면): ADC 획득층(2ch 평균 10/50) + TIM 2ms/10ms cadence(superloop+SysTick 위) + 상태머신 골격 + 출력드라이버 추상화(매핑/극성 named const 격리). 단 전달함수·핀방향은 B1~B5 대기.
+**슬라이스 1 = 레귤레이션 코어** (M16 §4 제어루프 심장부; 알고리즘은 펌웨어에서 포팅, 물리 의미는 HW-verify 주석):
+1. **ADC 획득층**: 2ch free-run, ch0 = 10샘플 평균(PA0 = 출력세기 피드백), ch1 = 50샘플 평균(PA1). 근거 `196c`, ADCSRA=0xCF(/128) ch0/ch1 교대.
+2. **~2ms cadence** (M16 Timer0 등가; superloop+SysTick/TIM 위): `adc_ch0_avg` → `lookup_table` 스케일 → scaled value(0~1000 clip) → `output_level_process` 비교 → 누진 드라이브 패턴 `0x01→0x03→0x07→…→0xFF`.
+3. **출력**: 누진 레벨 → OSC 드라이브 출력 라인 (V30 OSC_OUT0..4 = 전부 출력; 펌웨어의 M16 mixed in/out 무시 — 함수 관점은 "레벨을 OSC보드로 출력").
 
-그다음 **`docs/NEXT_STEPS.md`** 읽기 (§1.1 슬라이스 현황, §5.7 BOOT0 이슈).
+**다음 슬라이스(2+)**: 명령 상태머신(내부 us_start/seek/reset) + overload 검출/플래그 + soft-start 램프(main_loop 임계 0x29..0x191) + blink phase.
+
+**flag (코딩 차단 ✗, 주석만)**: lookup_table 물리 의미(전류한계/주파수추종? = B3), ADC ch1(PA1) 정체(B4), OSC 출력 활성극성(Q8).
+
+**검증된 사실 (slice 1 spec 재사용 — 이번 세션 도출)**:
+- 제어루프 개요 = `docs/superpowers/analysis/atmega16-io-behavior.md §4`.
+- `lookup_table[24]` 값(0x03FF→0x0004 감소곡선) = `ref/atmega16/m16_conv_v001.c:127-132`.
+- Timer0 OSC 미러 극성 = **active-LOW / idle-HIGH** (플래그 set → 핀 LOW; disasm `01:256-276`). **v001이 맞고, `M16_reverse/out/04_reconstruction.c:175-177`은 극성 반전 오류.** 출력 초기화는 idle=HIGH (부팅 시 OSC off; 현 `board.c`는 LOW=asserted = 잠재버그).
+- 디컴파일 함수명(g_run_flag/"LED"/"blink") 무시, 레지스터 사실만.
+- pinmap 부록 A IPC표의 PB13/PB12 = **SAMD20 핀**(폐지된 옛 신호), F410 핀 아님 — F410 충돌 없음.
+
+그다음 **`docs/NEXT_STEPS.md`** 읽기 (§5.7 BOOT0 이슈).
 
 ---
 
