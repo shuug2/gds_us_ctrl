@@ -12,9 +12,10 @@
 |-------|------|-----|------|
 | Phase 1+2 Bootstrap | ✅ main 머지 완료 (2026-05-05) | `b8afe1c` (merge) | 96 MHz HSI×12 + TIM11 1ms tick + USART6 mon + PB3 heartbeat |
 | Stage A LCD I/O | ✅ **main 머지 완료 (2026-05-25)** | `4651453` (merge), tag `hw-revA_fw-stage-a` | DGUS LCD wire 통신 + 1Hz cadence 검증. 33 commits 병합 |
-| **Stage B LCD app 데이터** | ▶️ **다음 세션 시작 (확정)** | — | LCD application 데이터 사전 셋업. visible 페이지 변경 완성. → **§4 진입 절차** |
+| Stage B LCD app 데이터 | ✅ **main 머지 완료 (2026-05-25)** | `540008d` (merge), tag `hw-revA_fw-stage-b` | FRAM(FM24C16B @0x50) config load + `init_lcd_mode` 포팅. HW 검증 통과(BOOT0 forced-jump). 7 commits. FLASH 22.30%/RAM 8.81% |
+| **Stage C (다음 후보)** | ⬜ 미시작 | — | Modbus RTU on USART6 |
 | Stage A I/O (후순위) | ⬜ 미시작 | — | CON_OVLD / CON_START / CTRL_OSC0~4 GPIO |
-| Stage C (후순위) | ⬜ 미시작 | — | Modbus RTU on USART6 |
+| ATmega16 흡수 (후순위) | ⬜ 미시작 | — | 초음파 실시간 제어 로직 포팅 (`ref/atmega16` 분석) |
 
 > **2026-05-25 머지/정리 세션 처리 내역**:
 > - Stage A 머지 전: `docs/requirements.md` 보강분 커밋(`e322644`), stale NEXT_STEPS/RESUME → `historical/` archive(`cea0c3a`)
@@ -179,10 +180,16 @@ Stage A 에서 이미 발견된 패턴 (typo / Phase 2 reality 불일치 / scope
 - 200k context 기준 50% 임계 정책은 다른 모델 세션에서만 의미
 - `/context` 정기 점검 권장
 
-### 5.6 미해결 핵심 질문 (Phase 1+2 시점부터)
-- ATmega16 PA4/PC0/PC1/PC4 ↔ SAMD20 핀 매핑 (회로도 필요)
-- 7-세그먼트 디스플레이 유지 여부 (DGUS 통합 여부)
-- `I2C_POT` 정체 (외부 칩 vs ATmega16 인터페이스)
+### 5.6 핵심 질문 — 2026-05-25 회로도(`hw/schematics/USW_CTRL_V30`) + DGUS 자료로 해소
+- **ATmega16 PA4/PC0/PC1/PC4**: PA4=초음파 출력개시 신호 입력, PC0=overload 출력, PC1/PC4=초음파 보드 신호 입력 (ATmega16 측 확정). 구체 동작은 `ref/atmega16` fw 분석 후 STM32 흡수 — 미래 슬라이스. (memory `project_atmega16_absorption`)
+- **7-세그먼트**: V30 보드에 없음 — DGUS LCD 단독.
+- **`I2C_POT`**: U4 외부 I2C 디지털 포텐셔미터 @0x28 (EEPROM과 I2C1 버스 공유).
+
+### 5.7 ⚠️ 보드 BOOT0 이슈 (hw revA — 플래시/실행에 직접 영향)
+- **R64**(BOOT0 풀다운, netlist U2.60) **미실장** → BOOT0 floating high → 매 리셋 시 **ST 시스템 부트로더 부팅, 앱 미실행** (PC=0x1FFFxxxx, RAM=garbage, 시리얼 무출력).
+- **영구 수정**: R64 실장 또는 BOOT0(U2.60)→GND.
+- **검증 워크어라운드**: `openocd reset halt` → gdb `set $sp/$pc` (플래시 벡터 `*0x08000000`/`*0x08000004`) + VTOR(`0xE000ED08`=0x08000000) → `monitor resume`. 클럭은 강제 점프에도 96MHz 정상. (memory `project_board_boot0_workaround`)
+- **macOS 시리얼 캡처(USART6 mon 115200)**: 단일 fd 필수 — `{ stty 115200 cs8 -parenb -cstopb raw -echo; cat; } < /dev/cu.usbserial-XXXX`. (`stty -f` 후 `cat`은 baud 리셋되어 garbage)
 
 ---
 
