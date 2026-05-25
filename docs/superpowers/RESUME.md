@@ -9,10 +9,20 @@
 
 ```bash
 cd /Users/tknoh/dev/work/gds_us_ctrl
-git status                 # clean 기대
+git status                 # clean 기대 (tip = 9cac85c docs: ATmega16 board-truth correction)
 git log --oneline -6
 git tag -l 'hw-revA*'      # hw-revA_fw-stage-a, hw-revA_fw-stage-b
 ```
+
+### ⛔ STEP 0 — 측정 게이트 (Stage D 코딩 차단 중)
+
+이 세션은 **사용자 HW 재측정 대기** 상태로 멈춤. 새 세션 첫 행동:
+
+1. **사용자가 `analysis §0.1` B1~B5 측정/행동 재분석을 제공했는가?**
+   - **제공됨** → 값을 `analysis/atmega16-io-behavior.md` §0.1 B1~B5 표에 채우고 → **Stage D brainstorming 재개** (spec 작성). 결정 완료분: 1슬라이스(피드백 루프, 모듈경계로만 분할) · 코드포팅 먼저+머지前 실측 · 안전경계 옵션 측정 후 재논의.
+   - **아직 안 됨** → 측정 항목(B1~B5) 다시 안내하고 대기. 코딩 착수 금지.
+2. 측정과 무관하게 착수 가능한 **Stage D 구조부**(원하면): ADC 획득층(2ch 평균 10/50) + TIM 2ms/10ms cadence(superloop+SysTick 위) + 상태머신 골격 + 출력드라이버 추상화(매핑/극성 named const 격리). 단 전달함수·핀방향은 B1~B5 대기.
+
 그다음 **`docs/NEXT_STEPS.md`** 읽기 (§1.1 슬라이스 현황, §5.7 BOOT0 이슈).
 
 ---
