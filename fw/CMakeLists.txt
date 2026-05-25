@@ -51,6 +51,7 @@ set(HAL_SOURCES
     ${VENDOR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c
     ${VENDOR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim.c
     ${VENDOR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim_ex.c
+    ${VENDOR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c.c
 )
 
 add_library(stm32_hal STATIC
@@ -82,9 +83,10 @@ target_link_options(${PROJECT_NAME}.elf PRIVATE
     -Wl,--gc-sections
     -Wl,-Map=${PROJECT_NAME}.map,--cref
     -Wl,--print-memory-usage
+    -Wl,--no-warn-rwx-segments
     --specs=nano.specs
     -u _printf_float
-    -lc -lm -lnosys
+    -lc -lm
 )
 
 add_custom_command(TARGET ${PROJECT_NAME}.elf POST_BUILD

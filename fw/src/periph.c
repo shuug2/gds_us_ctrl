@@ -4,3 +4,4 @@
 UART_HandleTypeDef huart6;
 UART_HandleTypeDef huart1;   /* USART1 — DGUS LCD (Stage A) */
 TIM_HandleTypeDef  htim11;
+I2C_HandleTypeDef  hi2c1;   /* I2C1 — FM24C16B FRAM (Stage B) */

@@ -1,25 +1,35 @@
-/* fw/src/app.c — Stage A: banner 갱신 + LCD demo cadence */
+/* fw/src/app.c — Stage B: FRAM config load + LCD init_mode + liveness cadence */
 #include "stm32f4xx_hal.h"
 #include "app.h"
 #include "board.h"
 #include "sys_tick.h"
 #include "mon.h"
 #include "dgus_lcd.h"
+#include "app_config.h"
+#include "app_lcd.h"
+
+static app_config_t g_cfg;
 
 void app_init(void)
 {
     sys_tick_init();
     mon_init();
-    mon_writeln("[boot] gds_us_ctrl stage-a-lcd ready");
-    mon_printf("[lcd] usart1@115200 ring=64 prio=5\r\n");
+    mon_writeln("[boot] gds_us_ctrl stage-b ready");
 
 #if DGUS_DEMO_RESET_ON_BOOT
     dgus_reset_lcd();
 #endif
 
-    dgus_set_page(DGUS_DEMO_BOOT_PAGE);
-    mon_printf("[lcd] init ok, set_page=%u, uptime VP=0x%04X\r\n",
-               (unsigned)DGUS_DEMO_BOOT_PAGE, (unsigned)DGUS_DEMO_UPTIME_VP);
+    dgus_set_page(LCD_LOGO);          /* page 0 — logo */
+    sys_tick_delay_ms(1000);          /* DGUS T5L boot settle (TIM11 tick, not HAL_Delay) */
+
+    app_config_load(&g_cfg);          /* FRAM read; factory-write on blank (0xAA flag) */
+    app_lcd_init_mode(&g_cfg);        /* model str + VP pre-fill + set_page(run) */
+
+    mon_printf("[cfg] freq=%u type=%u work=%lu energy=%lu en_e=%u en_m=%u\r\n",
+               (unsigned)g_cfg.model_freq, (unsigned)g_cfg.model_type,
+               (unsigned long)g_cfg.work_cnt, (unsigned long)g_cfg.limit_energy,
+               (unsigned)g_cfg.energy_ctrl, (unsigned)g_cfg.multi_ctrl);
 }
 
 void app_loop_iter(void)
