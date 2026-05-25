@@ -137,12 +137,17 @@ confidence + how to verify. These are the heart of what STM32 must absorb.
 
 ---
 
-## 8. Open ask for the user (decides analysis precision)
+## 8. OLD-board schematic — ✅ PROVIDED
 
-**Will you add the OLD-board (samd20+atmega16) schematic before this session?**
-- **Yes** → closes the OLD ATmega16-pin ↔ net mapping decisively; most rows reach HIGH/MEDIUM.
-- **No** → analysis still proceeds, but PORTB/PORTD output rows and several inputs stay LOW/MEDIUM until
-  HW testing. (User earlier offered to add the old schematic — `usw_ctrl_v2x_samd20.*`.)
+`hw/schematics/usw_ctrl_v26_samd20.pdf` (V26, samd20+atmega16 era, 4-page PDF; **PDF only, no netlist**).
+This closes the OLD ATmega16-pin ↔ signal mapping — use it to push rows toward HIGH/MEDIUM.
+
+- Read it by rendering pages: `pdftoppm -png -r 600 -f N -l N usw_ctrl_v26_samd20.pdf out` then view crops
+  (poppler installed). Find the ATmega16 (U?) symbol; read PA4/PC0/PC1/PC4 + all PORTB/PORTD nets and where
+  they go (connector / SAMD20 / oscillator board).
+- **No netlist for V26** → mapping is visual (schematic read), so confirmations are slightly weaker than the
+  V30 `.asc` text netlist. Cross-check OLD net names against V30 equivalents (`USW_CTRL_V30.asc`).
+- Three-way HIGH still requires: code register access + OLD-schematic net + user pin-role agreement.
 
 ---
 

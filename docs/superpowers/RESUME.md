@@ -50,7 +50,7 @@ git tag -l 'hw-revA*'      # hw-revA_fw-stage-a, hw-revA_fw-stage-b
 **`docs/superpowers/2026-05-25-atmega16-analysis-kickoff.md`** 를 그대로 따름. 이건 *분석* 작업이라 brainstorm→spec→plan 의식 **생략** — kickoff가 spec, 산출물은 신호↔동작 가설 테이블(`docs/superpowers/analysis/atmega16-io-behavior.md`).
 - 비판적 독해 체크리스트 + confidence(H/M/L 3중확인 기준) + HW-verify 방법 고정셋.
 - scope: ADC센싱/출력(초음파)제어/main·ISR 흐름 = in / 7-seg·comm(IPC)·버튼 = out.
-- ⚠️ **사용자 결정 필요(kickoff §8)**: 분석 전에 **구 회로도(samd20+atmega16)** 를 넣을지 — 넣으면 OLD↔NEW 핀 매핑이 확정됨.
+- ✅ **구 회로도 확보**: `hw/schematics/usw_ctrl_v26_samd20.pdf` (V26 samd20+atmega16, PDF만/netlist 없음) — OLD 핀↔신호 매핑에 사용 (pdftoppm 렌더 후 판독).
 
 ## 그 이후 코드 슬라이스 후보 (분석 뒤 결정)
 
