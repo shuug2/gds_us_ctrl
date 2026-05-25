@@ -1,7 +1,7 @@
 # RESUME — 다음 세션
 
-> **상태 (2026-05-25)**: **ATmega16 FW 동작↔I/O 분석 완료** → `docs/superpowers/analysis/atmega16-io-behavior.md`. (Stage B는 `540008d`, tag `hw-revA_fw-stage-b`로 머지 완료.) `main` 단독.
-> **다음 작업**: **(선행) HW-verify 패스** → 분석문서 §7의 LOW/M 행(OSC 트리거 핀·ADC 채널·PC1)을 실측 승급. 그다음 **Stage D — Ultrasonic regulation core 흡수** (분석문서 §8). 코드 슬라이스 정석 흐름.
+> **상태 (2026-05-25)**: ATmega16 FW↔I/O 분석 완료 + **보드-진실 정정** (`analysis §0.1`). OSC 드라이브 매핑 **보드 직독 확정**: `CTRL_OSC0..4` ← mega16 PB1/PB0/PC4/PA7/PC7 (V30 PB2/PB10/PB12/PB13/PB14). **소스 오브 트루스 전환** — 1차=사용자 보드 측정+행동 재분석, 2차(약함)=디컴파일(함수명 무시). (Stage B는 `540008d`, tag `hw-revA_fw-stage-b`로 머지 완료.) `main` 단독, 문서 갱신 완료.
+> **다음 작업**: **사용자 HW 재측정 대기** — `analysis §0.1` B1~B5 (① 5 OSC핀 방향 in/out ② 극성·레벨↔비트 매핑 ③ 레귤레이션 전달함수 ④ ADC ch1(PA1) 정체 ⑤ `g_main_state` 0/1 두 출력모드). 사용자가 측정 + 행동 재분석 제공 예정. **수령 후 Stage D brainstorming 재개**. Stage D 코딩은 측정 전까지 보류.
 
 ---
 
@@ -45,25 +45,31 @@ git tag -l 'hw-revA*'      # hw-revA_fw-stage-a, hw-revA_fw-stage-b
 
 ---
 
-## ATmega16 분석 결과 요약 (완료 — `docs/superpowers/analysis/atmega16-io-behavior.md`)
+## ATmega16 분석 결과 + 보드-진실 정정 (`analysis §0.1`이 본문 §0/§1/§3/§4/§7보다 우선)
 
-- **아키텍처 확정**: ATmega16 = 트리거+전류모니터링(실시간 레귤레이션), SAMD20 = UI+전체제어, OSC = 별도 보드. IPC = 순수 GPIO.
-- **디컴파일러 noise 정정**: C 헤더의 핀-역할 주석 대부분 추측. `display_*`(PORTD+PB2/3/4)는 **V26 미연결 = dead legacy**. `BUZ_M16`/`U1.xx` 등 net 주석 오류 다수.
-- **HIGH 확정 핀**: PA4=`M_START`(START in), PC0=`M_OVLD`(overload out). PORTD/PB2-4 미연결.
-- **핵심 단서**: `output_level_process` 누진 5비트(0x01→0x1F) ↔ V30 `OSC_OUT0..4` 1:1.
-- **미해소(최우선 HW-verify)**: ① OSC 트리거 물리 출력핀 ② ADC ch0/ch1 정체 ③ PC1 방향 충돌. (분석문서 §7)
+**확정 (보드 직독 / 사용자):**
+- 아키텍처: ATmega16 = 트리거+출력세기 모니터링(실시간 레귤레이션), SAMD20 = UI+전체제어, OSC = 별도 보드.
+- `CTRL_OSC0..4` ← mega16 **PB1/PB0/PC4/PA7/PC7** (V30 PB2/PB10/PB12/PB13/PB14). ← OSC 트리거 핀 미해소 해소.
+- **PA0(ADC ch0) = 출력 초음파 세기 피드백** = 레귤레이션 입력 (V30 PB0/ADC1_IN8 `SENS_OUT`).
+- IPC는 OSC 핀과 별개: 명령선 M_START/SEEK/RESET(PA4/5/6) + M_OVLD(PC0).
 
-## 다음 세션 진입 (분석문서 §8 그대로)
+**뒤집힌 본문 결론 (이제 무시):** "IPC=PB0/PB1/PA7/PC4/PC7"(§1), "PB0/PB1/PC7=상태표시"(§3), "누진패턴→dead display로만 감"(§4). 디컴파일 **함수명·동작주석은 무시**, 동작은 사용자가 재도출.
 
-1. **(선행) HW-verify 패스** — §7 #1/#2/#3 OLD 보드 또는 V30 보드로 실측. scope/openocd. (BOOT0 워크어라운드 필요)
-2. **Stage D — Ultrasonic regulation core 흡수**:
-   - in: STM32 ADC(`SENS_OUT`/`SENS_CURR`) → adc avg
-   - proc: `lookup_table` 스케일 → `adc_scaled_value` → 누진 레벨 (`output_level_process` 포팅)
-   - out: `OSC_OUT0..4`(U2.28/29/33/34/35), `CON_OVLD`, `BUZZER`
-   - 명령 in: `B_START`/`B_RESET`(+SEEK) GPIO/EXTI
-   - cadence: TIM 2ms/10ms로 Timer0/Timer1 ISR 등가 (superloop+SysTick 위)
-   - 안전(overload) 직결 → **HW 실측 우선** 강제
-3. **비포팅**: 7-seg/`display_*`(dead), comm IPC(single MCU).
+**측정 대기 (Stage D 차단 — `analysis §0.1` B1~B5):**
+- B1 5 OSC핀 각 방향 (출력 vs 입력 — PC4·PA7는 코드상 입력이라 순수 5출력 아닐 수 있음)
+- B2 레벨↔OSC 비트매핑 + 극성(Active H/L)
+- B3 레귤레이션 전달함수 (PA0 피드백 → scaled → 레벨; 디컴파일 스케일 수식 placeholder)
+- B4 ADC ch1(PA1, 50샘플) 정체
+- B5 `g_main_state` 0/1 두 출력모드 (lookup 레귤레이션 vs 본문부재 `output_direct_process`)
+
+## 다음 세션 진입
+
+1. **사용자 측정 결과 + 행동 재분석 수령** → `analysis §0.1` B1~B5 채움.
+2. **Stage D brainstorming 재개** — spec 작성. 결정 완료분: 슬라이스 1개 유지(피드백 루프, 모듈 경계로만 분할), 코드-포팅 먼저+머지前 실측(사용자 결정), 안전경계는 측정 후 재논의(원래 arm-gate/idle-safe 옵션 보류).
+3. **Stage D 구조부(측정 무관, 선포팅 가능)**: ADC 획득층(2ch 평균 10/50) + TIM 2ms/10ms cadence(Timer0/1 등가, superloop+SysTick 위) + 상태머신 골격 + **출력드라이버 추상화**(5비트 레벨 → CTRL_OSC, 매핑/극성은 named const로 격리). 전달함수·핀방향은 B1~B5 대기.
+4. **비포팅**: 7-seg/`display_*`(dead), comm IPC(single MCU).
+
+> ⚠️ "ref/atmega16 verbatim 포팅" 전제 **폐기** — 디컴파일은 약한 참조. 레귤레이션 동작은 사용자 측정/재분석이 권위.
 
 ## 그 외 대기 슬라이스
 

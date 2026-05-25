@@ -112,7 +112,7 @@
 ### GPIO Output — 초음파 발진회로 제어 (외부 제어 신호 출력)
 
 > 외부 발진회로로 가는 제어 신호. 5채널 모두 ATmega16의 특정 핀이 구동하던 신호를 F410이 흡수.
-> 활성 극성(Active H/L)은 회로도 확인 후 확정 — 일단 핀 매핑만 등록 (Q8b).
+> **mega16 출신핀 identity = 보드 직독 확정 (2026-05-25, H-C)**: PB1/PB0/PC4/PA7/PC7 (아래 표). 단 **각 핀 방향(출력 vs 입력)·활성 극성·레벨↔비트 매핑은 사용자 재측정 대기** — PC4·PA7는 mega16 FW상 입력핀(DDR)이라 "순수 5출력"이 아닐 수 있음(OSC보드→M16 피드백 입력 혼재 가능). 상세: `docs/superpowers/analysis/atmega16-io-behavior.md` §0.1 (B1/B2). Stage D 코딩은 이 측정 대기로 보류.
 
 | Pin (F410) | Net Name | ATmega16 원본 핀 | 설명 |
 |-----|----------|------------------|------|
@@ -240,5 +240,6 @@ USB 48 MHz ← PLLQ
 
 | # | 항목 | 재확인 시점 |
 |---|------|----------|
-| Q8b | CTRL_OSC0~4 활성 극성 (Active H/L) | Stage D `do_control()` 구현 시 |
+| Q8b | CTRL_OSC0~4 **방향(in/out)·활성 극성·레벨↔비트 매핑** | **사용자 재측정 대기** (analysis §0.1 B1/B2). Stage D 차단 |
 | Q10 | ADC1 IN9 (PB1) `.ioc`에 채널 추가 | Phase 1 CubeMX 보정 + Stage D ADC 흡수 시 |
+| Q11 | ADC1 IN8 (PB0) = mega16 PA0 = **출력 초음파 세기 피드백** (레귤레이션 입력) | **확정 (2026-05-25)**. IN9(PB1)=ch1 정체는 analysis §0.1 B4 |

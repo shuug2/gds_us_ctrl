@@ -13,9 +13,9 @@
 | Phase 1+2 Bootstrap | ✅ main 머지 완료 (2026-05-05) | `b8afe1c` (merge) | 96 MHz HSI×12 + TIM11 1ms tick + USART6 mon + PB3 heartbeat |
 | Stage A LCD I/O | ✅ **main 머지 완료 (2026-05-25)** | `4651453` (merge), tag `hw-revA_fw-stage-a` | DGUS LCD wire 통신 + 1Hz cadence 검증. 33 commits 병합 |
 | Stage B LCD app 데이터 | ✅ **main 머지 완료 (2026-05-25)** | `540008d` (merge), tag `hw-revA_fw-stage-b` | FRAM(FM24C16B @0x50) config load + `init_lcd_mode` 포팅. HW 검증 통과(BOOT0 forced-jump). 7 commits. FLASH 22.30%/RAM 8.81% |
-| ATmega16 FW↔I/O 분석 | ✅ **완료 (2026-05-25)** | — | 산출물 `docs/superpowers/analysis/atmega16-io-behavior.md`. 핀별 가설 테이블 + 제어루프/ISR + V26→V30 매핑 + HW-verify 우선순위 |
-| **HW-verify 패스 (다음, 선행)** | ⬜ 미시작 | — | 분석 §7 #1(OSC 트리거 핀)·#2(ADC 채널)·#3(PC1) 실측 승급 |
-| **Stage D — Ultrasonic regulation 흡수** | ⬜ HW-verify 후 | — | 분석 §8. ADC→lookup→`output_level`→`OSC_OUT0..4`+`CON_OVLD`+`BUZZER` |
+| ATmega16 FW↔I/O 분석 | ✅ 완료 + **보드-진실 정정 (2026-05-25 후속)** | — | 산출물 `docs/superpowers/analysis/atmega16-io-behavior.md` (**§0.1 정정 절 추가**). OSC 매핑 보드 직독 확정 + 소스오브트루스 전환(디컴파일→보드 측정) |
+| **사용자 HW 재측정 (다음, 차단)** | ⏸ **측정 대기** | — | 분석 §0.1 B1(5 OSC핀 방향)·B2(극성/비트매핑)·B3(전달함수)·B4(ADC ch1)·B5(state 0/1). 사용자가 측정 후 행동 재분석 제공 예정 |
+| **Stage D — Ultrasonic regulation 흡수** | ⬜ 측정 후 | — | 분석 §0.1/§8. 구조부(ADC층·TIM cadence·상태머신 골격·출력드라이버 추상화) 선포팅 가능, 전달함수·핀방향·매핑은 B1~B5 대기. "ref verbatim 포팅" 전제 폐기 |
 | Stage C — Modbus RTU on USART6 | ⬜ 미시작 (Stage D와 독립) | — | 속도/패리티 = FRAM `comm_speed_idx`/`comm_parity_idx` |
 | Stage A I/O (Stage D와 일부 중첩) | ⬜ 미시작 | — | CON_OVLD / CON_START / CTRL_OSC0~4 GPIO |
 
