@@ -1,7 +1,7 @@
 # RESUME — 다음 세션
 
 > **상태 (2026-05-25)**: **Stage B LCD app 데이터 main 머지 완료** (`540008d`, tag `hw-revA_fw-stage-b`). FRAM(FM24C16B) config load + `init_lcd_mode` 포팅. HW 검증 통과. `main` 단독, working tree clean.
-> **다음 작업**: 사용자 확정 대기 — 후보는 **Stage C (Modbus RTU on USART6)**, Stage A I/O(GPIO), scope-b LCD 확장, 또는 ATmega16 흡수.
+> **다음 작업**: **ATmega16 FW 동작 ↔ I/O 신호 정밀 분석** (코드 슬라이스 전 선행 — 사용자 확정). kickoff: `docs/superpowers/2026-05-25-atmega16-analysis-kickoff.md`. 역변환 코드를 **비판적으로** 보고, **HW-시험으로 정정 가능한 가설 테이블**로 산출.
 
 ---
 
@@ -45,14 +45,21 @@ git tag -l 'hw-revA*'      # hw-revA_fw-stage-a, hw-revA_fw-stage-b
 
 ---
 
-## 다음 슬라이스 후보 (사용자 결정 필요)
+## 다음 세션 = ATmega16 FW 분석 (선행 작업, 코드 ✗)
 
-1. **Stage C — Modbus RTU on USART6** (속도/패리티는 EEPROM `comm_speed_idx`/`comm_parity_idx` 가변, Stage B에서 이미 FRAM에 로드됨)
-2. **Stage A I/O** — CON_OVLD / CON_START / CTRL_OSC0~4 GPIO (구 회로도 + ATmega16 핀 역할 참조)
-3. **scope-b LCD 확장** — `change_lcd_page` per-page 문자열 포맷(`DISP_STD_DATA`, time2str/energy2str), SETUP 페이지 (DGUS `14ShowFile.bin` VP맵 참조: `hw/lcd/dgus/README.md`)
-4. **ATmega16 흡수** — 초음파 실시간 제어 로직 (`ref/atmega16` 분석 → STM32 내장)
+**`docs/superpowers/2026-05-25-atmega16-analysis-kickoff.md`** 를 그대로 따름. 이건 *분석* 작업이라 brainstorm→spec→plan 의식 **생략** — kickoff가 spec, 산출물은 신호↔동작 가설 테이블(`docs/superpowers/analysis/atmega16-io-behavior.md`).
+- 비판적 독해 체크리스트 + confidence(H/M/L 3중확인 기준) + HW-verify 방법 고정셋.
+- scope: ADC센싱/출력(초음파)제어/main·ISR 흐름 = in / 7-seg·comm(IPC)·버튼 = out.
+- ⚠️ **사용자 결정 필요(kickoff §8)**: 분석 전에 **구 회로도(samd20+atmega16)** 를 넣을지 — 넣으면 OLD↔NEW 핀 매핑이 확정됨.
 
-정석 흐름 동일: worktree → brainstorming → spec → plan → subagent/Codex 실행 → HW 검증 → 머지.
+## 그 이후 코드 슬라이스 후보 (분석 뒤 결정)
+
+1. **Stage C — Modbus RTU on USART6** (속도/패리티는 EEPROM `comm_speed_idx`/`comm_parity_idx`, Stage B에서 FRAM 로드됨)
+2. **Stage A I/O** — CON_OVLD / CON_START / CTRL_OSC0~4 GPIO
+3. **scope-b LCD 확장** — `change_lcd_page` 문자열 포맷 + SETUP 페이지 (DGUS VP맵: `hw/lcd/dgus/README.md`)
+4. **ATmega16 흡수** — 초음파 실시간 제어 로직 (위 분석 산출물 기반)
+
+코드 슬라이스 정석 흐름: worktree → brainstorming → spec → plan → subagent/Codex 실행 → HW 검증 → 머지.
 
 ---
 
