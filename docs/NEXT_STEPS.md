@@ -187,10 +187,10 @@ Stage A 에서 이미 발견된 패턴 (typo / Phase 2 reality 불일치 / scope
 - **7-세그먼트**: V30 보드에 없음 — DGUS LCD 단독.
 - **`I2C_POT`**: U4 외부 I2C 디지털 포텐셔미터 @0x28 (EEPROM과 I2C1 버스 공유).
 
-### 5.7 ⚠️ 보드 BOOT0 이슈 (hw revA — 플래시/실행에 직접 영향)
-- **R64**(BOOT0 풀다운, netlist U2.60) **미실장** → BOOT0 floating high → 매 리셋 시 **ST 시스템 부트로더 부팅, 앱 미실행** (PC=0x1FFFxxxx, RAM=garbage, 시리얼 무출력).
-- **영구 수정**: R64 실장 또는 BOOT0(U2.60)→GND.
-- **검증 워크어라운드**: `openocd reset halt` → gdb `set $sp/$pc` (플래시 벡터 `*0x08000000`/`*0x08000004`) + VTOR(`0xE000ED08`=0x08000000) → `monitor resume`. 클럭은 강제 점프에도 96MHz 정상. (memory `project_board_boot0_workaround`)
+### 5.7 ✅ 보드 BOOT0 이슈 — 해결됨 (2026-05-26)
+- **BOOT0(U2.60)→GND 연결로 해결.** 이제 평범한 `reset run`으로 플래시 앱 직접 부팅. HW 검증(2026-05-26): `reset halt` → **PC=0x080045c0 / MSP=0x20008000**(플래시 Reset_Handler), `reset run` → mon `[boot] … stage-b ready` / `[cfg] …` / `[t=N ms] hello uptime=N`(1초 cadence) 정상. **force-jump 워크어라운드 불필요.**
+- **이전 문제(해결됨)**: R64(BOOT0 풀다운, U2.60) 미실장 → BOOT0 floating high → 매 리셋 시 ST 부트로더 부팅(PC=0x1FFFxxxx), 앱 미실행.
+- **다른 미개조 보드 재발 시 fallback**: `openocd reset halt` → gdb `set $sp/$pc`(플래시 벡터 `*0x08000000`/`*0x08000004`) + VTOR(`0xE000ED08`=0x08000000) → `monitor resume`. (memory `project_board_boot0_workaround`)
 - **macOS 시리얼 캡처(USART6 mon 115200)**: 단일 fd 필수 — `{ stty 115200 cs8 -parenb -cstopb raw -echo; cat; } < /dev/cu.usbserial-XXXX`. (`stty -f` 후 `cat`은 baud 리셋되어 garbage)
 
 ---

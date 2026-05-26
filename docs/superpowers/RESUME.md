@@ -38,18 +38,12 @@ git tag -l 'hw-revA*'                   # hw-revA_fw-stage-a, hw-revA_fw-stage-b
 
 ---
 
-## ⚠️ 먼저 알아야 할 보드 이슈 (HW 작업 시)
+## ✅ 보드 이슈 — BOOT0 해결됨 (2026-05-26)
 
-**R64 (BOOT0 풀다운, U2.60) 미실장** → BOOT0 floating high → 매 리셋 시 ST 시스템 부트로더로 부팅, **플래시한 앱이 안 돎**. 증상: `reset halt` PC=0x1FFFxxxx, RAM garbage, 시리얼 무출력.
+**BOOT0(U2.60)를 GND로 묶음 → 해결.** 이제 플래시한 앱이 평범한 `reset run`으로 직접 부팅. HW 검증(2026-05-26): `reset halt` 후 **PC=0x080045c0 / MSP=0x20008000**(플래시 Reset_Handler), `reset run` → mon USART6에 `[boot] gds_us_ctrl stage-b ready` / `[cfg] …` / `[t=N ms] hello uptime=N`(1초 cadence 증가) 정상. **gdb force-jump 워크어라운드 불필요.**
 
-- **영구 수정**: R64 실장 또는 BOOT0→GND.
-- **검증 워크어라운드** (memory `project_board_boot0_workaround`):
-  ```
-  openocd ... program build/gds_us_ctrl.elf verify
-  gdb: monitor reset halt; set $sp=*(unsigned*)0x08000000; set $pc=*(unsigned*)0x08000004;
-       set *(unsigned*)0xE000ED08=0x08000000; monitor resume; detach
-  ```
-  강제 점프해도 클럭 96MHz 정상 (RCC 확인). g_cfg/카운터는 두 번째 gdb 세션에서 `monitor halt`(reset ✗) 후 `print`.
+- **이전 문제(해결됨)**: R64(BOOT0 풀다운, U2.60) 미실장 → BOOT0 floating high → 매 리셋 시 ST 부트로더(PC 0x1FFFxxxx)로 부팅, 앱 미실행.
+- **다른 미개조 보드에서 재발 시 fallback** (memory `project_board_boot0_workaround`): `openocd … program … verify` 후 gdb `monitor reset halt` → `set $sp=*(unsigned*)0x08000000` → `set $pc=*(unsigned*)0x08000004` → `set *(unsigned*)0xE000ED08=0x08000000`(VTOR) → `monitor resume; detach`. 상태 읽기는 두 번째 세션 `monitor halt`(reset ✗) 후 `print`.
 - **시리얼 (USART6 mon, /dev/cu.usbserial-*, 115200)**: 단일 fd — `{ stty 115200 cs8 -parenb -cstopb raw -echo; cat; } < /dev/cu.usbserial-XXXX > log`.
 
 ---
