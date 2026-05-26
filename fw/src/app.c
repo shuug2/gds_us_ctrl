@@ -20,11 +20,28 @@ void app_init(void)
     dgus_reset_lcd();
 #endif
 
+    /* Cold-boot race fix: the DGUS panel boots slower than the MCU, so the old
+     * blind 1 s delay + one-shot set_page lost the command and the panel stayed
+     * on its power-on logo. Gate on the panel answering a SYS_PIC_NOW read
+     * instead (replicates samd20's intended-but-commented check_lcd_comm
+     * handshake, ref/samd20/main.c:4933-5022). */
+    bool lcd_up = dgus_wait_ready(DGUS_BOOT_READY_TIMEOUT_MS);
+    mon_printf("[lcd] ready=%u\r\n", (unsigned)lcd_up);
+
+    /* Show the logo splash for a deliberate dwell, then switch to the run page
+     * (samd20 UX: set_page(0) → 1 s → run). The readiness gate above guarantees
+     * the panel is up, so this set_page(LOGO) lands and the logo is actually
+     * visible for the dwell (on ST-LINK reset it also forces logo→run). */
     dgus_set_page(LCD_LOGO);          /* page 0 — logo */
-    sys_tick_delay_ms(1000);          /* DGUS T5L boot settle (TIM11 tick, not HAL_Delay) */
+    sys_tick_delay_ms(DGUS_LOGO_DWELL_MS);
 
     app_config_load(&g_cfg);          /* FRAM read; factory-write on blank (0xAA flag) */
     app_lcd_init_mode(&g_cfg);        /* model str + VP pre-fill + set_page(run) */
+
+    /* Re-assert the run page until SYS_PIC_NOW confirms it — covers the panel
+     * reverting to its boot page after finishing its own splash. */
+    bool page_ok = app_lcd_ensure_run_page(&g_cfg);
+    mon_printf("[lcd] run_page_confirmed=%u\r\n", (unsigned)page_ok);
 
     mon_printf("[cfg] freq=%u type=%u work=%lu energy=%lu en_e=%u en_m=%u\r\n",
                (unsigned)g_cfg.model_freq, (unsigned)g_cfg.model_type,

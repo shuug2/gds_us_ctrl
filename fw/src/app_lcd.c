@@ -1,6 +1,14 @@
 /* fw/src/app_lcd.c — samd20 init_lcd_mode port (scope a: RUN-page bring-up, no string formatting). */
 #include "app_lcd.h"
 #include "dgus_lcd.h"
+#include "sys_tick.h"
+
+uint8_t app_lcd_run_page(const app_config_t *cfg)
+{
+    if      (cfg->model_type == 0) return LCD_RUN_HAND;    /* 3 */
+    else if (cfg->model_type == 1) return LCD_RUN_MULTI;   /* 3 */
+    else                           return LCD_RUN_STD;     /* 9 */
+}
 
 void app_lcd_send_model_str(uint8_t freq, uint8_t type)
 {
@@ -28,13 +36,9 @@ void app_lcd_send_model_str(uint8_t freq, uint8_t type)
 
 void app_lcd_init_mode(const app_config_t *cfg)
 {
-    uint8_t run_page;
+    uint8_t run_page = app_lcd_run_page(cfg);
 
     app_lcd_send_model_str(cfg->model_freq, cfg->model_type);
-
-    if      (cfg->model_type == 0) run_page = LCD_RUN_HAND;    /* 3 */
-    else if (cfg->model_type == 1) run_page = LCD_RUN_MULTI;   /* 3 */
-    else                           run_page = LCD_RUN_STD;     /* 9 */
 
     /* init_lcd_mode VP pre-fill (main.c:3216-3228) */
     dgus_write_u16(ICON_RESET, 0);
@@ -54,4 +58,25 @@ void app_lcd_init_mode(const app_config_t *cfg)
     dgus_write_u16(DISP_MULTI_EN,  cfg->multi_ctrl  ? 1 : 0);
 
     dgus_set_page(run_page);
+}
+
+bool app_lcd_ensure_run_page(const app_config_t *cfg)
+{
+    uint8_t  run_page = app_lcd_run_page(cfg);
+    uint16_t now_pg;
+
+    for (uint8_t i = 0; i < DGUS_PAGE_CONFIRM_RETRIES; i++) {
+        if (dgus_read_word(SYS_PIC_NOW, &now_pg, DGUS_READ_REPLY_TIMEOUT_MS)
+            && (uint8_t)now_pg == run_page) {
+            return true;                                /* 패널이 run 페이지 확인 */
+        }
+        dgus_set_page(run_page);                        /* 미확인 → 재전송 */
+        sys_tick_delay_ms(DGUS_PAGE_CONFIRM_SPACING_MS);
+    }
+
+    /* 마지막 재전송 후 최종 확인 */
+    if (dgus_read_word(SYS_PIC_NOW, &now_pg, DGUS_READ_REPLY_TIMEOUT_MS)) {
+        return (uint8_t)now_pg == run_page;
+    }
+    return false;
 }

@@ -103,6 +103,12 @@ void dgus_read_var(uint8_t var);                      /* 0x83 RD len=1 word */
 bool dgus_rx_poll(dgus_frame_t *out);
 bool dgus_is_echo(const dgus_frame_t *f);             /* cmd == 0x82 */
 
+/* Boot-time blocking RD helpers — DGUS cold-boot handshake (panel boots
+ * slower than the MCU, so a one-shot set_page was lost and the panel stayed
+ * on its power-on logo). NOT for the main loop. */
+bool dgus_read_word(uint16_t addr, uint16_t *out_val, uint32_t timeout_ms);
+bool dgus_wait_ready(uint32_t timeout_ms);            /* poll SYS_PIC_NOW until panel UART answers */
+
 /* 관측성 (chunk 6f GDB read 용) */
 uint16_t dgus_rx_drop_count(void);
 uint16_t dgus_tx_timeout_count(void);
@@ -114,3 +120,12 @@ uint16_t dgus_tx_timeout_count(void);
 #define DGUS_DEMO_BOOT_PAGE      LCD_RUN_STD    /* 9 — VAR_POWER 시각화되는 페이지 */
 #define DGUS_DEMO_UPTIME_VP      VAR_POWER      /* 0x1110 — U16 (wrap @ 65535초) */
 #define DGUS_DEMO_RESET_ON_BOOT  0              /* 0=skip / 1=부팅 시 LCD 풀-재시작 */
+
+/*--------------------------------------------------------------
+ * LCD 콜드부팅 핸드셰이크 튜닝 (set_page 레이스 픽스)
+ *--------------------------------------------------------------*/
+#define DGUS_BOOT_READY_TIMEOUT_MS   4000u   /* 패널 UART 기동 최대 대기 */
+#define DGUS_READ_REPLY_TIMEOUT_MS    120u   /* RD 1회 응답 대기창 */
+#define DGUS_LOGO_DWELL_MS           1000u   /* 패널 기동 후 로고 splash 노출 시간 (samd20 동일) */
+#define DGUS_PAGE_CONFIRM_RETRIES       8u   /* run 페이지 read-back 재전송 횟수 */
+#define DGUS_PAGE_CONFIRM_SPACING_MS  150u   /* 재전송 간격 */
