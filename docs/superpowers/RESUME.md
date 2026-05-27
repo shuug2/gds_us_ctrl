@@ -1,7 +1,11 @@
 # RESUME — 다음 세션
 
-> **상태 (2026-05-27)**: **LCD 전체 동작 포팅(samd20→STM32) 구현 완료 — T1~T9, 빌드 0-warning(FLASH 27.9%/RAM 9.3%). HW 검증(T10)만 남음.** 사용자가 Stage D보다 LCD 포팅을 먼저 하기로 재우선순위(2026-05-27). 브랜치 **`feat/stage-lcd-full-behavior`** (main에서 분기, BOOT0+LCD 콜드부팅 픽스 cherry-pick 선반영, 16커밋). 범위 = parse_lcd_comm 입력/설정편집/SAVE·CANCEL + change_lcd_page 렌더 + 주기 표시 스텝머신 + 포맷터. 측정값=전부0 스텁 provider, HW/제어결합=named 스텁 훅(set_pot/us_command/comm_reconfigure/ether_apply/horn = Stage C/D 통합점). samd20 퀴크 verbatim 보존(F3 HAND저장→MULTI페이지, STD경로 ether 미영속, ether NM/GW가 IP옥텟[3] 시드). Stage B 콜드부팅 무회귀(inspection — 첫부팅 실증 필요). T1~T4 직접, T5~T9 subagent-driven+태스크별 samd20 대조 리뷰.
-> **다음 작업**: **STEP 0 = LCD HW bench 검증** (플래시 → `docs/changelog.md` 2026-05-27 항목의 체크리스트). 통과 시 RESUME/NEXT_STEPS "done" 갱신 + main PR + 태그 `hw-revA_fw-stage-lcd`. **Stage D slice 1(레귤레이션 코어)는 LCD 머지 뒤로 연기 — 상세 ↓ STEP 1.** spec/plan = `docs/superpowers/{specs,plans}/2026-05-27-stage-lcd-full-behavior*`.
+> **상태 (2026-05-27 c)**: LCD 전체 동작 포팅(T1~T9) + **HW 검증(T10) 착수 중 발견한 버그 2건 수정·검증 완료**. 브랜치 **`feat/stage-lcd-full-behavior`** (main 미머지, **tip `c1b00a1`**). 둘 다 LCD 포팅 로직이 아닌 하부 결함이고, 버그1이 버그2를 가리고 있었음.
+> - **버그1 = USART1 DGUS RX 영구 wedge** (Phase2/StageA 1바이트 `HAL_UART_Receive_IT`가 오버런/재무장 실패 시 RXNEIE=0 영구 정지; energy 슬라이더 플러드+per-rx 블로킹 mon_printf가 트리거). **수정 = DMA2 Stream2 Ch4 circular free-running RX**(오버런 면역, `usart1_rx_pop` NDTR 기반, 시그니처 불변 → 파서/app 무수정) + per-rx 트레이스 `#ifdef LCD_TRACE_RX` 게이트(default off) + mon TX 50ms 타임아웃. 커밋 a2c37b4→82cdb4c(+리뷰 20b3380), cpp-reviewer APPROVE.
+> - **버그2 = LCD 입력 값 추출 off-by-one** (DGUS 0x83 응답의 VP주소 뒤 READ_LEN 워드수 바이트를 값 MSB로 오독 → SAVE(값1)이 256으로 읽혀 CANCEL 분기 실행, 전 입력 garbage). **수정 = `app_lcd_input.c` `data16=(data[1]<<8)|data[2]`**(READ_LEN 건너뜀, samd20 `dgus_lcd.h` DATA_H=5/L=6 일치). 1줄, 커밋 `d6c681f`.
+> - **HW 검증 PASS**: ① 부팅 무회귀(`run_page_confirmed=1`), ② SETUP energy 편집→SAVE→**전원사이클→영속**(`[cfg] energy=567`), 공격적 슬라이더 드래그에도 **RX 무wedge**(CR3 DMAR=1/SR ORE=0/NDTR·tail 전진), ⑩ 훅(`set_pot power=55 dac=12` = output_power 정확 추출), ⑧ N/A(전원 공유), ⑨ 재해석(패널이 idle에 `5A A5 03 82 4F 4B` LEN=3 프레임 연속 스트리밍 → 파서가 설계상 거부 → drop_count 항상 비0이나 무wedge가 진짜 신호).
+> - 문서: spec/plan `docs/superpowers/{specs,plans}/2026-05-27-usart1-dma-rx-hardening*`, finding `…/analysis/2026-05-27-lcd-hw-verify-rx-wedge.md`(Finding 1+2), changelog `2026-05-27 (후속)` 항목.
+> **다음 작업**: **남은 T10 항목 ③~⑦ 검증** (↓ STEP 0). 통과 시 main PR + 태그 `hw-revA_fw-stage-lcd`. 그 뒤 STEP 1 = Stage D slice 1(레귤레이션 코어). spec/plan(원 포팅) = `docs/superpowers/{specs,plans}/2026-05-27-stage-lcd-full-behavior*`.
 
 ---
 
@@ -9,17 +13,30 @@
 
 ```bash
 cd /Users/tknoh/dev/work/gds_us_ctrl
-git checkout feat/stage-lcd-full-behavior   # LCD 포팅 브랜치 (main 미머지, 16커밋)
-git log --oneline -3                          # tip = 0f184d4 (changelog), 61ca87b (T9 wire)
+git checkout feat/stage-lcd-full-behavior   # LCD 브랜치 (main 미머지)
+git log --oneline -8                          # tip = c1b00a1 (docs), d6c681f (data16 fix) …
 git tag -l 'hw-revA*'                         # hw-revA_fw-stage-a, hw-revA_fw-stage-b
-cd fw && env -u STM32_TOOLCHAIN cmake --build build   # 0-warning 확인
+cd fw && env -u STM32_TOOLCHAIN cmake --build build   # 0-warning 확인 (FLASH 26.75%/RAM 10.16%)
+cmake --build build --target flash            # 두 fix 반영 펌웨어 플래시
 ```
 
-### ▶ STEP 0 — LCD HW bench 검증 (T10; 코드 T1~T9 완료)
+USART6 mon(@115200) = `/dev/cu.usbserial-BG02DMWU`. 단일-fd 캡처:
+`{ stty -f /dev/cu.usbserial-BG02DMWU 115200 cs8 -parenb -cstopb raw -echo; cat; } < /dev/cu.usbserial-BG02DMWU > /tmp/lcd-mon.log &`
 
-새 세션 첫 행동: 위 브랜치 체크아웃 → 빌드 확인 → **플래시(`cmake --build build --target flash`) → USART6 mon(@115200)로 `docs/changelog.md` 2026-05-27 항목의 HW 체크리스트 실행**. 핵심: `run_page_confirmed=1`(Stage B 무회귀), SETUP 편집→SAVE→전원사이클 영속, CANCEL 복귀, 전 페이지 네비 무락업/무SYS_PIC_NOW루프, F3/STD-ether/ether-seed 퀴크가 samd20과 일치, 패널만 전원사이클 시 재init 정상복구, `dgus_rx_drop_count()` 0, 훅 `[lcd-hook]` 로그. 통과 → changelog/RESUME/NEXT_STEPS "done" + `gh pr create`(→main) + 태그 `hw-revA_fw-stage-lcd`. 실패 → 증상별로 spec §12 flags(F1~F6) + 보존 퀴크부터 점검.
+### ▶ STEP 0 — 남은 T10 항목 ③~⑦ 검증 (①②⑧⑨⑩ + 두 fix 완료)
 
-> 구조/계약: spec `docs/superpowers/specs/2026-05-27-stage-lcd-full-behavior-port-design.md`, plan `…/plans/2026-05-27-stage-lcd-full-behavior.md`. 신규 소스 = `fw/src/app_lcd_{str,render,input,disp}.c` + `app_lcd.c`. config 소유 = `app_lcd_cfg()`, transient = `app_lcd_state()`, 측정 = `app_lcd_measure()`(스텁).
+**이미 검증된 것(재시험 불요)**: ① 부팅 무회귀, ② SAVE→전원사이클→영속, ⑧ N/A(전원공유), ⑨ 무wedge, ⑩ 훅. RX wedge·data16 추출 버그 둘 다 수정·HW PASS.
+
+**남은 것 (이제 입력이 동작하므로 검증 가능, 사용자와 인터랙티브)**:
+- ③ **CANCEL** → 편집값이 FRAM 값으로 복귀하는지.
+- ④ **전 setup/comm/ethernet 페이지 네비** — 락업/SYS_PIC_NOW 루프 없는지(mon trace; 필요 시 `-DLCD_TRACE_RX` 빌드로 rx 가시화).
+- ⑤ **STD 모델(type=2) STDE 이더넷 편집 SAVE/reload → comm_mode/ether 미영속** = samd20 동작과 일치(의도된 퀴크).
+- ⑥ **HAND 저장 후 MULTI 페이지 복귀(F3)** — 의도된 UX인지 사용자 확인.
+- ⑦ **NM/GW 필드 선택 시 IP 마지막 옥텟이 초기값 표시**(`temp_ether_ip[3]` 시드, verbatim) — samd20과 일치.
+
+통과 → changelog/RESUME/NEXT_STEPS "done" + `gh pr create`(→main) + 태그 `hw-revA_fw-stage-lcd`. 실패 → spec §12 flags + 보존 퀴크부터 점검. **머지 전 권장: 전체 브랜치 final 코드리뷰 1회**(RX core는 cpp-reviewer APPROVE 받음, data16은 1줄 samd20-대조 확정).
+
+> 구조/계약: 포팅 spec `…/specs/2026-05-27-stage-lcd-full-behavior-port-design.md`(F5 가정 = 틀림, finding 2 참조), RX fix spec `…/specs/2026-05-27-usart1-dma-rx-hardening-design.md`. 신규 소스 = `fw/src/app_lcd_{str,render,input,disp}.c` + `app_lcd.c`. config 소유 = `app_lcd_cfg()`, transient = `app_lcd_state()`, 측정 = `app_lcd_measure()`(스텁). RX = `fw/drivers/usart1.c`(DMA circular).
 
 ---
 
