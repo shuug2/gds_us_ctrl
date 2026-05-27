@@ -1,7 +1,57 @@
-/* fw/src/app_lcd.c — samd20 init_lcd_mode port (scope a: RUN-page bring-up, no string formatting). */
+/* fw/src/app_lcd.c — LCD app: init_lcd_mode port + subsystem state owner + stub hooks. */
 #include "app_lcd.h"
 #include "dgus_lcd.h"
 #include "sys_tick.h"
+#include "mon.h"
+
+/*--- Stage LCD subsystem state owner + control/HW stub hooks ---
+ * Single definition of the transient state; render/input/disp layers (Tasks 5-9)
+ * reach it via app_lcd_state(). Hooks log only — Stage C/D add real bodies. */
+static lcd_app_state_t g_lcd;
+
+lcd_app_state_t *app_lcd_state(void) { return &g_lcd; }
+
+const lcd_measure_t *app_lcd_measure(void)
+{
+    /* Stub: all-zero until Stage D regulation feeds live values.
+     * Bars render empty + VAR_* show 0 (the approved "alive but idle" UI). */
+    static const lcd_measure_t zero = {0};
+    return &zero;
+}
+
+void app_lcd_hook_set_pot(uint8_t output_power)
+{
+    /* F1: DAC byte = (power-50)*255/100 → 50%→0, 100%→127. No I2C write
+     * (U4 I2C_POT identity = open question F2). */
+    uint8_t dac = (uint8_t)(((int)output_power - 50) * 255 / 100);
+    mon_printf("[lcd-hook] set_pot power=%u dac=%u\r\n",
+               (unsigned)output_power, (unsigned)dac);
+}
+
+void app_lcd_hook_us_command(us_cmd_t cmd)
+{
+    mon_printf("[lcd-hook] us_command=%u\r\n", (unsigned)cmd);
+}
+
+void app_lcd_hook_comm_reconfigure(uint8_t speed_idx, uint8_t parity_idx, uint8_t address)
+{
+    mon_printf("[lcd-hook] comm speed=%u parity=%u addr=%u\r\n",
+               (unsigned)speed_idx, (unsigned)parity_idx, (unsigned)address);
+}
+
+void app_lcd_hook_ether_apply(uint8_t mode, const uint8_t ip[4], const uint8_t nm[4], const uint8_t gw[4])
+{
+    mon_printf("[lcd-hook] ether mode=%u ip=%u.%u.%u.%u nm=%u.%u.%u.%u gw=%u.%u.%u.%u\r\n",
+               (unsigned)mode,
+               (unsigned)ip[0], (unsigned)ip[1], (unsigned)ip[2], (unsigned)ip[3],
+               (unsigned)nm[0], (unsigned)nm[1], (unsigned)nm[2], (unsigned)nm[3],
+               (unsigned)gw[0], (unsigned)gw[1], (unsigned)gw[2], (unsigned)gw[3]);
+}
+
+void app_lcd_hook_horn(bool down)
+{
+    mon_printf("[lcd-hook] horn down=%u\r\n", (unsigned)down);
+}
 
 uint8_t app_lcd_run_page(const app_config_t *cfg)
 {

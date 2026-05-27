@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "app_config.h"
+#include "dgus_lcd.h"   /* dgus_frame_t for app_lcd_input_dispatch */
 
 /* GDSONIC model string -> MODEL_NAME (11-byte payload incl. trailing NUL). */
 void app_lcd_send_model_str(uint8_t freq, uint8_t type);
@@ -38,3 +39,89 @@ uint8_t ip_to_string(const uint8_t ip[4], char *str_buffer);
 /* Copy src into dest, NUL-filling from the first NUL onward (samd20 lcd_data_pdd,
  * de-globalized: explicit dest instead of the lcd_temp_buf global). */
 void lcd_data_pdd(uint8_t *dest, const uint8_t *src, uint8_t len);
+
+/*==============================================================
+ * LCD subsystem state, measurement provider, control/HW hooks
+ *  (Stage LCD full port — spec §4, §5)
+ *==============================================================*/
+
+/* Ultrasonic command edges raised by panel keys (KEY_MULTI / KEY_ERROR_RESET).
+ * Stub-logged now; Stage D drives the real command FSM / output pins. */
+typedef enum {
+    US_CMD_START,
+    US_CMD_SEEK,
+    US_CMD_RESET,
+    US_CMD_RUN_RELEASE,
+} us_cmd_t;
+
+/* ether-input field selector (LV_ETHER_KEY 'I'/'M'/'G'); NONE = idle. */
+#define LCD_ETHER_INPUT_NONE  0xFFu
+#define LCD_ETHER_INPUT_IP    0u
+#define LCD_ETHER_INPUT_NM    1u
+#define LCD_ETHER_INPUT_GW    2u
+
+/* Transient runtime state owned by the LCD subsystem (spec §4.2).
+ * Config/limit values live in app_config_t (g_cfg); this holds only what is
+ * NOT persisted: current page, mode/status, setup-edit shadows, ether FSM. */
+typedef struct {
+    uint8_t  lcd_status;        /* current page ID */
+    uint8_t  sys_mode;          /* 0=hand 1=multi 2=std (= model_type) */
+    uint8_t  sys_status;        /* SYS_RUN/SETUP/HORN/ERROR (control-fed) */
+    uint8_t  error_status;      /* ERR_* bitmask (control-fed; cleared by key) */
+    uint8_t  horn_status;       /* solenoid request (control-fed) */
+    uint8_t  key_tick;          /* long-press timer (SETUP_MODEL / _MOOHAN) */
+
+    uint16_t ref_lv_1, ref_lv_2, ref_lv_10, ref_lv_20;  /* output-bar thresholds (from model_freq) */
+
+    /* setup-page comm/ether edit shadows (committed to FRAM on DATA_SAVE) */
+    uint8_t  temp_address, temp_speed_idx, temp_parity_idx;
+    uint8_t  temp_comm_mode;    /* 0xFF sentinel = "not loaded yet" */
+    uint8_t  temp_ether_ip[4], temp_ether_nm[4], temp_ether_gw[4];
+    uint8_t  temp_cnt_reset;    /* shadow: reset work_cnt on save */
+    uint8_t  temp_horndown;     /* shadow: horn-down request on save */
+
+    /* ether IP/NM/GW text-entry FSM (LV_ETHER_KEY) */
+    uint8_t  ether_what_input;          /* LCD_ETHER_INPUT_* */
+    uint16_t ether_current_number;      /* octet accumulator; wider than octet so the >255 clamp is live */
+    uint8_t  ether_current_octet;       /* 0..3 */
+    uint8_t  ether_has_input;
+    uint8_t  ether_ip_input_complete;
+    uint8_t  ether_buffer_pos;
+    uint8_t  ether_input_buffer[16];    /* ASCII edit buffer shown on panel */
+    uint8_t  ether_temp_ip[4];          /* staging during one field's edit */
+
+    uint32_t last_set_page_ms;  /* SYS_PIC_NOW loop guard (spec §10) */
+    bool     boot_complete;     /* honor SYS_PIC_NOW re-init only after app_init */
+} lcd_app_state_t;
+
+/* Live measured values the display machine renders (spec §4.3).
+ * Stubbed (all-zero) until Stage D regulation fills this provider. */
+typedef struct {
+    uint16_t curr_amp;
+    uint16_t curr_power, max_power, last_power;
+    uint16_t curr_freq, last_freq;          /* Hz; displayed /100 */
+    uint32_t curr_energy, last_energy;
+    uint8_t  us_on_time_200m;               /* 0..200 → LV_TIME bar fill */
+    uint8_t  us_run_status;                 /* US_IDLE/REMOTE/TOUCH/COMM */
+    uint8_t  sig_run_status, sig_seek_status, sig_reset_status;
+} lcd_measure_t;
+
+/* Single owner of the transient state (kept in app_lcd.c). */
+lcd_app_state_t *app_lcd_state(void);
+
+/* Measurement provider — stub returns all-zero until Stage D. */
+const lcd_measure_t *app_lcd_measure(void);
+
+/* Control / hardware stub hooks (spec §5) — Stage C/D integration points.
+ * Bodies log via mon_printf only; no hardware driven this stage. */
+void app_lcd_hook_set_pot(uint8_t output_power);
+void app_lcd_hook_us_command(us_cmd_t cmd);
+void app_lcd_hook_comm_reconfigure(uint8_t speed_idx, uint8_t parity_idx, uint8_t address);
+void app_lcd_hook_ether_apply(uint8_t mode, const uint8_t ip[4], const uint8_t nm[4], const uint8_t gw[4]);
+void app_lcd_hook_horn(bool down);
+
+/* Subsystem entry points (defined in app_lcd_render/input/disp — Tasks 5-9). */
+void app_lcd_change_page(uint8_t page);               /* render + set_page (spec §6) */
+void app_lcd_input_dispatch(const dgus_frame_t *f);   /* panel touch/key handler (spec §7) */
+void app_lcd_tick(void);                              /* periodic display step (spec §11) */
+void app_lcd_var_init(void);                          /* panel-var seed (boot / SYS_PIC_NOW) */
