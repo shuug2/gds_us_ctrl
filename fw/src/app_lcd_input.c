@@ -492,6 +492,11 @@ static void commit_comm_mode_and_ether(void)
     bool ether_changed = false;
     uint8_t i;
 
+#ifdef LCD_TRACE_RX
+    mon_printf("[lcd] commit cm temp=%u cfg=%u\r\n",
+               (unsigned)state->temp_comm_mode, (unsigned)cfg->comm_mode);
+#endif
+
     if (state->temp_comm_mode != cfg->comm_mode) {
         cfg->comm_mode = state->temp_comm_mode;
     }
@@ -559,11 +564,15 @@ static void data_save_commit(void)
                state->lcd_status == LCD_SETUP_STD3 ||
                state->lcd_status == LCD_SETUP_STDC ||
                state->lcd_status == LCD_SETUP_STDE) {
-        /* STD path: out power DAC + cnt_reset + horndown + addr/speed/parity only
-         * (samd20 3455-3510). NO comm_mode / ether commit. */
+        /* STD path: out power DAC + cnt_reset + horndown + addr/speed/parity.
+         * samd20 (3455-3510) confined comm_mode/ether commit to MULTI, so STD
+         * saves dropped ether/comm_mode (quirk). Intentional deviation
+         * (2026-05-27, user): commit comm_mode/ether here too so STD persists
+         * them like MULTI. */
         app_lcd_hook_set_pot(cfg->output_power);
         commit_cnt_reset();
         app_lcd_hook_horn(state->temp_horndown == 1u);   /* samd20 SOL_DN / SYS_HORN path */
+        commit_comm_mode_and_ether();                    /* deviation: STD now persists ether/comm_mode */
         commit_comm_serial_shadows();
         state->lcd_status = LCD_RUN_STD;
     }

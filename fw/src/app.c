@@ -48,6 +48,11 @@ void app_init(void)
                (unsigned long)cfg->work_cnt, (unsigned long)cfg->limit_energy,
                (unsigned)cfg->energy_ctrl, (unsigned)cfg->multi_ctrl);
 
+#ifdef LCD_TRACE_RX
+    mon_printf("[lcd] boot cm=%u ip=%u.%u.%u.%u\r\n", (unsigned)cfg->comm_mode,
+               cfg->ether_ip[0], cfg->ether_ip[1], cfg->ether_ip[2], cfg->ether_ip[3]);
+#endif
+
     /* Boot handshake done: now honor panel SYS_PIC_NOW re-init reports (spec §10).
      * Gating on this flag stops the §10 loop guard from firing during the
      * Stage B cold-boot dance above. */
