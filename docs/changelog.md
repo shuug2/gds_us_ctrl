@@ -2,6 +2,30 @@
 
 ## [Unreleased]
 
+### 2026-05-27 — LCD 전체 동작 포팅 (samd20→STM32) 구현 완료 (코드 변경 O, **HW 검증 대기**)
+
+- **브랜치**: `feat/stage-lcd-full-behavior` (main에서 분기, BOOT0 `9bbc505`+LCD `d5860a3` cherry-pick 선반영). 사용자 지시: "samd20은 동작이 정확하게 되는 코드" → 충실 포팅.
+- **범위**: parse_lcd_comm(터치/키 입력+설정편집+DATA_SAVE/CANCEL) + change_lcd_page(페이지 렌더) + 주기 표시 스텝머신(LV_OUTPUT/LV_TIME 바, VAR_*, ICON) + 문자열 포맷터. 와이어/FRAM 계층은 Stage B 재사용. 측정값은 **스텁 provider**(전부 0 → 바 빈/값 0), HW/제어 결합은 **named 스텁 훅**(set_pot/us_command/comm_reconfigure/ether_apply/horn = Stage C/D 통합점).
+- **구현(spec→plan→10태스크, 각 빌드-게이트+커밋)**: T1 VP 매크로 / T2 `app_config_save_all` / T3 포맷터(time/energy/addr/ip/pdd) / T4 서브시스템 state+측정스텁+훅 / T5 `change_lcd_page` / T6 입력 디스패치 코어 / T7 DATA_SAVE/CANCEL+comm/ether / T8 표시 스텝머신+아이콘+에러페이지 / T9 app.c 배선+SYS_PIC_NOW 루프가드. T1-T4 직접, T5-T9 subagent-driven(태스크별 리뷰+samd20 원본 대조).
+- 신규 소스: `src/app_lcd_str.c`(167) `app_lcd_render.c`(223) `app_lcd_input.c`(802) `app_lcd_disp.c`(290), `app_lcd.c`(165) 확장. **빌드 0-warning, FLASH 27.9%(35684B)/RAM 9.3%**. config 소유권을 LCD 서브시스템으로 이동(`app_lcd_cfg()`).
+- **보존된 samd20 퀴크(verbatim, 임의수정 ✗)**: F3 HAND 저장→MULTI 페이지 복귀. F4 cancel = full FRAM reload(live comm/ether는 저장前 미변경이라 no-op). STD 경로 저장은 comm_mode/ether **미영속**(addr/speed/parity만). `ether_select_field`가 항상 `temp_ether_ip[3]`로 시드(samd20 copy-paste 버그). KEY_MULTI RESET 에러클리어가 samd20 `sys_status==SYS_ERROR` 추가게이트 생략(에러경로 미도달, Stage D 재조정).
+- **Stage B 콜드부팅 핸드셰이크 무회귀** (`dgus_wait_ready`/`ensure_run_page` 그대로; init_mode는 change_page 호출로 리팩터, 기본설정 RUN 페이지 렌더 byte-identical 검증). 회귀 여부는 첫 부팅서 실증.
+- **잔여 cleanup(옵션)**: `app_lcd_input.c` 802줄(800 가이드라인 2줄 초과) — 분할 시 ether FSM을 `app_lcd_input_ether.c`로 절단 권장. 그린 빌드 리스크로 지금은 보류.
+- **다음 = HW bench 검증 (T10, 사용자와)**. 통과 시 RESUME/NEXT_STEPS "done" 갱신 + PR + 태그 `hw-revA_fw-stage-lcd`. spec `docs/superpowers/specs/2026-05-27-stage-lcd-full-behavior-port-design.md`, plan `docs/superpowers/plans/2026-05-27-stage-lcd-full-behavior.md`.
+
+#### HW bench 검증 체크리스트 (USART6 mon @115200; spec §13)
+- [ ] 부팅 → RUN 페이지 렌더 (Stage B 패리티), `run_page_confirmed=1` (Stage B 경로는 inspection상 불변, 첫 부팅서 실증).
+- [ ] SETUP 진입 → 현재 리밋 표시 → 값 편집 → SAVE → 전원 사이클 → 값 영속 (FRAM determinism).
+- [ ] CANCEL → 값이 FRAM 값으로 복귀.
+- [ ] 전 setup/comm/ethernet 페이지 네비 — 락업/SYS_PIC_NOW 루프 없음 (mon trace 관찰).
+- [ ] **STD 모델(type=2)에서 STDE 이더넷 편집 SAVE/reload → comm_mode/ether 미영속 = samd20 동작과 일치 확인** (의도된 동작).
+- [ ] **HAND 저장 후 MULTI 페이지로 복귀(F3)** — 편집한 페이지와 다른 페이지 표시, 의도된 UX인지 사용자 확인.
+- [ ] **NM/GW 필드 선택 시 IP 마지막 옥텟이 초기값으로 표시**(`temp_ether_ip[3]` 시드, verbatim) — samd20과 일치 확인.
+- [ ] **패널만 전원 사이클**(MCU 유지) → SYS_PIC_NOW 재init이 루프 없이 복구되는지 (200ms 가드가 정상 케이스를 안 막는지).
+- [ ] 터치-헤비 네비 중 `dgus_rx_drop_count()` 관찰 (RX 링 오버플로 없음).
+- [ ] 훅이 RUN/SEEK/RESET/SAVE에 `[lcd-hook]` 로그 — 하드웨어 미구동 배선 확인.
+- [ ] (옵션) `LCD_DEMO_MEASURE_RAMP` 빌드 → LV_OUTPUT/LV_TIME 바 스윕, VAR_* 증가.
+
 ### 2026-05-26 — BOOT0 해결 + LCD 콜드부팅 핸드셰이크 픽스 (코드 변경 O, HW 검증)
 
 - **BOOT0 이슈 해결**: BOOT0(U2.60)→GND 연결. 콜드부팅 시 플래시 앱 직접 실행. HW 검증: `reset halt` PC=0x080045c0/MSP=0x20008000, mon 정상. force-jump 워크어라운드 폐기 (fallback으로 문서 보존). `docs/NEXT_STEPS.md §5.7`, `docs/superpowers/RESUME.md`, memory `project_board_boot0_workaround` 갱신.
