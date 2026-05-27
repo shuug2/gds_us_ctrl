@@ -610,11 +610,15 @@ void app_lcd_input_dispatch(const dgus_frame_t *f)
         return;
     }
 
-    /* F5 (confirmed against drivers/dgus_lcd.c parser_step):
-     * frame_buf[3+i] -> data[i], so data[0] is the first payload byte (MSB)
-     * after the VP address. data16 = first big-endian word. */
+    /* DGUS 0x83 read-response payload after the VP address is:
+     *   data[0] = READ_LEN (word count, 0x01 for a 1-word read)
+     *   data[1] = DATA_H,  data[2] = DATA_L
+     * So skip the READ_LEN byte — the value is data[1]:data[2] (big-endian).
+     * (samd20 ref/dgus_lcd.h: DATA_H=5/DATA_L=6 skip the offset-4 READ_LEN;
+     *  the prior data[0]:data[1] read mistook READ_LEN for the value MSB,
+     *  making SAVE(=1) read as 256 → CANCEL, and all edits store garbage.) */
     uint16_t vp     = f->vp_addr;
-    uint16_t data16 = (uint16_t)(((uint16_t)f->data[0] << 8) | f->data[1]);
+    uint16_t data16 = (uint16_t)(((uint16_t)f->data[1] << 8) | f->data[2]);
 
 #ifdef LCD_TRACE_RX
     mon_printf("[lcd] rx vp=0x%04X data=%u\r\n", (unsigned)vp, (unsigned)data16);
