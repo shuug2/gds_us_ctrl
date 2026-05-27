@@ -8,8 +8,10 @@
  * Single definition of the transient state; render/input/disp layers (Tasks 5-9)
  * reach it via app_lcd_state(). Hooks log only — Stage C/D add real bodies. */
 static lcd_app_state_t g_lcd;
+static app_config_t    g_cfg;   /* live config owner (loaded at boot, edited by input, saved to FRAM) */
 
 lcd_app_state_t *app_lcd_state(void) { return &g_lcd; }
+app_config_t    *app_lcd_cfg(void)   { return &g_cfg; }
 
 const lcd_measure_t *app_lcd_measure(void)
 {

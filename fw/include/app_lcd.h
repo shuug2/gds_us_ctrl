@@ -109,6 +109,11 @@ typedef struct {
 /* Single owner of the transient state (kept in app_lcd.c). */
 lcd_app_state_t *app_lcd_state(void);
 
+/* Single owner of the live config (kept in app_lcd.c). The input layer mutates
+ * it; the render layer reads it; DATA_SAVE commits it to FRAM. app.c loads it
+ * at boot via this accessor. */
+app_config_t *app_lcd_cfg(void);
+
 /* Measurement provider — stub returns all-zero until Stage D. */
 const lcd_measure_t *app_lcd_measure(void);
 

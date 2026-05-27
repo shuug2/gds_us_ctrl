@@ -8,10 +8,10 @@
 #include "app_config.h"
 #include "app_lcd.h"
 
-static app_config_t g_cfg;
-
 void app_init(void)
 {
+    app_config_t *cfg = app_lcd_cfg();   /* config owned by the LCD subsystem */
+
     sys_tick_init();
     mon_init();
     mon_writeln("[boot] gds_us_ctrl stage-b ready");
@@ -35,18 +35,18 @@ void app_init(void)
     dgus_set_page(LCD_LOGO);          /* page 0 — logo */
     sys_tick_delay_ms(DGUS_LOGO_DWELL_MS);
 
-    app_config_load(&g_cfg);          /* FRAM read; factory-write on blank (0xAA flag) */
-    app_lcd_init_mode(&g_cfg);        /* model str + VP pre-fill + set_page(run) */
+    app_config_load(cfg);             /* FRAM read; factory-write on blank (0xAA flag) */
+    app_lcd_init_mode(cfg);           /* model str + VP pre-fill + set_page(run) */
 
     /* Re-assert the run page until SYS_PIC_NOW confirms it — covers the panel
      * reverting to its boot page after finishing its own splash. */
-    bool page_ok = app_lcd_ensure_run_page(&g_cfg);
+    bool page_ok = app_lcd_ensure_run_page(cfg);
     mon_printf("[lcd] run_page_confirmed=%u\r\n", (unsigned)page_ok);
 
     mon_printf("[cfg] freq=%u type=%u work=%lu energy=%lu en_e=%u en_m=%u\r\n",
-               (unsigned)g_cfg.model_freq, (unsigned)g_cfg.model_type,
-               (unsigned long)g_cfg.work_cnt, (unsigned long)g_cfg.limit_energy,
-               (unsigned)g_cfg.energy_ctrl, (unsigned)g_cfg.multi_ctrl);
+               (unsigned)cfg->model_freq, (unsigned)cfg->model_type,
+               (unsigned long)cfg->work_cnt, (unsigned long)cfg->limit_energy,
+               (unsigned)cfg->energy_ctrl, (unsigned)cfg->multi_ctrl);
 }
 
 void app_loop_iter(void)
