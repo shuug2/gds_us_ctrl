@@ -149,3 +149,17 @@ bool app_lcd_ensure_run_page(const app_config_t *cfg)
     }
     return false;
 }
+
+void app_lcd_tick(void)
+{
+    /* Advance the display step machine on a 4 ms cadence (spec §11) — samd20's
+     * 10-step job_state on odd ticks of a 2 ms timer ⇒ ~4 ms/step. One VP-group
+     * per call; the machine wraps 0..9 internally. */
+    static uint32_t prev_ms = 0;
+    uint32_t now = sys_tick_get_ms();
+
+    if ((uint32_t)(now - prev_ms) >= 4) {
+        prev_ms = now;
+        app_lcd_disp_step();
+    }
+}

@@ -779,6 +779,23 @@ void app_lcd_input_dispatch(const dgus_frame_t *f)
         handle_ether_key(data16);
         break;
 
+    /*--- panel boot / page-flip notification — guarded re-init (spec §10) ----
+     * data16==0 means the panel reports it landed on a page (its own splash or a
+     * mid-run reset). Re-seed the panel vars + model string + run page, but ONLY
+     * when (a) the Stage B boot handshake has finished (boot_complete) and (b) at
+     * least 200 ms passed since our own last set_page — otherwise the
+     * change_page→set_page→SYS_PIC_NOW→re-init→set_page chain is a feedback loop.
+     * app_lcd_init_mode ends in app_lcd_change_page, which refreshes
+     * last_set_page_ms, so the 200 ms gate re-arms after each re-init. */
+    case SYS_PIC_NOW:
+        if (data16 == 0 && state->boot_complete &&
+            (uint32_t)(sys_tick_get_ms() - state->last_set_page_ms) >= 200u) {
+            app_lcd_var_init();
+            app_lcd_send_model_str(cfg->model_freq, cfg->model_type);
+            app_lcd_init_mode(cfg);
+        }
+        break;
+
     default:
         break;
     }
