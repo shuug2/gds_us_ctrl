@@ -88,11 +88,29 @@ void app_lcd_send_model_str(uint8_t freq, uint8_t type)
 
 void app_lcd_init_mode(const app_config_t *cfg)
 {
-    uint8_t run_page = app_lcd_run_page(cfg);
+    uint8_t          run_page = app_lcd_run_page(cfg);
+    lcd_app_state_t *state    = app_lcd_state();
 
     app_lcd_send_model_str(cfg->model_freq, cfg->model_type);
 
-    /* init_lcd_mode VP pre-fill (main.c:3216-3228) */
+    /* samd20 init_lcd_mode: lcd_status + sys_mode from model_type (main.c:3181-3189) */
+    state->lcd_status = run_page;
+    state->sys_mode   = cfg->model_type;
+
+    /* output-bar thresholds from model_freq (main.c:3191-3211, verbatim) */
+    if (cfg->model_freq == 0) {            /* 15 kHz */
+        state->ref_lv_1 = 50;  state->ref_lv_2 = 100;
+        state->ref_lv_10 = 1000; state->ref_lv_20 = 2000;
+    } else if (cfg->model_freq == 1) {     /* 20 kHz */
+        state->ref_lv_1 = 50;  state->ref_lv_2 = 100;
+        state->ref_lv_10 = 600;  state->ref_lv_20 = 1200;
+    } else {                               /* >=30 kHz */
+        state->ref_lv_1 = 50;  state->ref_lv_2 = 100;
+        state->ref_lv_10 = 400;  state->ref_lv_20 = 700;
+    }
+
+    /* init_lcd_mode VP pre-fill (main.c:3216-3228) — change_lcd_page does NOT
+     * cover these, so they stay here (preserved verbatim). */
     dgus_write_u16(ICON_RESET, 0);
     dgus_write_u16(ICON_SEEK,  0);
     dgus_write_u16(ICON_RUN,   0);
@@ -105,11 +123,10 @@ void app_lcd_init_mode(const app_config_t *cfg)
     dgus_write_u16(LV_ENERGY_EDIT, (uint16_t)(cfg->limit_energy / 10));
     dgus_write_u16(DISP_HORNDOWN, 0);
 
-    /* change_lcd_page unconditional top (main.c:2947-2955) */
-    dgus_write_u16(DISP_ENERGY_EN, cfg->energy_ctrl ? 1 : 0);
-    dgus_write_u16(DISP_MULTI_EN,  cfg->multi_ctrl  ? 1 : 0);
-
-    dgus_set_page(run_page);
+    /* samd20 init_lcd_mode tail: change_lcd_page(lcd_status) (main.c:3230).
+     * For RUN_HAND/RUN_MULTI (page 3) this writes only DISP_ENERGY_EN/MULTI_EN
+     * + set_page — byte-identical to the Stage-B inline trio it replaces. */
+    app_lcd_change_page(run_page);
 }
 
 bool app_lcd_ensure_run_page(const app_config_t *cfg)
