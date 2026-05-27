@@ -15,7 +15,7 @@
 
 #define RX_DMA_SIZE  256u                  /* 2의 거듭제곱 → mask 분기 없음 */
 
-static uint8_t  s_rx_dma_buf[RX_DMA_SIZE]; /* DMA circular 목적지 (.bss SRAM, DMA2 접근 가능) */
+static volatile uint8_t s_rx_dma_buf[RX_DMA_SIZE]; /* DMA circular 목적지 (.bss SRAM). volatile: DMA가 비동기로 씀 */
 static uint16_t s_rx_tail;                 /* loop reader 인덱스 (단독 소유) */
 
 void usart1_init(void)
@@ -83,7 +83,9 @@ HAL_StatusTypeDef usart1_send_blocking(const uint8_t *buf, uint16_t len)
 
 bool usart1_rx_pop(uint8_t *out_byte)
 {
-    /* DMA write 위치 = SIZE - NDTR. tail 단독 소유라 락 불필요. */
+    /* DMA write 위치 = SIZE - NDTR. tail 단독 소유라 락 불필요.
+     * reload 순간 NDTR=0이면 head=SIZE(=256)일 수 있으나, head는 empty-check에만
+     * 쓰이고 버퍼 인덱싱(s_rx_tail)엔 안 쓰여 무해(다음 pop에서 정상화). */
     uint16_t head = (uint16_t)(RX_DMA_SIZE - __HAL_DMA_GET_COUNTER(&hdma_usart1_rx));
     if (s_rx_tail == head) {
         return false;
