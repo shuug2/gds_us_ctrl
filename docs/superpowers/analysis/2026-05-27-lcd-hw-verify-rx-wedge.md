@@ -60,3 +60,36 @@ RX 상태 스냅샷 (1초 간격 2회 동일 = 영구 상태):
 1. 부팅 → SETUP 진입 → energy 슬라이더를 좌우로 빠르게 드래그.
 2. 표시 멈춤(~수백ms 플러드) 후, openocd로 USART1 CR1 읽으면 RXNEIE=0, SR ORE=1.
 3. 이후 모든 터치 미수신(SAVE/CANCEL 무동작). reset로만 복구.
+
+---
+
+# Finding 2 — LCD 입력 값 추출 off-by-one (SAVE 및 전 입력 오독) (2026-05-27, RX fix 후 발견)
+
+> RX 하드닝(DMA circular) HW 검증 통과 후, SAVE 미동작을 추적하다 발견. RX wedge가 원래 모든 입력 테스트를 막아 이번에 처음 노출. **RX fix와 별개의 LCD-port 버그.**
+
+## 증상
+- DMA RX 검증 통과 후 SAVE를 눌러도 영속 안 됨(리셋 후 `[cfg] energy=100000` 공장기본 유지).
+
+## Root cause (samd20 대조로 확정)
+DGUS **0x83(read) 응답 프레임** = `5A A5 LEN 83 ADDR_H ADDR_L **READ_LEN** DATA_H DATA_L` — VP 주소 뒤에 **읽기 워드수(READ_LEN=0x01) 바이트**가 있음.
+
+포트 파서(`dgus_lcd.c`) 매핑: `frame_buf[3+i]→data[i]` → `data[0]=READ_LEN`, `data[1]=DATA_H`, `data[2]=DATA_L`.
+
+`app_lcd_input.c:617` 현재: `data16 = (data[0]<<8)|data[1]` = `(READ_LEN<<8)|DATA_H` = `(0x01<<8)|DATA_H`. **READ_LEN을 값 MSB로 오독.**
+
+- SAVE 값 1 → 프레임 `…83 10 50 01 00 01` → data16 = (0x01<<8)|0x00 = **256** → `256 != SAVE_COMMIT(1)` → **`data_save_cancel()` 실행**(롤백) → 영속 안 됨.
+- `(uint8_t)data16` 필드(model_freq/type 등, 값<256): data16=256 → (uint8_t)=0 → 항상 0 오독.
+- 슬라이더(LV_ENERGY_EDIT): 1차 디버깅 때 본 값 256~285 = `(0x01<<8)|DATA_H`(DATA_H=0..0x1D) = garbage(실제값 아님).
+- **전 numeric 입력 VP가 오독** (SAVE/CANCEL/슬라이더/한도/comm/ether…).
+
+## samd20 권위 대조
+`ref/samd20/dgus_lcd.h`: `LCD_COMM_MODE=1, ADDR_H=2, ADDR_L=3, DATA_H=5, DATA_L=6` — **offset 4(READ_LEN) 건너뜀**. `ref/samd20/main.c:3264-3265`: `lcd_data = lcd_buf[5]:lcd_buf[6]`(DATA_H:DATA_L). 즉 samd20은 READ_LEN을 건너뛰고 DATA를 읽음. 포트는 안 건너뜀 = 버그.
+
+## Fix (1줄 + 주석)
+`app_lcd_input.c:617`: `data16 = (uint16_t)(((uint16_t)f->data[1] << 8) | f->data[2]);` (data[0]=READ_LEN 건너뜀). `DGUS_MAX_DATA=23 ≥ 3`이라 `data[2]` 안전. 613-615 F5 주석 정정. spec의 F5 가정(틀림)도 정정 필요.
+
+## 영향
+LCD 입력이 전혀 정상 동작 안 했음(SAVE=cancel, 편집=garbage 저장). 이 1줄이 LCD 입력 전체를 정상화. RX fix와 함께 merge blocker.
+
+## 잔여 관측
+- 패널이 idle에 `5A A5 03 82 4F 4B`(LEN=3, cmd=0x82 WR) 프레임을 연속 스트리밍 → 파서가 `LEN<DGUS_LEN_MIN(4)`로 거부(정상, 무해). DMA RX가 wedge 없이 처리. dgus_rx_drop_count가 이 때문에 항상 비0(체크리스트 ⑨ 재해석됨). VP 0x4F4B 정체/스트리밍 이유는 향후 조사 후보(코딩 차단 아님).
