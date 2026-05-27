@@ -616,7 +616,9 @@ void app_lcd_input_dispatch(const dgus_frame_t *f)
     uint16_t vp     = f->vp_addr;
     uint16_t data16 = (uint16_t)(((uint16_t)f->data[0] << 8) | f->data[1]);
 
+#ifdef LCD_TRACE_RX
     mon_printf("[lcd] rx vp=0x%04X data=%u\r\n", (unsigned)vp, (unsigned)data16);
+#endif
 
     lcd_app_state_t *state = app_lcd_state();
     app_config_t    *cfg   = app_lcd_cfg();
