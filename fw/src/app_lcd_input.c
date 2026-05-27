@@ -139,20 +139,43 @@ static void handle_key_error_reset(uint16_t data16)
 }
 
 /* SETUP_MODEL / SETUP_PARAM_MOOHAN long-press FSM.
- * press (data==0) records the press start; release (data==2) with >= KEY_HOLD_MS held
- * triggers the action. Returns true if the (long) release fired. */
-static bool long_press_released(uint16_t data16)
+ *
+ * samd20 (main.c) assumed the panel reports data==0 on touch-down and data==2
+ * on touch-up, timing the release to detect a >= KEY_HOLD_MS hold. HW-verify
+ * (2026-05-27) found this panel's 0x1084 button instead emits data==0 on BOTH
+ * down AND up (one event each, no auto-repeat) and NEVER data==2 — so the
+ * verbatim port could never complete a long-press (the release event was
+ * misread as a fresh press). See docs/superpowers/analysis/2026-05-27-lcd-
+ * setup-model-longpress.md.
+ *
+ * Fix: pair consecutive same-VP data==0 events. The first arms the press
+ * (records key_press_ms + key_press_vp); the second is the release and fires
+ * if held >= KEY_HOLD_MS. data==2 is still honoured as an explicit release for
+ * any button/panel that does send it (backward compatible). key_press_vp is
+ * keyed by VP so the two long-press buttons (0x1084 / 0x1094) don't interfere.
+ * Returns true only on a qualifying (long) release. */
+static bool long_press_released(uint16_t vp, uint16_t data16)
 {
     lcd_app_state_t *state = app_lcd_state();
 
-    if (data16 == 0) {                                  /* press */
-        state->key_press_ms = sys_tick_get_ms();
-        return false;
+    if (data16 == 0) {
+        if (state->key_press_vp != vp) {                /* touch-down: arm this VP */
+            state->key_press_vp = vp;
+            state->key_press_ms = sys_tick_get_ms();
+            return false;
+        }
+        /* touch-up (release reported as value 0): same VP already armed */
+        state->key_press_vp = 0;
+        return (uint32_t)(sys_tick_get_ms() - state->key_press_ms) >= KEY_HOLD_MS;
     }
-    if (data16 == 2) {                                  /* release */
-        uint32_t held = (uint32_t)(sys_tick_get_ms() - state->key_press_ms);
-        return held >= KEY_HOLD_MS;
+
+    if (data16 == 2) {                                  /* explicit release (legacy / other panels) */
+        bool fired = (state->key_press_vp == vp) &&
+                     (uint32_t)(sys_tick_get_ms() - state->key_press_ms) >= KEY_HOLD_MS;
+        state->key_press_vp = 0;
+        return fired;
     }
+
     return false;
 }
 
@@ -728,13 +751,13 @@ void app_lcd_input_dispatch(const dgus_frame_t *f)
         app_lcd_change_page(state->lcd_status);
         break;
     case SETUP_PARAM_MOOHAN:                             /* long-press variant of SETUP_PARAM */
-        if (long_press_released(data16)) {
+        if (long_press_released(vp, data16)) {
             state->lcd_status = setup1_page_for_mode(state->sys_mode);
             app_lcd_change_page(state->lcd_status);
         }
         break;
     case SETUP_MODEL:                                    /* long-press → model setup */
-        if (long_press_released(data16)) {
+        if (long_press_released(vp, data16)) {
             enter_model_setup();
         }
         break;
