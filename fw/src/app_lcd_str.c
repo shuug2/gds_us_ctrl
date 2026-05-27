@@ -7,6 +7,22 @@
 #include <stddef.h>
 #include "app_lcd.h"
 
+/* Fixed-width comm-config strings (samd20 main.c:160-161 verbatim).
+ * Each row is exactly its array width with NO trailing NUL (sent as raw bytes). */
+const uint8_t comm_speed_txt[6][6] = {
+    {' ','2','4','0','0',' '},
+    {' ','4','8','0','0',' '},
+    {' ','9','6','0','0',' '},
+    {'1','9','2','0','0',' '},
+    {'3','8','4','0','0',' '},
+    {'1','1','5','2','0','0'},
+};
+const uint8_t comm_parity_txt[3][4] = {
+    {'E','V','E','N'},
+    {'O','D','D',' '},
+    {'N','O','N','E'},
+};
+
 uint8_t time2str(uint16_t src, uint8_t *dest)
 {
     uint8_t  nibble, first_zero, pos;

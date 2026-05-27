@@ -40,6 +40,12 @@ uint8_t ip_to_string(const uint8_t ip[4], char *str_buffer);
  * de-globalized: explicit dest instead of the lcd_temp_buf global). */
 void lcd_data_pdd(uint8_t *dest, const uint8_t *src, uint8_t len);
 
+/* Fixed-width comm-config display strings (samd20 main.c:160-161 verbatim).
+ * NOT NUL-terminated: sent as exactly 6 / 4 bytes via dgus_write_bytes.
+ * Shared by render (COMM_*_TXT echo on page entry) and input (COMM_SPEED/PARITY). */
+extern const uint8_t comm_speed_txt[6][6];   /* " 2400 " … "115200" */
+extern const uint8_t comm_parity_txt[3][4];  /* "EVEN" "ODD " "NONE" */
+
 /*==============================================================
  * LCD subsystem state, measurement provider, control/HW hooks
  *  (Stage LCD full port — spec §4, §5)
