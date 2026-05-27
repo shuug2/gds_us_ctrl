@@ -137,3 +137,10 @@ void app_lcd_change_page(uint8_t page);               /* render + set_page (spec
 void app_lcd_input_dispatch(const dgus_frame_t *f);   /* panel touch/key handler (spec §7) */
 void app_lcd_tick(void);                              /* periodic display step (spec §11) */
 void app_lcd_var_init(void);                          /* panel-var seed (boot / SYS_PIC_NOW) */
+
+/* Display layer (app_lcd_disp.c — spec §11). step machine advances one VP-group per
+ * call (0..9 wrap); the icon/work_cnt/error helpers are event-driven (input + Stage D). */
+void app_lcd_disp_step(void);                         /* one VP-group per call (LV_OUTPUT/LV_TIME/VAR_*) */
+void app_lcd_icon(uint16_t icon_vp, bool on);         /* ICON_RESET/SEEK/RUN/OL/OUTERR set/clear */
+void app_lcd_set_work_cnt(uint32_t cnt);              /* LV_WORK_CNT (u32) */
+void app_lcd_show_error(uint8_t error_code);          /* error_status -> VP_ERROR_MSG + LCD_WARNING */
