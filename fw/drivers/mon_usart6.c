@@ -5,11 +5,12 @@
 #include "stm32f4xx_hal.h"
 #include "periph.h"
 #include "mon.h"
+#define MON_TX_TIMEOUT_MS  50u   /* 진단 채널이 앱을 영구 블록하지 못하게 */
 
 void mon_init(void) { /* huart6는 usart6_init이 이미 초기화 */ }
 
 void mon_write(const uint8_t *buf, size_t len) {
-    HAL_UART_Transmit(&huart6, (uint8_t *)buf, len, HAL_MAX_DELAY);
+    HAL_UART_Transmit(&huart6, (uint8_t *)buf, len, MON_TX_TIMEOUT_MS);
 }
 
 void mon_writeln(const char *s) {
