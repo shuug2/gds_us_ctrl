@@ -28,3 +28,8 @@ void app_config_load(app_config_t *cfg);
 
 /* Write the full samd20 default map to FRAM and fill cfg with the same values. */
 void app_config_factory_write(app_config_t *cfg);
+
+/* Commit the full live config map to FRAM (DATA_SAVE). FRAM has no write-cycle
+ * cost, so the whole map is written for consistency. EN_ENERGY/EN_MULTI and the
+ * ether arrays reflect the live cfg fields (unlike factory defaults). */
+void app_config_save_all(const app_config_t *cfg);
