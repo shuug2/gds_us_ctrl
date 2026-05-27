@@ -75,7 +75,8 @@ typedef struct {
     uint8_t  sys_status;        /* SYS_RUN/SETUP/HORN/ERROR (control-fed) */
     uint8_t  error_status;      /* ERR_* bitmask (control-fed; cleared by key) */
     uint8_t  horn_status;       /* solenoid request (control-fed) */
-    uint8_t  key_tick;          /* long-press timer (SETUP_MODEL / _MOOHAN) */
+    uint8_t  key_tick;          /* long-press timer (SETUP_MODEL / _MOOHAN) — legacy, unused */
+    uint32_t key_press_ms;      /* long-press start ms (SETUP_MODEL / _MOOHAN); samd20 KEY_HOLD_TH 200×10ms = 2000ms */
 
     uint16_t ref_lv_1, ref_lv_2, ref_lv_10, ref_lv_20;  /* output-bar thresholds (from model_freq) */
 
