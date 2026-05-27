@@ -71,7 +71,72 @@
 #define ICON_SEEK        0x1151
 #define ICON_RUN         0x1152
 
-/* (samd20 의 다른 VP 매크로들은 후속 슬라이스에서 추가. Stage A 데모 범위 외) */
+/* Full LCD behavior VPs (samd20 dgus_lcd.h verbatim — Stage LCD full port) */
+/* setup / save / model */
+#define STD_SETUP_PARAM     0x1020
+#define DATA_SAVE           0x1050
+#define M_DATA_SAVE         0x1250
+#define MODEL_FREQ          0x1060
+#define MODEL_TYPE          0x1070
+#define KEY_MULTI           0x1080
+#define SETUP_MODEL         0x1084
+#define ENERGY_EN           0x1085
+#define SETUP_PARAM_MOOHAN  0x1094
+#define SETUP_PARAM         0x1100
+/* comm config (values + on-screen text) */
+#define COMM_ADDR           0x1071
+#define COMM_SPEED          0x1072
+#define COMM_PARITY         0x1073
+#define COMM_ADDR_TXT       0x1460
+#define COMM_SPEED_TXT      0x1464
+#define COMM_PARITY_TXT     0x146a
+#define COMM_IP_TXT         0x1470
+#define COMM_NM_TXT         0x1480
+#define COMM_GW_TXT         0x1490
+/* status icons (extend ICON_RESET/SEEK/RUN block) */
+#define ICON_OL             0x1153
+#define ICON_OUTERR         0x1154
+#define ICON_ERROR_RESET    0x1407
+#define KEY_ERROR_RESET     0x1408
+/* live display bars / values */
+#define LV_OUTPUT2          0x117a
+#define LV_TIME             0x1184
+#define LV_TIME2            0x118e
+/* setup-page edit fields */
+#define LV_OUT_POWER        0x1200
+#define LV_MAX_ON_TIME      0x1201
+#define LV_ENERGY_VAL       0x1212
+#define DISP_MULTI          0x1208
+#define DISP_RUN_MODE       0x120c
+#define DISP_SAFTY          0x120d
+#define DISP_REMOTE         0x120e
+#define LV_LIMIT_OUT_T      0x120f
+#define LV_RUN_MODE         0x1210
+#define LV_MO_OUT1          0x1400
+#define LV_MO_OUT2          0x1401
+#define LV_MO_TIME1         0x1402
+#define LV_MO_TIME2         0x1403
+/* std-page formatted text + version + error msg */
+#define DISP_STD_DATA1      0x1300
+#define DISP_STD_DATA2      0x1310
+#define DISP_STD_DATA3      0x1320
+#define DISP_VERSION        0x1330
+#define VP_ERROR_MSG        0x1350
+/* ethernet / comm-mode */
+#define MULTI_EN            0x140a
+#define LV_COMM_MODE        0x140b
+#define DISP_COMM_MODE      0x140c
+#define DISP_EN_DHCP        0x140d
+#define LV_ETHER_KEY        0x140f
+/* calibration */
+#define VAR_CAL_VAL         0x1410
+#define VAR_FREQ_CAL_VAL    0x1412
+
+/* Key/touch return codes (samd20 dgus_lcd.h verbatim) */
+#define KEY_UP      1
+#define KEY_DN      0
+#define KEY_CANCEL  0
+#define KEY_SAVE    1
 
 /*--------------------------------------------------------------
  * 프레임 / API
