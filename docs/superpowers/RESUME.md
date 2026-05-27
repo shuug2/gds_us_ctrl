@@ -1,7 +1,7 @@
 # RESUME — 다음 세션
 
-> **상태 (2026-05-25)**: Stage D **프레이밍 확정 + slice 1 선택**. ATmega16 흡수 = **제어 함수 흡수이지 1:1 IO 이전이 아님** (사용자 2026-05-25 명시, 2회 강조). 단일 STM32가 SAMD20+M16 역할 모두 보유 → **명령 IPC는 내부화로 소멸**: M_START(PA4)/M_SEEK(PA5)/M_RESET(PA6) = 내부 `us_start/seek/reset()` 호출, M_OVLD(PC0) = 내부 플래그(옵션: CON_OVLD/PB3 외부 출력). **외부 물리 I/O로 남는 것** = ADC 센스(PA0=출력세기 피드백, PA1=ch1), **OSC 드라이브 출력**(누진 레벨 → OSC_OUT0..4 / CN2), buzzer/solenoid. ⇒ PB1/PB0/PC4/PA7/PC7 in/out 논쟁은 무의미해짐(M16 내부 핀 quirk). **측정 게이트(B1~B5) 해제** — 사용자 지시: 동작은 펌웨어 분석에서 도출, 물리 의미(B3)는 flag만 하고 코딩 차단 안 함.
-> **다음 작업**: **Stage D slice 1 = 레귤레이션 코어** (사용자 선택). spec-first. 브랜치 `feat/stage-d-osc-pin-io` (이전 핀-I/O 스펙 `2026-05-25-stage-d-osc-pin-io-design.md`은 **RETIRED** — 프레이밍 오류, 배너 추가됨. 검증된 사실은 보존). 슬라이스1 내용 ↓ STEP 0.
+> **상태 (2026-05-27)**: **LCD 전체 동작 포팅(samd20→STM32) 구현 완료 — T1~T9, 빌드 0-warning(FLASH 27.9%/RAM 9.3%). HW 검증(T10)만 남음.** 사용자가 Stage D보다 LCD 포팅을 먼저 하기로 재우선순위(2026-05-27). 브랜치 **`feat/stage-lcd-full-behavior`** (main에서 분기, BOOT0+LCD 콜드부팅 픽스 cherry-pick 선반영, 16커밋). 범위 = parse_lcd_comm 입력/설정편집/SAVE·CANCEL + change_lcd_page 렌더 + 주기 표시 스텝머신 + 포맷터. 측정값=전부0 스텁 provider, HW/제어결합=named 스텁 훅(set_pot/us_command/comm_reconfigure/ether_apply/horn = Stage C/D 통합점). samd20 퀴크 verbatim 보존(F3 HAND저장→MULTI페이지, STD경로 ether 미영속, ether NM/GW가 IP옥텟[3] 시드). Stage B 콜드부팅 무회귀(inspection — 첫부팅 실증 필요). T1~T4 직접, T5~T9 subagent-driven+태스크별 samd20 대조 리뷰.
+> **다음 작업**: **STEP 0 = LCD HW bench 검증** (플래시 → `docs/changelog.md` 2026-05-27 항목의 체크리스트). 통과 시 RESUME/NEXT_STEPS "done" 갱신 + main PR + 태그 `hw-revA_fw-stage-lcd`. **Stage D slice 1(레귤레이션 코어)는 LCD 머지 뒤로 연기 — 상세 ↓ STEP 1.** spec/plan = `docs/superpowers/{specs,plans}/2026-05-27-stage-lcd-full-behavior*`.
 
 ---
 
@@ -9,14 +9,23 @@
 
 ```bash
 cd /Users/tknoh/dev/work/gds_us_ctrl
-git checkout feat/stage-d-osc-pin-io   # slice 작업 브랜치 (main에 미머지)
-git log --oneline -3                    # tip = 825ab7c (RETIRED 핀-IO 스펙 + 배너)
-git tag -l 'hw-revA*'                   # hw-revA_fw-stage-a, hw-revA_fw-stage-b
+git checkout feat/stage-lcd-full-behavior   # LCD 포팅 브랜치 (main 미머지, 16커밋)
+git log --oneline -3                          # tip = 0f184d4 (changelog), 61ca87b (T9 wire)
+git tag -l 'hw-revA*'                         # hw-revA_fw-stage-a, hw-revA_fw-stage-b
+cd fw && env -u STM32_TOOLCHAIN cmake --build build   # 0-warning 확인
 ```
 
-### ▶ STEP 0 — Stage D slice 1: 레귤레이션 코어 (spec-first, 측정 게이트 해제됨)
+### ▶ STEP 0 — LCD HW bench 검증 (T10; 코드 T1~T9 완료)
 
-새 세션 첫 행동: 위 브랜치 체크아웃 → **slice 1 spec 작성** (`docs/superpowers/specs/`) → 사용자 리뷰 → `writing-plans` → 구현. (brainstorming은 이미 완료 — 프레이밍/슬라이스 확정.)
+새 세션 첫 행동: 위 브랜치 체크아웃 → 빌드 확인 → **플래시(`cmake --build build --target flash`) → USART6 mon(@115200)로 `docs/changelog.md` 2026-05-27 항목의 HW 체크리스트 실행**. 핵심: `run_page_confirmed=1`(Stage B 무회귀), SETUP 편집→SAVE→전원사이클 영속, CANCEL 복귀, 전 페이지 네비 무락업/무SYS_PIC_NOW루프, F3/STD-ether/ether-seed 퀴크가 samd20과 일치, 패널만 전원사이클 시 재init 정상복구, `dgus_rx_drop_count()` 0, 훅 `[lcd-hook]` 로그. 통과 → changelog/RESUME/NEXT_STEPS "done" + `gh pr create`(→main) + 태그 `hw-revA_fw-stage-lcd`. 실패 → 증상별로 spec §12 flags(F1~F6) + 보존 퀴크부터 점검.
+
+> 구조/계약: spec `docs/superpowers/specs/2026-05-27-stage-lcd-full-behavior-port-design.md`, plan `…/plans/2026-05-27-stage-lcd-full-behavior.md`. 신규 소스 = `fw/src/app_lcd_{str,render,input,disp}.c` + `app_lcd.c`. config 소유 = `app_lcd_cfg()`, transient = `app_lcd_state()`, 측정 = `app_lcd_measure()`(스텁).
+
+---
+
+### ▶ STEP 1 — Stage D slice 1: 레귤레이션 코어 (LCD 머지 후 재개, spec-first, 측정 게이트 해제됨)
+
+LCD 머지 뒤 재개. **slice 1 spec 작성** (`docs/superpowers/specs/`) → 사용자 리뷰 → `writing-plans` → 구현. Stage D는 LCD의 `lcd_measure_t` provider(측정값) + 스텁 훅 실체(us_command/set_pot 등)를 채우는 형태로 자연 통합됨. (brainstorming 완료 — 프레이밍/슬라이스 확정.)
 
 **슬라이스 1 = 레귤레이션 코어** (M16 §4 제어루프 심장부; 알고리즘은 펌웨어에서 포팅, 물리 의미는 HW-verify 주석):
 1. **ADC 획득층**: 2ch free-run, ch0 = 10샘플 평균(PA0 = 출력세기 피드백), ch1 = 50샘플 평균(PA1). 근거 `196c`, ADCSRA=0xCF(/128) ch0/ch1 교대.
