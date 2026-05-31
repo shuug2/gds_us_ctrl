@@ -3,6 +3,7 @@
 #include "dgus_lcd.h"
 #include "sys_tick.h"
 #include "mon.h"
+#include "app_reg.h"
 
 /*--- Stage LCD subsystem state owner + control/HW stub hooks ---
  * Single definition of the transient state; render/input/disp layers (Tasks 5-9)
@@ -15,10 +16,9 @@ app_config_t    *app_lcd_cfg(void)   { return &g_cfg; }
 
 const lcd_measure_t *app_lcd_measure(void)
 {
-    /* Stub: all-zero until Stage D regulation feeds live values.
-     * Bars render empty + VAR_* show 0 (the approved "alive but idle" UI). */
-    static const lcd_measure_t zero = {0};
-    return &zero;
+    /* Stage D slice 1: live regulation values (amp + scaled level). Cycle/freq/
+     * energy/status stay 0 until slice 2 (honest "regulating, no cycle yet"). */
+    return app_reg_measure();
 }
 
 void app_lcd_hook_set_pot(uint8_t output_power)

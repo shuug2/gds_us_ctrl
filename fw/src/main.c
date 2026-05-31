@@ -2,6 +2,7 @@
 #include "stm32f4xx_hal.h"
 #include "clock.h"
 #include "app.h"
+#include "app_reg.h"
 #include "usart1.h"
 #include "i2c1.h"
 #include "dgus_lcd.h"
@@ -21,6 +22,7 @@ int main(void) {
     board_init();      /* GPIO out + CTRL_OSC0..4 LOW */
     dgus_init();       /* Stage A: DGUS 프로토콜 레이어 상태 클리어 */
     app_init();        /* sys_tick start, mon banner */
+    app_reg_init();    /* Stage D: ADC1 + regulation state (needs sys_tick up) */
 
     while (1) {
         app_loop_iter();
