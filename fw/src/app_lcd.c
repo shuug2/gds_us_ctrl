@@ -97,6 +97,15 @@ void app_lcd_init_mode(const app_config_t *cfg)
     state->lcd_status = run_page;
     state->sys_mode   = cfg->model_type;
 
+    /* Arm the comm/ether shadow-load sentinel (fix A). The struct documents
+     * temp_comm_mode==0xFF as "not loaded yet" (app_lcd.h:86), but zero-init
+     * leaves it 0(=serial) at boot, so the first comm-page entry skips the
+     * seed-from-cfg gate (render.c:143/178) and the display shows stale state.
+     * samd20 relied on a setup-page entry to set 0xFF before any comm page;
+     * setting it here at boot (and on SYS_PIC_NOW re-init) makes the lifecycle
+     * coherent — consistent with the cancel-path re-arm (input.c:598). */
+    state->temp_comm_mode = 0xFFu;
+
     /* output-bar thresholds from model_freq (main.c:3191-3211, verbatim) */
     if (cfg->model_freq == 0) {            /* 15 kHz */
         state->ref_lv_1 = 50;  state->ref_lv_2 = 100;

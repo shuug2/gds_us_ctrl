@@ -20,6 +20,9 @@
 #include "app_config.h"
 #include "dgus_lcd.h"
 #include "sys_tick.h"
+#ifdef LCD_TRACE_RX
+#include "mon.h"
+#endif
 
 /* run_mode codes (samd20 main.c:519-520). Port app_config_t.run_mode uses the
  * same encoding (0=delay 1=trigger), so literals match verbatim. */
@@ -195,9 +198,10 @@ void app_lcd_change_page(uint8_t page)
             state->ether_buffer_pos       = 0;
             state->ether_what_input       = LCD_ETHER_INPUT_NONE;
         }
-        if (state->temp_comm_mode == 0)
+        if (state->temp_comm_mode == 0) {
             dgus_write_u16(DISP_COMM_MODE, 0);
-        else {
+            dgus_write_u16(DISP_EN_DHCP, 0);   /* fix D: clear stale DHCP check on serial */
+        } else {
             dgus_write_u16(DISP_COMM_MODE, 1);
             dgus_write_u16(DISP_EN_DHCP, (uint16_t)(state->temp_comm_mode - 1));
         }
@@ -205,6 +209,34 @@ void app_lcd_change_page(uint8_t page)
 
     dgus_set_page(page);
     state->last_set_page_ms = sys_tick_get_ms();   /* SYS_PIC_NOW loop guard (spec §10) */
+
+    /* Comm-mode icon re-assert AFTER set_page (panel page 23/27 quirk, verified
+     * 2026-05-31). The STD comm pages STDC(23)/STDE(27) do NOT auto-load
+     * DISP_COMM_MODE on page-show — only a live write while the page is active
+     * updates the serial/ethernet/DHCP icon (the same path the touch handler
+     * uses). The MULTI pages MHC(21)/MHE(25) auto-load, so the in-branch write
+     * before set_page suffices there; re-asserting is redundant-but-harmless.
+     * Proven by repoint cross-test: identical firmware rendered on page 25 shows
+     * ethernet correctly, on page 27 shows serial. temp_comm_mode is already
+     * seeded (0/1/2) by the branch above on every comm page.
+     * See analysis/2026-05-31-std-comm-page27-display-port-faithful.md. */
+    if (page == LCD_SETUP_MHC || page == LCD_SETUP_STDC ||
+        page == LCD_SETUP_MHE || page == LCD_SETUP_STDE) {
+        dgus_write_u16(DISP_COMM_MODE, (state->temp_comm_mode == 0) ? 0u : 1u);
+        if (page == LCD_SETUP_MHE || page == LCD_SETUP_STDE) {
+            dgus_write_u16(DISP_EN_DHCP,
+                           (state->temp_comm_mode == 0)
+                               ? 0u : (uint16_t)(state->temp_comm_mode - 1));
+        }
+    }
+#ifdef LCD_TRACE_RX
+    /* comm-page display diagnosis: page id + seeded shadow + persisted cfg.
+     * 21=MHC 23=STDC 25=MHE 27=STDE. From page+tcm the DISP_COMM_MODE/EN_DHCP
+     * writes are fully determined by the render logic above. */
+    mon_printf("[lcd] page=%u tcm=%u cm=%u\r\n",
+               (unsigned)page, (unsigned)state->temp_comm_mode,
+               (unsigned)cfg->comm_mode);
+#endif
 }
 
 /* Panel-var seed (samd20 lcd_var_init, main.c:2592-2603): initial key/model

@@ -497,6 +497,17 @@ static void commit_comm_mode_and_ether(void)
                (unsigned)state->temp_comm_mode, (unsigned)cfg->comm_mode);
 #endif
 
+    /* Guard (fix B): 0xFF = comm/ether shadows were never seeded from cfg this
+     * setup session (no comm-page visit). The shadows hold the sentinel/zero
+     * (boot) state, so committing would write comm_mode=0xFF + 0.0.0.0 ether
+     * over live cfg and persist garbage to FRAM. Skip = cfg unchanged.
+     * samd20 never hit this because STD save did not commit comm; the
+     * STD-persist deviation (data_save_commit STD branch) opened a live path:
+     * SAVE from a non-comm STD page (STD1/2/3, which set 0xFF on entry). */
+    if (state->temp_comm_mode == 0xFFu) {
+        return;
+    }
+
     if (state->temp_comm_mode != cfg->comm_mode) {
         cfg->comm_mode = state->temp_comm_mode;
     }
