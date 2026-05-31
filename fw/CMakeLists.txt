@@ -52,13 +52,15 @@ set(HAL_SOURCES
     ${VENDOR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim.c
     ${VENDOR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim_ex.c
     ${VENDOR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c.c
+    # Stage D — regulation ADC:
+    ${VENDOR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_adc.c
 )
 
 add_library(stm32_hal STATIC
     ${HAL_SOURCES}
     ${VENDOR}/Core/Src/system_stm32f4xx.c
 )
-target_include_directories(stm32_hal PUBLIC
+target_include_directories(stm32_hal SYSTEM PUBLIC
     ${VENDOR}/Drivers/STM32F4xx_HAL_Driver/Inc
     ${VENDOR}/Drivers/CMSIS/Device/ST/STM32F4xx/Include
     ${VENDOR}/Drivers/CMSIS/Include

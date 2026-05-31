@@ -257,15 +257,20 @@ git commit -m "feat(stage-d): pure regulation compute (reg_scale/reg_output_leve
 - Modify: `fw/src/periph.c`, `fw/include/periph.h`
 - Modify: `fw/CMakeLists.txt:38-55` (HAL_SOURCES)
 
-- [ ] **Step 1: Add the HAL ADC source to CMake**
+- [ ] **Step 1: Add the HAL ADC source to CMake + enable the module + SYSTEM vendor includes**
 
-Edit `fw/CMakeLists.txt` — inside the `set(HAL_SOURCES …)` block, after the I2C line (`stm32f4xx_hal_i2c.c`, line 54), add:
+(a) Edit `fw/CMakeLists.txt` — inside the `set(HAL_SOURCES …)` block, after the I2C line (`stm32f4xx_hal_i2c.c`), add:
 
 ```cmake
+    # Stage D — regulation ADC:
     ${VENDOR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_adc.c
 ```
 
-> If linking later reports an undefined `HAL_ADCEx_*` symbol, also add `stm32f4xx_hal_adc_ex.c` on the next line. Basic regular polled conversion needs only `..._hal_adc.c`.
+> If linking later reports an undefined `HAL_ADCEx_*` symbol, also add `stm32f4xx_hal_adc_ex.c`. Basic regular polled conversion needs only `..._hal_adc.c`.
+
+(b) **Enable the ADC HAL module** (spec gap discovered in execution): edit `fw/vendor/Core/Inc/stm32f4xx_hal_conf.h` line 37 — uncomment to `#define HAL_ADC_MODULE_ENABLED`. This is the application-level HAL config in `Core/Inc` (NOT the read-only ST `Drivers/` tree); prior stages enabled `HAL_I2C_MODULE_ENABLED`/`HAL_TIM_MODULE_ENABLED` the same way. Without it the HAL umbrella never includes `stm32f4xx_hal_adc.h` and `HAL_ADC_Start/...` are undeclared.
+
+(c) **Make vendor includes SYSTEM** (0-warning gate fix): change `target_include_directories(stm32_hal PUBLIC` → `target_include_directories(stm32_hal SYSTEM PUBLIC`. Enabling the ADC module pulls `stm32f4xx_ll_adc.h`, whose `LL_ADC_DMA_GetRegAddr` inline trips `-Wunused-parameter` in every app TU including the HAL umbrella. Marking vendor headers SYSTEM suppresses vendor-header warnings while keeping our own code under full `-Wall -Wextra`.
 
 - [ ] **Step 2: Add the ADC handle to periph**
 
