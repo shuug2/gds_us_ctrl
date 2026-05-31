@@ -6,7 +6,7 @@
 
 ## 1. 현재 상태 (2026-05-25 기준)
 
-> **⚠ 활성 작업 (2026-05-27) — 아래 표보다 우선**: 브랜치 **`feat/stage-lcd-full-behavior`** (main 미머지)에서 **LCD 전체 동작 포팅 + HW 검증** 진행 중. 사용자가 Stage D보다 LCD를 먼저 하기로 재우선순위. HW 검증 중 버그 2건(USART1 RX 영구 wedge → DMA circular RX로 수정 / LCD 입력 값 추출 off-by-one → 1줄 수정) 발견·수정·검증 완료. **남은 작업 = T10 체크리스트 ③~⑦(CANCEL/네비/퀴크) → main PR + 태그 `hw-revA_fw-stage-lcd`**. 정밀 상태·재개 절차는 `docs/superpowers/RESUME.md`(세션 시작 시 자동 로드). 아래 1.1 표는 Stage A/B 머지 시점(2026-05-25) 스냅샷이라 LCD 브랜치·Stage D는 그 뒤 맥락임. **Stage D는 LCD 머지 후 재개.**
+> **⚠ 활성 작업 (2026-05-31 갱신) — 아래 표보다 우선**: 브랜치 **`feat/stage-lcd-full-behavior`** (main 미머지)에서 **LCD 전체 동작 포팅 + HW 검증 = 완료**. T1~T9 포팅 + RX/data16 버그 2건 + SETUP_MODEL 롱프레스 + STD comm_mode/ether 영속·표시(A/B/C/D + DGUS 에셋 root fix) 모두 처리. **§4 전체 HW 재검증 PASS** + **cpp-reviewer APPROVED**. **남은 작업 = main 통합(머지/PR) + 태그 `hw-revA_fw-stage-lcd` → 그 후 Stage D slice 1.** 정밀 상태는 `docs/superpowers/RESUME.md`(자동 로드)·`docs/changelog.md 2026-05-31`. 아래 1.1 표는 Stage A/B 머지 시점(2026-05-25) 스냅샷. **Stage D는 LCD 통합 후 재개.**
 
 ### 1.1 슬라이스 현황
 

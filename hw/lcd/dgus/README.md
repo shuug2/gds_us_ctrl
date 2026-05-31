@@ -63,3 +63,18 @@ Confirmed: the `NN.jpg` numbering matches the `LCD_*` page-ID macros exactly.
   authoritative map for `change_lcd_page()`'s per-page VP sets.
 - VP addresses the firmware writes are listed in `fw/include/dgus_lcd.h`; they must match the bindings in
   `14ShowFile.bin`.
+
+## Asset changes
+
+- **2026-05-31 — `14ShowFile.bin`**: fixed the **comm-mode icon display on pages 27 (STDE) / 23 (STDC)**.
+  Root cause of the STD comm display defect was here, not in firmware: the page-27/23 widgets did **not**
+  auto-load `DISP_COMM_MODE` (0x140c) on page-show, while page 25 (MHE) did — so a freshly-shown STD comm
+  page rendered a stale serial/ethernet/dhcp icon. Confirmed by repoint cross-test (repointing STD comm
+  entry to page 25 displayed correctly). Fixed by editing the page 27/23 widget show-config so the icon
+  auto-loads on page-show, matching page 25. HW-verified PASS. Firmware-side defense (re-assert after
+  `set_page`, "Fix C") is kept as redundant-but-harmless. See
+  `docs/superpowers/analysis/2026-05-31-std-comm-page27-display-port-faithful.md`.
+- This folder holds the **compiled/exported** DWIN output (`.bin`/`.icl`). Edit the page widgets in the
+  **DWIN DGUS tool** (open the project, edit the page's variable/widget config), then re-export
+  `14ShowFile.bin` and re-flash the panel. Keep the editable DWIN project source archived alongside the
+  panel toolchain (not in this repo).

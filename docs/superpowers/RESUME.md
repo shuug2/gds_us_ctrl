@@ -1,20 +1,15 @@
 # RESUME — 다음 세션
 
-> **상태 (2026-05-31, 갱신)**: STD comm 표시결함 **해결 — 코드 아니라 DGUS 에셋(page 27/23)이 root**(진단대로). 사용자 에셋만 수정→정상. **커밋 완료**(미커밋 아님): firmware A/B/C/D `a0a631c` + 에셋 `14ShowFile.bin` `0eafe68` + docs(이 커밋). **다음 세션 = 핸드오프 문서 체크리스트 진행**: `docs/superpowers/2026-05-31-HANDOFF-lcd-comm-display-resolved.md`. 브랜치 **`feat/stage-lcd-full-behavior`** (main 미머지, 미푸시).
-> - **⚑ 최우선(handoff §1)**: 수정된 DGUS 에셋이 레포 `hw/lcd/dgus/`에 **미반영** → export·커밋(아마 `14ShowFile.bin`). 안 잡으면 fix 유실.
-> - **⚑ Fix C 처분(handoff §2)**: 에셋이 root 해결 → C(set_page후 재기록) 잉여 → revert 후 재검증 권장. A/B/D는 유지(독립 유효).
-> - **재검증(handoff §4)**: 토글 아이콘(이번 세션 실패분) 포함 전 모드 재확인 → final 리뷰 → PR + 태그 `hw-revA_fw-stage-lcd` → Stage D.
-> - **fix A/B/C/D 적용(미커밋)**: A=부팅 `temp_comm_mode=0xFF` sentinel(app_lcd.c init_mode), B=`commit_comm_mode_and_ether` 0xFF early-return 손상가드(input.c), C=render `set_page` **후** comm 아이콘 재기록(render.c, page 27 auto-load 부재 우회), D=serial 분기 `DISP_EN_DHCP=0`. 머지빌드 0-warning(FLASH 26.86%).
-> - **HW 검증 경과(에셋 수정 전)**: ✅ STD comm 진입 표시(전원사이클→ethernet O, `page=27 tcm=1`). ✅ 영속(`boot cm=1/2`). ❌ 토글 시 아이콘 사라짐 — 이게 **에셋 수정으로 해결됨**(handoff §4에서 머지빌드로 재확인 필요). (당시 관측: `0x140B data=1`→`page=9`, `page=27 tcm=2 cm=1` 섀도우 stale — 표시 아닌 별개 이슈인지 §4에서 점검.)
-> - **핵심 finding (검증완료)**: comm 표시 결함은 **firmware 회귀 아님** — render가 STDE(27)/MHE(25)에 byte-동등 출력(SAMD20와도 동등). **교차테스트로 확정**: STD comm 진입을 page 25로 repoint하니 정상 → page 27(패널 에셋) auto-load 부재가 root. **사용자 에셋 수정으로 입증·해결**. 상세: `…/analysis/2026-05-31-std-comm-page27-display-port-faithful.md`.
-> - **진단 스캐폴딩**(render `page=` 트레이스 + LCD_TRACE_RX 게이트) 유지, 보드엔 트레이스 빌드 플래시됨(머지 아님). 정리는 handoff §3.
+> **상태 (2026-05-31, 마감)**: STD comm 표시결함 **해결 완료 — root = DGUS 에셋(page 27/23 위젯 auto-load 부재), firmware 아님**(교차테스트+사용자 에셋fix로 입증). 에셋fix `0eafe68` + firmware A/B/C/D `a0a631c` 적용·커밋. **§4 전체 HW 재검증 PASS**(트레이스+머지 PR 바이너리 양쪽: 진입 표시·토글 0x140B·DHCP 영속·Fix A sentinel·Fix B IP무손상). **cpp-reviewer APPROVED**(차단 0). 브랜치 **`feat/stage-lcd-full-behavior`** = **통합 준비 완료**(머지/PR + 태그 `hw-revA_fw-stage-lcd`). **다음 = STEP 1 Stage D slice 1.**
+> - **Fix 처분(확정)**: A/B/D 유지(독립 유효), **C 유지**(에셋 root fix로 redundant지만 사용자 결정으로 defense-in-depth 보존 — cpp-reviewer가 idempotent·무플리커·`temp-1` 언더플로우가드 확인). 진단 트레이스 `LCD_TRACE_RX` **유지**(머지 컴파일아웃 검증), `fw/build-trace/` gitignore.
+> - **§4 검증 로그 핵심**: 토글 `0x140B data=0/1/2 → page=23/27/27 tcm=0/1/2`(serial=STDC23, eth·dhcp=STDE27 = 패널 의도 2-레이아웃; 지난 세션 `page=9` 이탈 **재현 안 됨**). DHCP 저장→`boot cm=2 ip=192.168.1.128`. 머지 PR 바이너리 시각 sanity OK. 상세: `…/analysis/2026-05-31-std-comm-page27-display-port-faithful.md`, 핸드오프 `…/2026-05-31-HANDOFF-lcd-comm-display-resolved.md`.
 
 > **이전 상태 (2026-05-27 d)**: LCD 포팅(T1~T9) + RX/data16 버그 2건 + T10 검증 + 버그A 수정 + 버그B WIP. tip `99d3502`.
 > - **이전 세션 fix(검증완료)**: 버그1 USART1 RX wedge→DMA circular(82cdb4c), 버그2 data16 off-by-one(d6c681f). 상세 `…/analysis/2026-05-27-lcd-hw-verify-rx-wedge.md`.
 > - **이번 세션 — T10 인터랙티브 HW 검증(사용자와)**: ① 부팅무회귀 ② SAVE→전원사이클→영속 ③ **CANCEL 복귀 PASS** ④ **전 페이지 네비 무락업/무루프 PASS** ⑥ **HAND저장→MULTI복귀 = 의도된 UX 확인 PASS** ⑦ **NM/GW 선택 시 IP 마지막옥텟 시드 = samd20 퀴크 확인 PASS** ⑧ N/A ⑨ 무wedge ⑩ 훅. (③④⑥⑦이 이번 세션 신규 PASS.)
 > - **이번 세션 버그A (수정·HW검증·커밋 `c6c89ef`)**: SETUP_MODEL(0x1084) 롱프레스 진입 불가. 패널이 down/up 모두 data=0 전송(release=2 없음) → verbatim FSM 미발화. 수정 = `long_press_released(vp,data16)` 연속 두 data=0 페어링(2초 가드 유지). 2초홀드→진입/탭→미진입 PASS. finding `…/analysis/2026-05-27-lcd-setup-model-longpress.md`.
 > - **이번 세션 버그B (WIP 커밋 `99d3502`, 표시 미수정)**: 사용자 요청 "STD도 MULTI처럼 ether/comm_mode 영속". **영속은 완료·검증**(STD `data_save_commit`에 `commit_comm_mode_and_ether` 추가 → `boot cm=2` DHCP 영속). 그러나 **comm_mode 표시 버그**(DHCP저장+전원사이클→STDE에 serial+dhcp 동시체크) + **0xFF 커밋 손상 위험** 미수정. 상세+수정안 A~D: `…/analysis/2026-05-27-std-ether-comm-mode-persist-display.md`.
-> **다음 작업**: **`docs/superpowers/2026-05-31-HANDOFF-lcd-comm-display-resolved.md` 체크리스트 진행** — §1 에셋 레포반영 → §2 Fix C 처분 → §3 진단정리 → §4 전체 재검증 → §5 final 리뷰 + PR + 태그 `hw-revA_fw-stage-lcd` → STEP 1 Stage D slice 1.
+> **다음 작업**: ✅ LCD 브랜치 마감 완료(핸드오프 §1~§5 처리, §4 HW 재검증 PASS, cpp-reviewer APPROVED). **남은 것 = main 통합(머지/PR) + 태그 `hw-revA_fw-stage-lcd` → STEP 1 Stage D slice 1.**
 
 ---
 
@@ -34,7 +29,7 @@ cmake --build build --target flash            # 머지 빌드 플래시 (진단 
 USART6 mon(@115200) = `/dev/cu.usbserial-BG02DMWU`. 단일-fd 캡처:
 `{ stty -f /dev/cu.usbserial-BG02DMWU 115200 cs8 -parenb -cstopb raw -echo; cat; } < /dev/cu.usbserial-BG02DMWU > /tmp/lcd-mon.log &`
 
-### ▶ STEP 0 — 버그B(comm_mode 표시) coherent 수정 → ⑤ 재검증 → 머지
+### ▶ STEP 0 — ✅ 완료 (2026-05-31): 버그B comm_mode 표시 = DGUS 에셋 root, A/B/C/D + 에셋fix, §4 HW PASS, cpp-reviewer APPROVED. 아래는 진행 기록.
 
 **T10 ③④⑥⑦ 이번 세션 PASS, ①②⑧⑨⑩ 기존 PASS, 버그A(롱프레스) 수정·PASS·커밋.** 남은 단 하나 = **버그B comm_mode 표시 + 0xFF 손상가드**.
 
