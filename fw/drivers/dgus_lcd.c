@@ -269,3 +269,50 @@ bool dgus_rx_poll(dgus_frame_t *out)
     }
     return false;
 }
+
+/*--------------------------------------------------------------
+ * 부트타임 RD 헬퍼 — DGUS 콜드부팅 핸드셰이크 (set_page 레이스 픽스)
+ *
+ * 패널이 MCU보다 늦게 부팅 → 단발 set_page 유실 → 로고 잔류 문제.
+ * blind delay 대신 패널 UART 응답을 게이트로 사용
+ * (samd20 의 주석처리된 check_lcd_comm 핸드셰이크 복원,
+ *  ref/samd20/main.c:4933-5022). 부트 전용 blocking — 메인 루프용 아님.
+ *--------------------------------------------------------------*/
+
+/* addr 한 워드를 RD 요청하고 timeout_ms 안에 0x83 응답을 기다림.
+ * 대기 동안 RX ring 을 계속 drain. 응답 수신 시 *out_val 적재 후 true.
+ * RD 응답 payload 레이아웃(samd20): data[0]=word count, data[1]=hi, data[2]=lo.
+ */
+bool dgus_read_word(uint16_t addr, uint16_t *out_val, uint32_t timeout_ms)
+{
+    dgus_frame_t f;
+    while (dgus_rx_poll(&f)) {
+        /* 이전 요청 잔여 / 터치 프레임 비움 */
+    }
+
+    dgus_read_var((uint8_t)addr);                       /* 0x83 RD, 1 word */
+
+    uint32_t t0 = sys_tick_get_ms();
+    while ((uint32_t)(sys_tick_get_ms() - t0) < timeout_ms) {
+        while (dgus_rx_poll(&f)) {
+            if (f.cmd == DGUS_CMD_RD && f.vp_addr == addr && f.data_len >= 3) {
+                *out_val = (uint16_t)(((uint16_t)f.data[1] << 8) | f.data[2]);
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+/* 패널이 SYS_PIC_NOW read 에 응답할 때까지(UART 기동) 또는 timeout 까지 폴링. */
+bool dgus_wait_ready(uint32_t timeout_ms)
+{
+    uint16_t pg;
+    uint32_t t0 = sys_tick_get_ms();
+    do {
+        if (dgus_read_word(SYS_PIC_NOW, &pg, DGUS_READ_REPLY_TIMEOUT_MS)) {
+            return true;
+        }
+    } while ((uint32_t)(sys_tick_get_ms() - t0) < timeout_ms);
+    return false;
+}

@@ -1,7 +1,15 @@
 # RESUME — 다음 세션
 
-> **상태 (2026-05-25)**: Stage D **프레이밍 확정 + slice 1 선택**. ATmega16 흡수 = **제어 함수 흡수이지 1:1 IO 이전이 아님** (사용자 2026-05-25 명시, 2회 강조). 단일 STM32가 SAMD20+M16 역할 모두 보유 → **명령 IPC는 내부화로 소멸**: M_START(PA4)/M_SEEK(PA5)/M_RESET(PA6) = 내부 `us_start/seek/reset()` 호출, M_OVLD(PC0) = 내부 플래그(옵션: CON_OVLD/PB3 외부 출력). **외부 물리 I/O로 남는 것** = ADC 센스(PA0=출력세기 피드백, PA1=ch1), **OSC 드라이브 출력**(누진 레벨 → OSC_OUT0..4 / CN2), buzzer/solenoid. ⇒ PB1/PB0/PC4/PA7/PC7 in/out 논쟁은 무의미해짐(M16 내부 핀 quirk). **측정 게이트(B1~B5) 해제** — 사용자 지시: 동작은 펌웨어 분석에서 도출, 물리 의미(B3)는 flag만 하고 코딩 차단 안 함.
-> **다음 작업**: **Stage D slice 1 = 레귤레이션 코어** (사용자 선택). spec-first. 브랜치 `feat/stage-d-osc-pin-io` (이전 핀-I/O 스펙 `2026-05-25-stage-d-osc-pin-io-design.md`은 **RETIRED** — 프레이밍 오류, 배너 추가됨. 검증된 사실은 보존). 슬라이스1 내용 ↓ STEP 0.
+> **상태 (2026-05-31, 마감)**: STD comm 표시결함 **해결 완료 — root = DGUS 에셋(page 27/23 위젯 auto-load 부재), firmware 아님**(교차테스트+사용자 에셋fix로 입증). 에셋fix `0eafe68` + firmware A/B/C/D `a0a631c` 적용·커밋. **§4 전체 HW 재검증 PASS**(트레이스+머지 PR 바이너리 양쪽: 진입 표시·토글 0x140B·DHCP 영속·Fix A sentinel·Fix B IP무손상). **cpp-reviewer APPROVED**(차단 0). 브랜치 **`feat/stage-lcd-full-behavior`** = **통합 준비 완료**(머지/PR + 태그 `hw-revA_fw-stage-lcd`). **다음 = STEP 1 Stage D slice 1.**
+> - **Fix 처분(확정)**: A/B/D 유지(독립 유효), **C 유지**(에셋 root fix로 redundant지만 사용자 결정으로 defense-in-depth 보존 — cpp-reviewer가 idempotent·무플리커·`temp-1` 언더플로우가드 확인). 진단 트레이스 `LCD_TRACE_RX` **유지**(머지 컴파일아웃 검증), `fw/build-trace/` gitignore.
+> - **§4 검증 로그 핵심**: 토글 `0x140B data=0/1/2 → page=23/27/27 tcm=0/1/2`(serial=STDC23, eth·dhcp=STDE27 = 패널 의도 2-레이아웃; 지난 세션 `page=9` 이탈 **재현 안 됨**). DHCP 저장→`boot cm=2 ip=192.168.1.128`. 머지 PR 바이너리 시각 sanity OK. 상세: `…/analysis/2026-05-31-std-comm-page27-display-port-faithful.md`, 핸드오프 `…/2026-05-31-HANDOFF-lcd-comm-display-resolved.md`.
+
+> **이전 상태 (2026-05-27 d)**: LCD 포팅(T1~T9) + RX/data16 버그 2건 + T10 검증 + 버그A 수정 + 버그B WIP. tip `99d3502`.
+> - **이전 세션 fix(검증완료)**: 버그1 USART1 RX wedge→DMA circular(82cdb4c), 버그2 data16 off-by-one(d6c681f). 상세 `…/analysis/2026-05-27-lcd-hw-verify-rx-wedge.md`.
+> - **이번 세션 — T10 인터랙티브 HW 검증(사용자와)**: ① 부팅무회귀 ② SAVE→전원사이클→영속 ③ **CANCEL 복귀 PASS** ④ **전 페이지 네비 무락업/무루프 PASS** ⑥ **HAND저장→MULTI복귀 = 의도된 UX 확인 PASS** ⑦ **NM/GW 선택 시 IP 마지막옥텟 시드 = samd20 퀴크 확인 PASS** ⑧ N/A ⑨ 무wedge ⑩ 훅. (③④⑥⑦이 이번 세션 신규 PASS.)
+> - **이번 세션 버그A (수정·HW검증·커밋 `c6c89ef`)**: SETUP_MODEL(0x1084) 롱프레스 진입 불가. 패널이 down/up 모두 data=0 전송(release=2 없음) → verbatim FSM 미발화. 수정 = `long_press_released(vp,data16)` 연속 두 data=0 페어링(2초 가드 유지). 2초홀드→진입/탭→미진입 PASS. finding `…/analysis/2026-05-27-lcd-setup-model-longpress.md`.
+> - **이번 세션 버그B (WIP 커밋 `99d3502`, 표시 미수정)**: 사용자 요청 "STD도 MULTI처럼 ether/comm_mode 영속". **영속은 완료·검증**(STD `data_save_commit`에 `commit_comm_mode_and_ether` 추가 → `boot cm=2` DHCP 영속). 그러나 **comm_mode 표시 버그**(DHCP저장+전원사이클→STDE에 serial+dhcp 동시체크) + **0xFF 커밋 손상 위험** 미수정. 상세+수정안 A~D: `…/analysis/2026-05-27-std-ether-comm-mode-persist-display.md`.
+> **다음 작업**: ✅ LCD 브랜치 마감 완료(핸드오프 §1~§5 처리, §4 HW 재검증 PASS, cpp-reviewer APPROVED). **남은 것 = main 통합(머지/PR) + 태그 `hw-revA_fw-stage-lcd` → STEP 1 Stage D slice 1.**
 
 ---
 
@@ -9,14 +17,44 @@
 
 ```bash
 cd /Users/tknoh/dev/work/gds_us_ctrl
-git checkout feat/stage-d-osc-pin-io   # slice 작업 브랜치 (main에 미머지)
-git log --oneline -3                    # tip = 825ab7c (RETIRED 핀-IO 스펙 + 배너)
-git tag -l 'hw-revA*'                   # hw-revA_fw-stage-a, hw-revA_fw-stage-b
+git checkout feat/stage-lcd-full-behavior   # LCD 브랜치 (main 미머지)
+git log --oneline -6                          # tip = 99d3502 (wip STD persist), c6c89ef (longpress fix) …
+git tag -l 'hw-revA*'                         # hw-revA_fw-stage-a, hw-revA_fw-stage-b
+cd fw && env -u STM32_TOOLCHAIN cmake --build build   # 0-warning 확인 (FLASH 26.80%/RAM 10.16%)
+cmake --build build --target flash            # 머지 빌드 플래시 (진단 게이트 off)
 ```
 
-### ▶ STEP 0 — Stage D slice 1: 레귤레이션 코어 (spec-first, 측정 게이트 해제됨)
+> 진단 가시화가 필요하면 `-DLCD_TRACE_RX` 트레이스 빌드(별도 `build-trace/`, CMakeLists에 한 줄 추가→빌드→원복→`build-trace/...elf` 플래시): `[lcd] rx vp=.. data=..` + `[lcd] commit cm temp=.. cfg=..` + `[lcd] boot cm=.. ip=..` 출력. 시리얼 리셋 글리치로 부팅줄 NULL 플러드가 섞이니 `tr -d '\000' < log | tr -s ' ' | grep '\['`로 정리해 읽기.
 
-새 세션 첫 행동: 위 브랜치 체크아웃 → **slice 1 spec 작성** (`docs/superpowers/specs/`) → 사용자 리뷰 → `writing-plans` → 구현. (brainstorming은 이미 완료 — 프레이밍/슬라이스 확정.)
+USART6 mon(@115200) = `/dev/cu.usbserial-BG02DMWU`. 단일-fd 캡처:
+`{ stty -f /dev/cu.usbserial-BG02DMWU 115200 cs8 -parenb -cstopb raw -echo; cat; } < /dev/cu.usbserial-BG02DMWU > /tmp/lcd-mon.log &`
+
+### ▶ STEP 0 — ✅ 완료 (2026-05-31): 버그B comm_mode 표시 = DGUS 에셋 root, A/B/C/D + 에셋fix, §4 HW PASS, cpp-reviewer APPROVED. 아래는 진행 기록.
+
+**T10 ③④⑥⑦ 이번 세션 PASS, ①②⑧⑨⑩ 기존 PASS, 버그A(롱프레스) 수정·PASS·커밋.** 남은 단 하나 = **버그B comm_mode 표시 + 0xFF 손상가드**.
+
+**0-a) (권장) samd20 comm-섀도우 로드 방식 대조** — `temp_comm_mode` 0xFF sentinel이 포팅 발명인지 samd20 패턴인지 확인 후 수정 방향 확정.
+
+**0-b) coherent 수정 A~D** (상세: `…/analysis/2026-05-27-std-ether-comm-mode-persist-display.md`):
+- **B(우선, 손상방지)**: `commit_comm_mode_and_ether`에서 `temp_comm_mode==0xFF`면 comm_mode/ether 커밋 스킵. ← 이미 작업1이 STD에 commit 호출 추가했으므로 가드 없으면 손상 위험 실재.
+- **A**: 부팅 시 `temp_comm_mode=0xFF` 초기화(`app_lcd_init_mode` 등) — 첫 comm 페이지 진입이 cfg에서 seed.
+- **C**: A로 기존 `==0xff` seed 게이트 자동 정상화.
+- **D**: render serial 분기(`render.c:198`)에서 `DISP_EN_DHCP=0` 명시 기록(stale dhcp 제거).
+- 빌드 0-warning, **트레이스 빌드로 HW 재검증**: DHCP 저장→전원사이클→STDE에 ethernet+dhcp만(serial 미체크), serial 저장→전원사이클→serial만.
+
+**0-c) ⑤ 재검증**: 이제 STD ether/comm_mode가 (의도적으로) 영속됨 = 원 samd20 "STD 미영속 퀴크"는 **사용자 결정으로 폐기**(MULTI와 동일하게 영속). spec §보존퀴크 목록의 ⑤ 항목은 "영속으로 변경" 반영 필요.
+
+**0-d) 진단 스캐폴딩 결정**: `LCD_TRACE_RX` 게이트 `boot cm`/`commit cm` 유지(유용) or 제거.
+
+통과 → changelog/RESUME/NEXT_STEPS "done" + **전체 브랜치 final 코드리뷰 1회**(cpp-reviewer) → `gh pr create`(→main) + 태그 `hw-revA_fw-stage-lcd`.
+
+> 구조/계약: 포팅 spec `…/specs/2026-05-27-stage-lcd-full-behavior-port-design.md`(F5 가정 = 틀림, finding 2 참조), RX fix spec `…/specs/2026-05-27-usart1-dma-rx-hardening-design.md`. 신규 소스 = `fw/src/app_lcd_{str,render,input,disp}.c` + `app_lcd.c`. config 소유 = `app_lcd_cfg()`, transient = `app_lcd_state()`, 측정 = `app_lcd_measure()`(스텁). RX = `fw/drivers/usart1.c`(DMA circular).
+
+---
+
+### ▶ STEP 1 — Stage D slice 1: 레귤레이션 코어 (LCD 머지 후 재개, spec-first, 측정 게이트 해제됨)
+
+LCD 머지 뒤 재개. **slice 1 spec 작성** (`docs/superpowers/specs/`) → 사용자 리뷰 → `writing-plans` → 구현. Stage D는 LCD의 `lcd_measure_t` provider(측정값) + 스텁 훅 실체(us_command/set_pot 등)를 채우는 형태로 자연 통합됨. (brainstorming 완료 — 프레이밍/슬라이스 확정.)
 
 **슬라이스 1 = 레귤레이션 코어** (M16 §4 제어루프 심장부; 알고리즘은 펌웨어에서 포팅, 물리 의미는 HW-verify 주석):
 1. **ADC 획득층**: 2ch free-run, ch0 = 10샘플 평균(PA0 = 출력세기 피드백), ch1 = 50샘플 평균(PA1). 근거 `196c`, ADCSRA=0xCF(/128) ch0/ch1 교대.
@@ -38,18 +76,12 @@ git tag -l 'hw-revA*'                   # hw-revA_fw-stage-a, hw-revA_fw-stage-b
 
 ---
 
-## ⚠️ 먼저 알아야 할 보드 이슈 (HW 작업 시)
+## ✅ 보드 이슈 — BOOT0 해결됨 (2026-05-26)
 
-**R64 (BOOT0 풀다운, U2.60) 미실장** → BOOT0 floating high → 매 리셋 시 ST 시스템 부트로더로 부팅, **플래시한 앱이 안 돎**. 증상: `reset halt` PC=0x1FFFxxxx, RAM garbage, 시리얼 무출력.
+**BOOT0(U2.60)를 GND로 묶음 → 해결.** 이제 플래시한 앱이 평범한 `reset run`으로 직접 부팅. HW 검증(2026-05-26): `reset halt` 후 **PC=0x080045c0 / MSP=0x20008000**(플래시 Reset_Handler), `reset run` → mon USART6에 `[boot] gds_us_ctrl stage-b ready` / `[cfg] …` / `[t=N ms] hello uptime=N`(1초 cadence 증가) 정상. **gdb force-jump 워크어라운드 불필요.**
 
-- **영구 수정**: R64 실장 또는 BOOT0→GND.
-- **검증 워크어라운드** (memory `project_board_boot0_workaround`):
-  ```
-  openocd ... program build/gds_us_ctrl.elf verify
-  gdb: monitor reset halt; set $sp=*(unsigned*)0x08000000; set $pc=*(unsigned*)0x08000004;
-       set *(unsigned*)0xE000ED08=0x08000000; monitor resume; detach
-  ```
-  강제 점프해도 클럭 96MHz 정상 (RCC 확인). g_cfg/카운터는 두 번째 gdb 세션에서 `monitor halt`(reset ✗) 후 `print`.
+- **이전 문제(해결됨)**: R64(BOOT0 풀다운, U2.60) 미실장 → BOOT0 floating high → 매 리셋 시 ST 부트로더(PC 0x1FFFxxxx)로 부팅, 앱 미실행.
+- **다른 미개조 보드에서 재발 시 fallback** (memory `project_board_boot0_workaround`): `openocd … program … verify` 후 gdb `monitor reset halt` → `set $sp=*(unsigned*)0x08000000` → `set $pc=*(unsigned*)0x08000004` → `set *(unsigned*)0xE000ED08=0x08000000`(VTOR) → `monitor resume; detach`. 상태 읽기는 두 번째 세션 `monitor halt`(reset ✗) 후 `print`.
 - **시리얼 (USART6 mon, /dev/cu.usbserial-*, 115200)**: 단일 fd — `{ stty 115200 cs8 -parenb -cstopb raw -echo; cat; } < /dev/cu.usbserial-XXXX > log`.
 
 ---

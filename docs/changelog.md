@@ -2,6 +2,79 @@
 
 ## [Unreleased]
 
+### 2026-05-31 — STD comm 표시결함 해결(DGUS 에셋 root) + LCD 브랜치 HW 검증 완료 (통합/태그 대기)
+
+comm_mode 표시결함의 **root는 firmware 아니라 DGUS 패널 에셋**(page 27/23 위젯이 page-show 시 `DISP_COMM_MODE`(0x140c) auto-load 안 함; page 25는 함)임을 **교차테스트**(STD comm 진입을 page 25로 repoint→정상)로 확정 → 사용자가 에셋만 수정해 정상화 = 진단 입증. firmware는 coherent 수정 A/B/C/D 적용. 상세: `docs/superpowers/analysis/2026-05-31-std-comm-page27-display-port-faithful.md`, 핸드오프 `docs/superpowers/2026-05-31-HANDOFF-lcd-comm-display-resolved.md`.
+
+- **Fix A/B/C/D (커밋 `a0a631c`)**: A=부팅 `temp_comm_mode=0xFF` sentinel(`app_lcd.c init_mode`, 헤더 의도 정합) / B=`commit_comm_mode_and_ether` 0xFF early-return 손상가드(`app_lcd_input.c`, comm 미방문 STD-page SAVE 시 comm_mode=255+0.0.0.0 손상 차단) / C=`dgus_set_page` **후** comm 아이콘 재기록(`app_lcd_render.c`, page-27 auto-load 부재 방어 — 에셋 root fix로 redundant지만 **사용자 결정으로 defense-in-depth 유지**) / D=serial 분기 `DISP_EN_DHCP=0`(stale dhcp echo 제거). 머지빌드 0-warning, **FLASH 26.86%/RAM 10.16%**.
+- **에셋 fix (커밋 `0eafe68`)**: `hw/lcd/dgus/14ShowFile.bin` page 27/23 comm-mode 아이콘 표시설정 (root fix, 레포 반영).
+- **§4 전체 HW 재검증 PASS** (트레이스 빌드 + 머지 PR 바이너리 양쪽 플래시): ① STD comm 진입 표시 정상(`page=27 tcm=1`, ethernet O) ② **토글 0x140B serial→ethernet→dhcp 아이콘 정상 갱신·사라짐 없음**(이번 세션 핵심 실패분 해소; `data=0/1/2 → page=23/27/27 tcm=0/1/2`, serial=STDC23/eth·dhcp=STDE27 2-레이아웃은 패널 의도, 지난 세션 `page=9` 이탈 재현 안 됨) ③ DHCP 저장→전원사이클→`boot cm=2 ip=192.168.1.128` 영속+IP 정상 ④ Fix A 부팅 `tcm=255` sentinel ⑤ Fix B IP 0.0.0.0 손상 없음.
+- **최종 리뷰**: cpp-reviewer **APPROVED** (A/B/C/D + `#ifdef LCD_TRACE_RX` 게이팅, 차단 이슈 0; B 오스킵 없음·C idempotent/무플리커/언더플로우가드 확인).
+- **진단 스캐폴딩**: `LCD_TRACE_RX` 게이트 트레이스 **유지**(머지 컴파일아웃 검증), `fw/build-trace/` gitignore.
+- **다음**: main 통합(머지/PR) + 태그 `hw-revA_fw-stage-lcd` → Stage D slice 1.
+
+### 2026-05-27 (후속 3, WIP 체크포인트) — STD 이더넷/comm_mode 영속 + comm_mode 표시 버그
+
+T10 항목 ⑤ 중 사용자 요청 "STD도 MULTI처럼 ether/comm_mode 영속" 작업. 상세: `docs/superpowers/analysis/2026-05-27-std-ether-comm-mode-persist-display.md`. **세션 종료 체크포인트 — 표시 버그 미수정, 다음 세션 이어감.**
+
+- **작업1 (완료·HW검증, 미커밋→이 커밋에 포함)**: `data_save_commit()` STD 분기에 `commit_comm_mode_and_ether()` 추가 → STD에서도 comm_mode/ether 영속. 검증: `commit cm temp=1 cfg=0`→커밋, 전원사이클 후 `boot cm=1`, DHCP는 `boot cm=2`로 FRAM 영속 확인. = 사용자가 본 "ethernet enable 저장 안됨"은 영속 실패가 아니라 표시 버그.
+- **작업2 (root cause 확정, 미수정)**: DHCP 저장+전원사이클 후 STDE에 **serial+dhcp 동시 체크**. 원인 = `temp_comm_mode` 섀도우 생명주기 결함: (1) 부팅 zero-init→`temp_comm_mode=0`(0xFF sentinel 아님), (2) seed가 `==0xff` 게이트라 부팅 후 첫 진입 스킵, (3) serial 분기가 `DISP_EN_DHCP` 미클리어(stale), (4) **추가 위험**: `commit_comm_mode_and_ether`가 0xFF 미가드 → comm 페이지 미방문 저장 시 comm_mode=255 손상(latent, MULTI에도 잠재, 작업1이 STD로 확장).
+- **다음 세션 = coherent 수정 A~D** (spec/plan + samd20 comm-섀도우 대조 후): A 부팅 `temp_comm_mode=0xFF` 초기화 / B commit 0xFF 가드(손상방지) / C seed 자동정상화 / D serial 분기 `DISP_EN_DHCP=0`.
+- **진단 스캐폴딩(LCD_TRACE_RX 게이트, 머지 컴파일아웃)**: `app.c` `boot cm=.. ip=..`, `app_lcd_input.c` commit `commit cm temp=.. cfg=..`. 유지/제거 결정 보류.
+
+### 2026-05-27 (후속 2) — SETUP_MODEL 롱프레스 진입 불가 발견·수정 (코드 변경 O, **HW 검증 PASS**)
+
+T10 항목 ⑥ 검증 중 **SETUP에서 모델 셋업 페이지 진입 키가 안 먹힘** 발견. systematic-debugging Phase 1~4. 상세 finding: `docs/superpowers/analysis/2026-05-27-lcd-setup-model-longpress.md`.
+
+- **Root cause**: DGUS 모델 키(VP 0x1084)가 **터치-다운/업 양쪽 모두 value 0**을 올리고 **release=2를 영영 안 보냄**(LCD_TRACE_RX 진단 빌드 3회 캡처: 4초 홀드=2이벤트 둘 다 0, auto-repeat 없음). 포팅된 `long_press_released()`는 samd20 verbatim으로 `data==2`를 릴리스로 가정 → 업(0)을 "또 다른 press"로 오인 → **롱프레스 절대 미완성**. 포팅 회귀 아님(이 패널 설정이면 samd20도 동일 실패 구조) = 패널 DGUS 터치 설정 ↔ 펌웨어 프로토콜 가정 불일치.
+- **수정 (P2, 펌웨어측 — 사용자 결정)**: `long_press_released(vp, data16)` 재설계 — 같은 VP의 **연속 두 data=0을 press→release로 페어링**, 간격 ≥ KEY_HOLD_MS(2000ms)면 발화(2초 가드 유지). `data==2` 하위호환 유지. `key_press_vp`로 키잉(0x1084/0x1094 무간섭). `app_lcd.h`에 `key_press_vp` 필드 추가. 빌드 0-warning, FLASH 26.80%/RAM 10.16%.
+- **HW 검증 PASS**: ① 모델 키 2초 홀드 → 모델 셋업 진입 ✓, ② 짧은 탭 → 미진입(가드 유지) ✓.
+- **보류 (P1, 패널측)**: DGUS `.bin`을 0x1084 업에서 value 2 올리도록 재설정(펌웨어 무수정·verbatim 유지) — DGUS 에디터+패널 재플래시 필요라 미채택.
+- **flag(차단 아님)**: 토글 desync 위험(0x1084 다운 드롭 시 spurious 진입; DMA RX로 완화). 0x1094 동일거동 여부 미확인(같은 로직 공유).
+
+### 2026-05-27 (후속) — HW 검증 중 버그 2건 발견·수정 (코드 변경 O, **HW 검증 PASS**)
+
+T10 HW bench 검증 착수 → energy 슬라이더 드래그가 DGUS RX를 영구 wedge시킴을 발견. 추적 결과 **연결된 버그 2건**을 수정. 둘 다 LCD 포팅 로직이 아닌 하부 결함이며, RX wedge가 다른 하나를 가리고 있었음. 상세 finding: `docs/superpowers/analysis/2026-05-27-lcd-hw-verify-rx-wedge.md`. spec/plan: `docs/superpowers/{specs,plans}/2026-05-27-usart1-dma-rx-hardening*`.
+
+- **버그 1 — USART1 DGUS RX 영구 wedge (Phase2/StageA 드라이버 결함, LCD 브랜치가 노출)**: 1바이트 `HAL_UART_Receive_IT`가 오버런/재무장 실패 시 RXNEIE=0으로 영구 정지(SR ORE=1, RXNE 갇힘). 트리거 = per-rx 블로킹 `mon_printf`(무한 타임아웃)가 VP 플러드 중 루프 포화. **수정**: USART1 RX를 **DMA2 Stream2 Ch4 circular free-running**으로 전환(오버런 면역, `usart1_rx_pop` NDTR 기반, 시그니처 불변 → 파서/app 무수정) + per-rx 트레이스 `#ifdef LCD_TRACE_RX` 게이트(default off) + mon TX 타임아웃 50ms. 커밋 a2c37b4→82cdb4c(+리뷰 20b3380). cpp-reviewer APPROVE.
+- **버그 2 — LCD 입력 값 추출 off-by-one (LCD 브랜치 T6, RX fix 후 노출)**: DGUS 0x83 응답의 VP주소 뒤 READ_LEN(워드수) 바이트를 값 MSB로 오독(`data16=(data[0]<<8)|data[1]`). SAVE(값1)→256으로 읽혀 CANCEL 분기 실행(영속 안 됨), 전 numeric 입력이 garbage. **수정**: `data16=(data[1]<<8)|data[2]`(READ_LEN 건너뜀, samd20 dgus_lcd.h DATA_H=5/L=6 일치). 1줄. 커밋 d6c681f.
+- **HW 검증 PASS**: ① `run_page_confirmed=1`(무회귀). ② SETUP energy 편집→SAVE→**전원사이클→영속**(`[cfg] energy=567`). 공격적 슬라이더 드래그에도 **RX 무wedge**(CR3 DMAR=1, SR ORE=0, NDTR/tail 전진). `[lcd-hook] set_pot power=55 dac=12`(output_power 정확 추출). ⑩ 훅 배선 OK. ⑧ N/A(전원 공유). ⑨ 재해석(패널이 idle에 LEN=3 `5A A5 03 82 4F 4B` 프레임 연속 스트리밍 → 파서가 설계상 거부 → dgus_rx_drop_count 항상 비0이나 무wedge가 진짜 신호).
+- **잔여 T10(미검증)**: ③ CANCEL 복귀, ④ 전 페이지 네비 무락업, ⑤ STD ether 미영속 퀴크, ⑥ F3 HAND→MULTI, ⑦ NM/GW IP옥텟 시드 퀴크. 이들 통과 후 main PR + 태그 `hw-revA_fw-stage-lcd`.
+- **향후 조사 후보(코딩 차단 아님)**: 패널이 스트리밍하는 VP 0x4F4B `5A A5 03 82 4F 4B`(LEN=3, WR)의 정체/이유.
+
+### 2026-05-27 — LCD 전체 동작 포팅 (samd20→STM32) 구현 완료 (코드 변경 O, **HW 검증 대기**)
+
+- **브랜치**: `feat/stage-lcd-full-behavior` (main에서 분기, BOOT0 `9bbc505`+LCD `d5860a3` cherry-pick 선반영). 사용자 지시: "samd20은 동작이 정확하게 되는 코드" → 충실 포팅.
+- **범위**: parse_lcd_comm(터치/키 입력+설정편집+DATA_SAVE/CANCEL) + change_lcd_page(페이지 렌더) + 주기 표시 스텝머신(LV_OUTPUT/LV_TIME 바, VAR_*, ICON) + 문자열 포맷터. 와이어/FRAM 계층은 Stage B 재사용. 측정값은 **스텁 provider**(전부 0 → 바 빈/값 0), HW/제어 결합은 **named 스텁 훅**(set_pot/us_command/comm_reconfigure/ether_apply/horn = Stage C/D 통합점).
+- **구현(spec→plan→10태스크, 각 빌드-게이트+커밋)**: T1 VP 매크로 / T2 `app_config_save_all` / T3 포맷터(time/energy/addr/ip/pdd) / T4 서브시스템 state+측정스텁+훅 / T5 `change_lcd_page` / T6 입력 디스패치 코어 / T7 DATA_SAVE/CANCEL+comm/ether / T8 표시 스텝머신+아이콘+에러페이지 / T9 app.c 배선+SYS_PIC_NOW 루프가드. T1-T4 직접, T5-T9 subagent-driven(태스크별 리뷰+samd20 원본 대조).
+- 신규 소스: `src/app_lcd_str.c`(167) `app_lcd_render.c`(223) `app_lcd_input.c`(802) `app_lcd_disp.c`(290), `app_lcd.c`(165) 확장. **빌드 0-warning, FLASH 27.9%(35684B)/RAM 9.3%**. config 소유권을 LCD 서브시스템으로 이동(`app_lcd_cfg()`).
+- **보존된 samd20 퀴크(verbatim, 임의수정 ✗)**: F3 HAND 저장→MULTI 페이지 복귀. F4 cancel = full FRAM reload(live comm/ether는 저장前 미변경이라 no-op). STD 경로 저장은 comm_mode/ether **미영속**(addr/speed/parity만). `ether_select_field`가 항상 `temp_ether_ip[3]`로 시드(samd20 copy-paste 버그). KEY_MULTI RESET 에러클리어가 samd20 `sys_status==SYS_ERROR` 추가게이트 생략(에러경로 미도달, Stage D 재조정).
+- **Stage B 콜드부팅 핸드셰이크 무회귀** (`dgus_wait_ready`/`ensure_run_page` 그대로; init_mode는 change_page 호출로 리팩터, 기본설정 RUN 페이지 렌더 byte-identical 검증). 회귀 여부는 첫 부팅서 실증.
+- **잔여 cleanup(옵션)**: `app_lcd_input.c` 802줄(800 가이드라인 2줄 초과) — 분할 시 ether FSM을 `app_lcd_input_ether.c`로 절단 권장. 그린 빌드 리스크로 지금은 보류.
+- **다음 = HW bench 검증 (T10, 사용자와)**. 통과 시 RESUME/NEXT_STEPS "done" 갱신 + PR + 태그 `hw-revA_fw-stage-lcd`. spec `docs/superpowers/specs/2026-05-27-stage-lcd-full-behavior-port-design.md`, plan `docs/superpowers/plans/2026-05-27-stage-lcd-full-behavior.md`.
+
+#### HW bench 검증 체크리스트 (USART6 mon @115200; spec §13)
+- [ ] 부팅 → RUN 페이지 렌더 (Stage B 패리티), `run_page_confirmed=1` (Stage B 경로는 inspection상 불변, 첫 부팅서 실증).
+- [ ] SETUP 진입 → 현재 리밋 표시 → 값 편집 → SAVE → 전원 사이클 → 값 영속 (FRAM determinism).
+- [ ] CANCEL → 값이 FRAM 값으로 복귀.
+- [ ] 전 setup/comm/ethernet 페이지 네비 — 락업/SYS_PIC_NOW 루프 없음 (mon trace 관찰).
+- [ ] **STD 모델(type=2)에서 STDE 이더넷 편집 SAVE/reload → comm_mode/ether 미영속 = samd20 동작과 일치 확인** (의도된 동작).
+- [ ] **HAND 저장 후 MULTI 페이지로 복귀(F3)** — 편집한 페이지와 다른 페이지 표시, 의도된 UX인지 사용자 확인.
+- [ ] **NM/GW 필드 선택 시 IP 마지막 옥텟이 초기값으로 표시**(`temp_ether_ip[3]` 시드, verbatim) — samd20과 일치 확인.
+- [ ] **패널만 전원 사이클**(MCU 유지) → SYS_PIC_NOW 재init이 루프 없이 복구되는지 (200ms 가드가 정상 케이스를 안 막는지).
+- [ ] 터치-헤비 네비 중 `dgus_rx_drop_count()` 관찰 (RX 링 오버플로 없음).
+- [ ] 훅이 RUN/SEEK/RESET/SAVE에 `[lcd-hook]` 로그 — 하드웨어 미구동 배선 확인.
+- [ ] (옵션) `LCD_DEMO_MEASURE_RAMP` 빌드 → LV_OUTPUT/LV_TIME 바 스윕, VAR_* 증가.
+
+### 2026-05-26 — BOOT0 해결 + LCD 콜드부팅 핸드셰이크 픽스 (코드 변경 O, HW 검증)
+
+- **BOOT0 이슈 해결**: BOOT0(U2.60)→GND 연결. 콜드부팅 시 플래시 앱 직접 실행. HW 검증: `reset halt` PC=0x080045c0/MSP=0x20008000, mon 정상. force-jump 워크어라운드 폐기 (fallback으로 문서 보존). `docs/NEXT_STEPS.md §5.7`, `docs/superpowers/RESUME.md`, memory `project_board_boot0_workaround` 갱신.
+- **LCD 콜드부팅 레이스 픽스**: 증상 = 콜드 전원 사이클 시 로고 화면만 잔류(동작화면 미전환). 근본원인 = DGUS 패널이 MCU보다 늦게 부팅 → 단발 `set_page(run)`(전원-on 후 ~1050ms)이 패널 준비 전 도착·유실 → 패널이 power-on 기본 페이지(로고)에 잔류. ST-LINK reset 경로는 패널이 이미 부팅돼 있어 미재현(비대칭).
+  - 수정 = blind 1s delay 대체 **readiness 게이트**(`dgus_wait_ready`: SYS_PIC_NOW(0x0014) read에 패널이 응답할 때까지 폴링, 최대 4s) + **read-back 확인/재전송**(`app_lcd_ensure_run_page`: SYS_PIC_NOW가 run 페이지 확정할 때까지 최대 8회 재전송). samd20의 주석처리된 `check_lcd_comm` 핸드셰이크(`ref/samd20/main.c:4933-5022`) 의도 복원.
+  - UX 보존: readiness 게이트 후 **로고 1초 dwell → run 페이지**(samd20 `set_page(0)→delay 1000→run` 동일).
+  - 신규 드라이버 API: `dgus_read_word`/`dgus_wait_ready`(`drivers/dgus_lcd.c`), `app_lcd_run_page`/`app_lcd_ensure_run_page`(`src/app_lcd.c`). 튜닝 상수 `DGUS_BOOT_READY_TIMEOUT_MS`/`DGUS_LOGO_DWELL_MS`/`DGUS_PAGE_CONFIRM_*`(`include/dgus_lcd.h`).
+  - HW 검증: 콜드 전원 사이클 → 로고 ~1초 → 동작화면 전환 확인. mon `[lcd] ready=1`/`run_page_confirmed=1`. 빌드 0-warning, FLASH 22.57%.
+
 ### 2026-05-25 (후속) — ATmega16 보드-진실 정정 + 소스오브트루스 전환 (코드 변경 ✗, 문서만)
 
 - Stage D brainstorming 중 사용자 보드 직독으로 **OSC 드라이브 매핑 확정**: `CTRL_OSC0..4` ← mega16 **PB1/PB0/PC4/PA7/PC7** (V30 PB2/PB10/PB12/PB13/PB14). 분석 §7 #1(OSC 트리거 물리핀 미해소) **해소**. **PA0(ADC ch0) = 출력 초음파 세기 피드백**(레귤레이션 입력) 확정.

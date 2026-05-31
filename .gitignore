@@ -7,6 +7,7 @@ hw/**/*.bak
 
 # F/W 빌드 산출물
 fw/build/
+fw/build-trace/
 fw/**/Debug/
 fw/**/Release/
 fw/**/*.elf

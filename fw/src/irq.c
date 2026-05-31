@@ -25,12 +25,3 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
         sys_tick_handle_irq();
     }
 }
-
-/* USART1 — DGUS LCD (Stage A).
- * vendor startup 의 weak alias 를 override.
- * HAL_UART_IRQHandler 가 RxCpltCallback (fw/drivers/usart1.c) 으로 분기.
- */
-void USART1_IRQHandler(void)
-{
-    HAL_UART_IRQHandler(&huart1);
-}
