@@ -713,6 +713,7 @@ Read `/tmp/reg-mon.log` (clean reset glitches: `tr -d '\000' < /tmp/reg-mon.log 
 - [ ] Inject / vary a known analog level on **PB0**: `ch0` tracks it; `scaled` follows the ×6/clip (e.g. ch0≈100 → scaled≈600; ch0≥1000 → scaled=1000); `band` steps through the table as `scaled` crosses thresholds.
 - [ ] LCD output bar + VAR_POWER/VAR_AMP move with the injected PB0 signal (provider live).
 - [ ] **No OSC GPIO activity** and PB2/PB10/PB14 idle **HIGH** (scope/meter); PB12/PB13 left as reset inputs (output deferred).
+- [ ] **PB15 (cpp-reviewer L3):** the old mask drove PB15 LOW; it is now unconfigured (reset input, floating). Confirm against the schematic that PB15 is NC / externally tied and nothing relied on firmware driving it LOW.
 
 - [ ] **Step 4: Clean up the trace build**
 
