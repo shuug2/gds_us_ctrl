@@ -40,9 +40,13 @@ uint16_t adc1_read(adc1_ch_t ch)
     };
     if (HAL_ADC_ConfigChannel(&hadc1, &s) != HAL_OK) Error_Handler();
 
-    HAL_ADC_Start(&hadc1);
-    (void)HAL_ADC_PollForConversion(&hadc1, 2u);   /* us-scale conversion; 2 ms guard */
+    /* Check Start + Poll: on timeout HAL_ADC_GetValue would return a stale DR
+     * value that would silently enter the averaging accumulator. Conversion is
+     * ~4 us vs the 2 ms guard (~500x margin), so a timeout means a real HW/clock
+     * fault — halt like the Init/ConfigChannel checks above. */
+    if (HAL_ADC_Start(&hadc1) != HAL_OK) Error_Handler();
+    if (HAL_ADC_PollForConversion(&hadc1, 2u) != HAL_OK) Error_Handler();
     uint16_t v = (uint16_t)HAL_ADC_GetValue(&hadc1);
-    HAL_ADC_Stop(&hadc1);
+    (void)HAL_ADC_Stop(&hadc1);   /* best-effort cleanup */
     return v;
 }
