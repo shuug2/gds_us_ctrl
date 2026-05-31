@@ -17,11 +17,13 @@
 
 ```bash
 cd /Users/tknoh/dev/work/gds_us_ctrl
-git checkout feat/stage-lcd-full-behavior   # LCD 브랜치 (main 미머지)
-git log --oneline -6                          # tip = 99d3502 (wip STD persist), c6c89ef (longpress fix) …
-git tag -l 'hw-revA*'                         # hw-revA_fw-stage-a, hw-revA_fw-stage-b
-cd fw && env -u STM32_TOOLCHAIN cmake --build build   # 0-warning 확인 (FLASH 26.80%/RAM 10.16%)
-cmake --build build --target flash            # 머지 빌드 플래시 (진단 게이트 off)
+git checkout main                             # ✅ LCD 머지 완료 (acb4be1, tag hw-revA_fw-stage-lcd) — feat/stage-lcd-full-behavior 삭제됨
+git log --oneline -4                          # tip = acb4be1 (Merge LCD full behavior port)
+git tag -l 'hw-revA*'                         # ...-stage-a, -stage-b, -stage-lcd
+git branch                                    # feat/stage-d-osc-pin-io (Stage D, 미머지) 존재
+cd fw && env -u STM32_TOOLCHAIN cmake --build build   # 0-warning (FLASH 26.86%/RAM 10.16%)
+# 다음 작업 = ▼ STEP 1 Stage D slice 1 (레귤레이션 코어). project_atmega16_absorption 참조.
+# (옛 pin-I/O spec은 RETIRED, slice 1 = spec-first 신규 작성)
 ```
 
 > 진단 가시화가 필요하면 `-DLCD_TRACE_RX` 트레이스 빌드(별도 `build-trace/`, CMakeLists에 한 줄 추가→빌드→원복→`build-trace/...elf` 플래시): `[lcd] rx vp=.. data=..` + `[lcd] commit cm temp=.. cfg=..` + `[lcd] boot cm=.. ip=..` 출력. 시리얼 리셋 글리치로 부팅줄 NULL 플러드가 섞이니 `tr -d '\000' < log | tr -s ' ' | grep '\['`로 정리해 읽기.
