@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### 2026-05-31 (후속) — Stage D slice 1 분석 완료 + spec 초안 (레귤레이션 코어, 코드 변경 ✗)
+
+ATmega16 레귤레이션 코어를 STM32F410으로 흡수하는 Stage D slice 1 착수. disasm-adjudicated 다중소스 분석(55-agent workflow, 3.7M tokens) → spec 초안. **코드 변경 없음**(분석+설계 단계, spec 리뷰 대기).
+
+- **검증된 분석** (`docs/superpowers/analysis/2026-05-31-m16-regulation-core-verified.md`): raw disasm(`M16_reverse/out/01_disassembly.asm`)을 ground-truth로 v001 디컴파일·재구성본을 교차검증(두 C파일은 hypothesis, "N소스 합의" 추론 금지). 29 register-fact(bucket A) + 7 open decision(bucket B). **v001 5건 정정**: ①스케일링 `>>6`→**×6 곱셈**(`1ac2 ldi r30,0x06`+`call 0x2158`, 시프트 명령 0개; 자기일관: `>>6`은 1000 clip 도달 불가) ②free-run→**단발 SW re-arm**(ADATE=0) ③Timer1 0xB1FF→**0xFFB1** ④램프 6단→**10단** ⑤compare `>`→**`<`**(strictly-less). 검증 파이프라인(SRAM→SRAM, ~2.05ms Timer0 틱): 2ch 단발 ADC(ch0÷10@0x01B9/ch1÷50@0x018D) → clip(≥1000)/floor(<3)/×6 → 21엔트리 내림차순 lookup thermometer → 패턴. advisor 최종검증: bucket-B 미승격 확인(C9 OSC identity는 register_fact 태그였으나 bucket B로 강등). 메모리 `project_m16_regulation_verified`.
+- **핵심 미확정 B-SEAM**: 레귤레이션 패턴이 OSC 5핀에 닿는 물리 경로는 이미지에 없음(디컴파일은 board-dead PORTD로 라우팅; Timer0 ISR은 3 바이너리 플래그만 active-LOW로 PC7/PB1/PB0=STM32 PB14/PB2/PB10 미러). PC4/PA7(OSC2/3=STM32 PB12/PB13)는 이미지상 입력. **사용자 결정 = measure-first**(벤치 스윕으로 실제 구동경로·방향 확정 후 출력단 구현).
+- **spec 초안** (`docs/superpowers/specs/2026-05-31-stage-d-slice1-regulation-core-design.md`, **리뷰 대기**): compute 파이프라인(신규 `app_reg.c`+`adc1.c`) + `app_lcd_measure()` 라이브화 + board.c 안전수정(마스크 정정+확정 3채널 idle-HIGH, PB12/PB13 제외)만; OSC GPIO 구동은 DEFERRED(§9). 결정 DP1=슈퍼루프 폴링 ADC / DP2=raw 카운트+측정보정(AVR 10-bit@2.56V vs F410 12-bit@3.3V 도메인 해저드, `>>2` 정규화 1차안) / DP3=spec→리뷰→plan→구현. 순수함수 `reg_scale`/`reg_output_level`은 TDD 단위테스트 대상.
+- **다음**: 사용자 spec 리뷰 → `writing-plans` → 구현(compute 먼저, 출력단은 측정 결과 수령 후).
+
 ### 2026-05-31 — STD comm 표시결함 해결(DGUS 에셋 root) + LCD 브랜치 HW 검증 완료 (통합/태그 대기)
 
 comm_mode 표시결함의 **root는 firmware 아니라 DGUS 패널 에셋**(page 27/23 위젯이 page-show 시 `DISP_COMM_MODE`(0x140c) auto-load 안 함; page 25는 함)임을 **교차테스트**(STD comm 진입을 page 25로 repoint→정상)로 확정 → 사용자가 에셋만 수정해 정상화 = 진단 입증. firmware는 coherent 수정 A/B/C/D 적용. 상세: `docs/superpowers/analysis/2026-05-31-std-comm-page27-display-port-faithful.md`, 핸드오프 `docs/superpowers/2026-05-31-HANDOFF-lcd-comm-display-resolved.md`.

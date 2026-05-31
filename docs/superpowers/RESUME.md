@@ -1,6 +1,13 @@
 # RESUME — 다음 세션
 
-> **상태 (2026-05-31, 마감)**: STD comm 표시결함 **해결 완료 — root = DGUS 에셋(page 27/23 위젯 auto-load 부재), firmware 아님**(교차테스트+사용자 에셋fix로 입증). 에셋fix `0eafe68` + firmware A/B/C/D `a0a631c` 적용·커밋. **§4 전체 HW 재검증 PASS**(트레이스+머지 PR 바이너리 양쪽: 진입 표시·토글 0x140B·DHCP 영속·Fix A sentinel·Fix B IP무손상). **cpp-reviewer APPROVED**(차단 0). 브랜치 **`feat/stage-lcd-full-behavior`** = **통합 준비 완료**(머지/PR + 태그 `hw-revA_fw-stage-lcd`). **다음 = STEP 1 Stage D slice 1.**
+> **상태 (2026-05-31 b, 마감)**: **Stage D slice 1 (레귤레이션 코어) — 분석 완료 + spec 초안·리뷰 대기.** disasm-adjudicated 분석(55-agent workflow, 3.7M tokens)으로 검증된 fact base 확정 → slice-1 spec 초안. **코드 변경 ✗**(분석+설계 단계). **다음 = 사용자 spec 리뷰 → `writing-plans` → 구현.**
+> - **검증 분석**: `docs/superpowers/analysis/2026-05-31-m16-regulation-core-verified.md` (29 bucket-A fact / 7 bucket-B; raw disasm = ground-truth, v001·재구성본은 hypothesis). **v001 5건 정정**: 스케일링 **×6**(>>6 아님 — 자기일관: >>6은 1000 clip 미도달), **단발 SW re-arm**(free-run 아님), Timer1 **0xFFB1**, 램프 **10단**, compare **`<`**. 파이프라인: 2ch 단발 ADC(ch0÷10/ch1÷50) → clip/floor/×6 → 21엔트리 내림차순 lookup → 패턴. 메모리 `project_m16_regulation_verified`.
+> - **spec 초안 (리뷰 대기)**: `docs/superpowers/specs/2026-05-31-stage-d-slice1-regulation-core-design.md`. compute 파이프라인(신규 `app_reg.c`+`adc1.c`)+`app_lcd_measure()` 라이브화+board.c 안전수정만; OSC 구동 **DEFERRED**. 결정: DP1 슈퍼루프 폴링 ADC / DP2 raw+측정보정(10-bit@2.56V vs 12-bit@3.3V 도메인, `>>2` 1차안) / DP3 spec→리뷰→plan→구현.
+> - **B-SEAM (measure-first, 사용자 결정)**: OSC 물리 구동경로 + PB12/PB13(OSC2/3 ← PC4/PA7, 이미지상 입력) 방향 = 이미지 부재 → 벤치 스윕 후 출력단 확정. compute는 이것 없이 완결·테스트 가능. board.c는 확정 3채널(PB2/PB10/PB14)만 idle-HIGH.
+> - 미커밋: 분석 doc + spec + changelog/RESUME (working tree). `ref/atmega16/M16_reverse/` 여전히 untracked(분석 ground-truth 소스 — 커밋 여부 사용자 결정).
+> - **이전 상태 (2026-05-31 a, LCD 마감)**: ↓ 아래 블록.
+
+> **상태 (2026-05-31 a, 마감)**: STD comm 표시결함 **해결 완료 — root = DGUS 에셋(page 27/23 위젯 auto-load 부재), firmware 아님**(교차테스트+사용자 에셋fix로 입증). 에셋fix `0eafe68` + firmware A/B/C/D `a0a631c` 적용·커밋. **§4 전체 HW 재검증 PASS**(트레이스+머지 PR 바이너리 양쪽: 진입 표시·토글 0x140B·DHCP 영속·Fix A sentinel·Fix B IP무손상). **cpp-reviewer APPROVED**(차단 0). 브랜치 **`feat/stage-lcd-full-behavior`** = **통합 준비 완료**(머지/PR + 태그 `hw-revA_fw-stage-lcd`). **다음 = STEP 1 Stage D slice 1.**
 > - **Fix 처분(확정)**: A/B/D 유지(독립 유효), **C 유지**(에셋 root fix로 redundant지만 사용자 결정으로 defense-in-depth 보존 — cpp-reviewer가 idempotent·무플리커·`temp-1` 언더플로우가드 확인). 진단 트레이스 `LCD_TRACE_RX` **유지**(머지 컴파일아웃 검증), `fw/build-trace/` gitignore.
 > - **§4 검증 로그 핵심**: 토글 `0x140B data=0/1/2 → page=23/27/27 tcm=0/1/2`(serial=STDC23, eth·dhcp=STDE27 = 패널 의도 2-레이아웃; 지난 세션 `page=9` 이탈 **재현 안 됨**). DHCP 저장→`boot cm=2 ip=192.168.1.128`. 머지 PR 바이너리 시각 sanity OK. 상세: `…/analysis/2026-05-31-std-comm-page27-display-port-faithful.md`, 핸드오프 `…/2026-05-31-HANDOFF-lcd-comm-display-resolved.md`.
 
@@ -22,8 +29,10 @@ git log --oneline -4                          # tip = acb4be1 (Merge LCD full be
 git tag -l 'hw-revA*'                         # ...-stage-a, -stage-b, -stage-lcd
 git branch                                    # feat/stage-d-osc-pin-io (Stage D, 미머지) 존재
 cd fw && env -u STM32_TOOLCHAIN cmake --build build   # 0-warning (FLASH 26.86%/RAM 10.16%)
-# 다음 작업 = ▼ STEP 1 Stage D slice 1 (레귤레이션 코어). project_atmega16_absorption 참조.
-# (옛 pin-I/O spec은 RETIRED, slice 1 = spec-first 신규 작성)
+# 다음 작업 = slice-1 spec 리뷰 → writing-plans → 구현 (▼ STEP 1).
+# 분석 완료: docs/superpowers/analysis/2026-05-31-m16-regulation-core-verified.md
+# spec 초안(리뷰 대기): docs/superpowers/specs/2026-05-31-stage-d-slice1-regulation-core-design.md
+# (옛 pin-I/O spec은 RETIRED)
 ```
 
 > 진단 가시화가 필요하면 `-DLCD_TRACE_RX` 트레이스 빌드(별도 `build-trace/`, CMakeLists에 한 줄 추가→빌드→원복→`build-trace/...elf` 플래시): `[lcd] rx vp=.. data=..` + `[lcd] commit cm temp=.. cfg=..` + `[lcd] boot cm=.. ip=..` 출력. 시리얼 리셋 글리치로 부팅줄 NULL 플러드가 섞이니 `tr -d '\000' < log | tr -s ' ' | grep '\['`로 정리해 읽기.
@@ -54,7 +63,9 @@ USART6 mon(@115200) = `/dev/cu.usbserial-BG02DMWU`. 단일-fd 캡처:
 
 ---
 
-### ▶ STEP 1 — Stage D slice 1: 레귤레이션 코어 (LCD 머지 후 재개, spec-first, 측정 게이트 해제됨)
+### ▶ STEP 1 — Stage D slice 1: 레귤레이션 코어 (spec-first, 측정 게이트 해제됨)
+
+> **진행 (2026-05-31 b)**: ✅ 분석 완료(검증 doc, advisor 통과) + ✅ spec 초안 작성. **현재 = 사용자 spec 리뷰 대기** → 통과 시 `writing-plans` → 구현. 상세는 최상단 상태 블록 + spec 문서. 아래는 원 slice 정의(spec에 반영됨, 참조용).
 
 LCD 머지 뒤 재개. **slice 1 spec 작성** (`docs/superpowers/specs/`) → 사용자 리뷰 → `writing-plans` → 구현. Stage D는 LCD의 `lcd_measure_t` provider(측정값) + 스텁 훅 실체(us_command/set_pot 등)를 채우는 형태로 자연 통합됨. (brainstorming 완료 — 프레이밍/슬라이스 확정.)
 
