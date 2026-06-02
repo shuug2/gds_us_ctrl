@@ -687,15 +687,19 @@ This task is **manual / interactive** (needs the physical board + USART6 monitor
 
 - [ ] **Step 1: Build a trace image**
 
-Add the trace define for a one-off build (do NOT commit this edit — mirror the `LCD_TRACE_RX` pattern):
+Add the trace define for a one-off build (no committed edit — pass the define via flags):
 ```bash
 cd fw
-env -u STM32_TOOLCHAIN cmake -B build-trace -G Ninja -DCMAKE_C_FLAGS="-DREG_TRACE"
+# NOTE: -DCMAKE_C_FLAGS OVERRIDES the cache, so the toolchain's CMAKE_C_FLAGS_INIT
+# (the -mcpu/-mthumb/-mfpu/-mfloat-abi CPU flags) is dropped -> ARM-mode build fails
+# ("selected processor does not support `wfi'"). Pass the CPU flags back alongside -DREG_TRACE:
+env -u STM32_TOOLCHAIN cmake -B build-trace -G Ninja \
+  -DCMAKE_C_FLAGS="-mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard -DREG_TRACE"
 env -u STM32_TOOLCHAIN cmake --build build-trace
 ```
-Expected: 0-warning build; `build-trace/gds_us_ctrl.elf`.
+Expected: 0-warning build; `build-trace/gds_us_ctrl.elf` (FLASH ~28.45% / RAM ~10.57%; trace strings add a little over the non-trace image).
 
-> `build-trace/` is already git-ignored. Reuse the existing pattern from RESUME (`-DLCD_TRACE_RX`).
+> `build-trace/` is already git-ignored. (The CPU flags must match `arm-none-eabi-gcc.cmake` `CPU_FLAGS`; the `-DLCD_TRACE_RX` RESUME pattern instead edits CMakeLists, which avoids this — either works.)
 
 - [ ] **Step 2: Flash and open the monitor**
 

@@ -4,7 +4,7 @@
 > - **plan**: `docs/superpowers/plans/2026-05-31-stage-d-slice1-regulation-core.md` (Task 1~5 = 구현 완료/커밋; Task 6 = HW 검증, 미실행).
 > - **구현 산출물**: 신규 `app_reg_calc.{c,h}`(순수 `reg_scale`/`reg_output_level`+table, HAL-free, 호스트 테스트 `fw/test/`) + `adc1.{c,h}`(ADC1 폴링 PB0/PB1) + `app_reg.{c,h}`(2ms 틱, 10/50 평균, scale+lookup, `lcd_measure_t` 발행). 통합: `main.c`/`app.c`/`app_lcd.c`. `board.c` OSC 마스크 정정 + 3채널 idle-HIGH. `CMakeLists`+adc HAL·SYSTEM include, `hal_conf.h` ADC 모듈 enable. **FLASH 28.39%/RAM 10.55%**.
 > - **spec 정제 3건**(plan §Deviations): 순수함수 분리(호스트테스트)/adc1 얇은 페리페럴 계층/`reg_output_level`=band index만(C-LADDER 패턴바이트 맵은 출력단=B-SEAM과 함께 DEFERRED=YAGNI, pure-add 후속).
-> - **Task 6 HW 검증 (다음, 사용자+보드)**: `env -u STM32_TOOLCHAIN cmake -B build-trace -G Ninja -DCMAKE_C_FLAGS="-DREG_TRACE"` → 플래시 → mon `[reg] ch0/ch1/scaled/band`; PB0 주입 시 ch0 추종·×6/clip·band 단계 + LCD bar 이동 + PB2/PB10/PB14 idle-HIGH·OSC 무구동·PB15 NC 확인. 상세 = plan Task 6.
+> - **Task 6 HW 검증 (다음, 사용자+보드)**: 트레이스 빌드 = `env -u STM32_TOOLCHAIN cmake -B build-trace -G Ninja -DCMAKE_C_FLAGS="-mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard -DREG_TRACE"`(⚠ CPU 플래그 함께 — `-DCMAKE_C_FLAGS`는 캐시를 덮어써 툴체인 `CMAKE_C_FLAGS_INIT`의 CPU 플래그가 날아가 ARM-mode 빌드 실패. 2026-06-02 정정) → 플래시 → mon `[reg] ch0/ch1/scaled/band`; PB0 주입 시 ch0 추종·×6/clip·band 단계 + LCD bar 이동 + PB2/PB10/PB14 idle-HIGH·OSC 무구동·PB15 NC 확인. 상세 = plan Task 6.
 > - 미커밋: changelog/RESUME/NEXT_STEPS doc + 메모리(working tree). `ref/atmega16/M16_reverse/` 여전히 untracked(분석 ground-truth — 커밋 여부 사용자 결정).
 > - **이전 상태 (2026-05-31 b)**: ↓ Stage D 분석 완료 + spec 초안 (구현 전).
 
