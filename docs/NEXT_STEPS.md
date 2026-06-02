@@ -6,7 +6,7 @@
 
 ## 1. 현재 상태 (2026-05-25 기준)
 
-> **⚠ 활성 작업 (2026-06-01 갱신) — 아래 표보다 우선**: LCD 포팅 = ✅ main 머지 완료(`acb4be1`, tag `hw-revA_fw-stage-lcd`). **Stage D slice 1 (레귤레이션 코어 compute) = 구현 완료** — 브랜치 **`feat/stage-d-regulation-core`** (main 미머지). spec→plan→inline 구현(6 커밋), 빌드 0-warning, 호스트 단위테스트 PASS, **cpp-reviewer APPROVED**. **compute 파이프라인만**(2ch ADC→×6 scale→21엔트리 lookup→`lcd_measure_t` 발행); OSC 물리 구동 = **B-SEAM 벤치 측정까지 DEFERRED**. **남은 작업 = Task 6 실보드 HW 검증(REG_TRACE) → 통과 시 머지/PR + 태그.** 정밀 상태 = `docs/superpowers/RESUME.md`(자동 로드)·`docs/changelog.md 2026-06-01`·plan `docs/superpowers/plans/2026-05-31-stage-d-slice1-regulation-core.md`. 아래 1.1 표는 Stage A/B 머지 시점(2026-05-25) 스냅샷.
+> **⚠ 활성 작업 (2026-06-01 갱신) — 아래 표보다 우선**: LCD 포팅 = ✅ main 머지 완료(`acb4be1`, tag `hw-revA_fw-stage-lcd`). **Stage D slice 1 (레귤레이션 코어 compute) = 구현 완료** — 브랜치 **`feat/stage-d-regulation-core`** (main 미머지). spec→plan→inline 구현(6 커밋), 빌드 0-warning, 호스트 단위테스트 PASS, **cpp-reviewer APPROVED**. **compute 파이프라인만**(2ch ADC→×6 scale→21엔트리 lookup→`lcd_measure_t` 발행); OSC 물리 구동 = **B-SEAM 벤치 측정까지 DEFERRED**. **(2026-06-02 갱신) HW 기능검증 6a = PASS** (compute liveness/무회귀/OSC idle-HIGH 스코프/LCD provider). Task 6은 6a(기능, 완료) + **6b(신호 calibration, HW 준비 후 = DEFERRED)** 로 분리. **남은 작업 = slice 1 머지/PR + 태그 `hw-revA_fw-stage-d` (6b는 추적 후속).** 정밀 상태 = `docs/superpowers/RESUME.md`(자동 로드)·`docs/changelog.md 2026-06-01`·plan `docs/superpowers/plans/2026-05-31-stage-d-slice1-regulation-core.md`. 아래 1.1 표는 Stage A/B 머지 시점(2026-05-25) 스냅샷.
 
 ### 1.1 슬라이스 현황
 

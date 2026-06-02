@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+### 2026-06-02 — Stage D slice 1 HW 기능검증(6a) PASS + Task 6 분리(6b calibration HW-gated)
+
+실보드 HW 검증 진행. 전압 가변 소스 부재로 Task 6을 **6a(기능/구조, 지금 가능)** + **6b(신호 calibration, HW 준비 후)** 로 분리(사용자 결정 = measure-first). 6a 전체 PASS → slice 1(compute, 출력 deferred)은 설계대로 통합 준비 완료. compute 수식은 호스트 단위테스트가 전 범위 커버.
+
+- **트레이스 빌드 명령 정정** (`879f43e`): plan Task 6 / RESUME의 `-DCMAKE_C_FLAGS="-DREG_TRACE"`가 캐시를 덮어써 툴체인 `CMAKE_C_FLAGS_INIT`의 CPU 플래그(-mcpu/-mthumb/-mfpu/-mfloat-abi)를 날려 ARM-mode 빌드 실패 → CPU 플래그를 함께 전달하도록 정정. 트레이스 ELF 0-warning, FLASH 28.45%/RAM 10.57%.
+- **6a 기능/구조 검증 PASS** (REG_TRACE 빌드, 사용자+보드):
+  - 6a-1 compute liveness: `[reg] ch0/ch1/scaled/band` ~500ms cadence. floating(신호 미연결) 시 ch0=3~5→scaled=18/24/30(**×6 라이브 확인**), 실 SENS_OUT 연결 후 ch0=0→**scaled=0(floor SCALE-05)→band=21(no-match off)** = scale 2분기+lookup off 경로 라이브 확인.
+  - 6a-2 무회귀: `[boot]/[lcd] ready/[cfg]` 배너 정상 + LCD 네비게이션 락업 없음.
+  - 6a-3 OSC 안전: **PB2/PB10/PB14 idle-HIGH 스코프 확인**(active-LOW=off, C6), OSC 무구동, PB12/PB13 미구동.
+  - 6a-4 LCD provider live: idle scaled=0 → **VAR_POWER=0 표시 정상**(provider 라이브, garbage/stuck 아님).
+- **6b 신호 calibration (DEFERRED, HW 준비 후)**: ① `>>2` 12→10bit 정규화 + 2.56V↔3.3V 레퍼런스 도메인 보정(DP2 first-cut→실측) ② ch0_avg/adc_scaled_value 물리단위 바인딩(B-UNITS/B3) ③ ADC offset/gain ④ OSC 출력 경로·비트매핑·극성(B-OSC-MAP/B-SEAM) + PB12/PB13 방향 확정. 전압 가변 + 실 초음파 구동 필요.
+- **설명 문서 신규** (`docs/superpowers/analysis/2026-06-02-m16-to-stm32-port-explained.md`): M16→STM32 포팅을 compute(알고리즘) + I/O(핀) 두 축으로 정리한 핸드오프/teaching 문서(권위 소스 아님, 참조 명시).
+
 ### 2026-06-01 — Stage D slice 1 구현 완료 (레귤레이션 코어 compute, 출력단 DEFERRED) — HW 검증 대기
 
 브랜치 **`feat/stage-d-regulation-core`** (main 미머지). spec(`…/specs/2026-05-31-stage-d-slice1-regulation-core-design.md`) → plan(`…/plans/2026-05-31-stage-d-slice1-regulation-core.md`) → inline 구현. **compute 파이프라인만**(OSC 물리 구동 = B-SEAM, 벤치 측정까지 DEFERRED). 빌드 0-warning, 호스트 단위테스트 PASS, **cpp-reviewer APPROVED**(차단 0). **남은 것 = 실보드 HW 검증(REG_TRACE) → 머지/태그.**

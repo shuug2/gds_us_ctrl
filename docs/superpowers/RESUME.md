@@ -1,5 +1,10 @@
 # RESUME — 다음 세션
 
+> **상태 (2026-06-02, 마감)**: **Stage D slice 1 (레귤레이션 코어 compute) — HW 기능검증(6a) PASS, 통합 준비 완료.** 실보드 검증에서 Task 6을 **6a(기능/구조, 전압스윕 불필요)** + **6b(신호 calibration, HW 준비 후)** 로 분리(measure-first). **6a 전체 PASS**: compute liveness(×6 + floor→0 + band21 라이브), 무회귀(배너+LCD 네비), OSC 안전(PB2/PB10/PB14 idle-HIGH 스코프), LCD provider live(VAR_POWER=0). 펌웨어 빌드 0-warning, 호스트 단위테스트 `all checks PASSED`, cpp-reviewer는 코드 미변경분 APPROVED 유지. 브랜치 **`feat/stage-d-regulation-core`** (main 미머지). **다음 = finishing-a-development-branch 선택(머지/PR) + 태그 `hw-revA_fw-stage-d`. 6b calibration = 추적 후속(HW-gated).**
+> - **6b calibration (DEFERRED, HW 준비 후)**: `>>2` 정규화 + 2.56V↔3.3V 도메인 실측 보정(DP2) / ch0_avg·scaled 물리단위(B-UNITS/B3) / ADC offset·gain / OSC 출력경로·비트매핑·극성(B-OSC-MAP/B-SEAM) + PB12/PB13 방향. 전압 가변 + 실 초음파 구동 필요.
+> - **설명 문서**: `docs/superpowers/analysis/2026-06-02-m16-to-stm32-port-explained.md` (M16→STM32 포팅 compute+I/O 정리, 핸드오프용).
+> - **이전 상태 (2026-06-01)**: ↓ 구현 완료, HW 검증 대기.
+
 > **상태 (2026-06-01, 마감)**: **Stage D slice 1 (레귤레이션 코어) — 구현 완료, 실보드 HW 검증 대기.** spec → plan(`writing-plans`) → inline 구현(6 커밋). **compute 파이프라인만**(OSC 물리 구동 = B-SEAM, 벤치 측정까지 DEFERRED). 빌드 0-warning, 호스트 단위테스트 PASS, **cpp-reviewer APPROVED**(차단 0). 브랜치 **`feat/stage-d-regulation-core`** (main 미머지). **다음 = Task 6 HW 검증(REG_TRACE, 사용자+보드) → 통과 시 머지/PR + 태그.**
 > - **plan**: `docs/superpowers/plans/2026-05-31-stage-d-slice1-regulation-core.md` (Task 1~5 = 구현 완료/커밋; Task 6 = HW 검증, 미실행).
 > - **구현 산출물**: 신규 `app_reg_calc.{c,h}`(순수 `reg_scale`/`reg_output_level`+table, HAL-free, 호스트 테스트 `fw/test/`) + `adc1.{c,h}`(ADC1 폴링 PB0/PB1) + `app_reg.{c,h}`(2ms 틱, 10/50 평균, scale+lookup, `lcd_measure_t` 발행). 통합: `main.c`/`app.c`/`app_lcd.c`. `board.c` OSC 마스크 정정 + 3채널 idle-HIGH. `CMakeLists`+adc HAL·SYSTEM include, `hal_conf.h` ADC 모듈 enable. **FLASH 28.39%/RAM 10.55%**.
