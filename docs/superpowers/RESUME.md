@@ -1,5 +1,18 @@
 # RESUME — 다음 세션
 
+> **상태 (2026-06-02, 마감)**: **Stage D slice 1 (레귤레이션 코어 compute) — HW 기능검증(6a) PASS, 통합 준비 완료.** 실보드 검증에서 Task 6을 **6a(기능/구조, 전압스윕 불필요)** + **6b(신호 calibration, HW 준비 후)** 로 분리(measure-first). **6a 전체 PASS**: compute liveness(×6 + floor→0 + band21 라이브), 무회귀(배너+LCD 네비), OSC 안전(PB2/PB10/PB14 idle-HIGH 스코프), LCD provider live(VAR_POWER=0). 펌웨어 빌드 0-warning, 호스트 단위테스트 `all checks PASSED`, cpp-reviewer는 코드 미변경분 APPROVED 유지. 브랜치 **`feat/stage-d-regulation-core`** (main 미머지). **다음 = finishing-a-development-branch 선택(머지/PR) + 태그 `hw-revA_fw-stage-d`. 6b calibration = 추적 후속(HW-gated).**
+> - **6b calibration (DEFERRED, HW 준비 후)**: `>>2` 정규화 + 2.56V↔3.3V 도메인 실측 보정(DP2) / ch0_avg·scaled 물리단위(B-UNITS/B3) / ADC offset·gain / OSC 출력경로·비트매핑·극성(B-OSC-MAP/B-SEAM) + PB12/PB13 방향. 전압 가변 + 실 초음파 구동 필요.
+> - **설명 문서**: `docs/superpowers/analysis/2026-06-02-m16-to-stm32-port-explained.md` (M16→STM32 포팅 compute+I/O 정리, 핸드오프용).
+> - **이전 상태 (2026-06-01)**: ↓ 구현 완료, HW 검증 대기.
+
+> **상태 (2026-06-01, 마감)**: **Stage D slice 1 (레귤레이션 코어) — 구현 완료, 실보드 HW 검증 대기.** spec → plan(`writing-plans`) → inline 구현(6 커밋). **compute 파이프라인만**(OSC 물리 구동 = B-SEAM, 벤치 측정까지 DEFERRED). 빌드 0-warning, 호스트 단위테스트 PASS, **cpp-reviewer APPROVED**(차단 0). 브랜치 **`feat/stage-d-regulation-core`** (main 미머지). **다음 = Task 6 HW 검증(REG_TRACE, 사용자+보드) → 통과 시 머지/PR + 태그.**
+> - **plan**: `docs/superpowers/plans/2026-05-31-stage-d-slice1-regulation-core.md` (Task 1~5 = 구현 완료/커밋; Task 6 = HW 검증, 미실행).
+> - **구현 산출물**: 신규 `app_reg_calc.{c,h}`(순수 `reg_scale`/`reg_output_level`+table, HAL-free, 호스트 테스트 `fw/test/`) + `adc1.{c,h}`(ADC1 폴링 PB0/PB1) + `app_reg.{c,h}`(2ms 틱, 10/50 평균, scale+lookup, `lcd_measure_t` 발행). 통합: `main.c`/`app.c`/`app_lcd.c`. `board.c` OSC 마스크 정정 + 3채널 idle-HIGH. `CMakeLists`+adc HAL·SYSTEM include, `hal_conf.h` ADC 모듈 enable. **FLASH 28.39%/RAM 10.55%**.
+> - **spec 정제 3건**(plan §Deviations): 순수함수 분리(호스트테스트)/adc1 얇은 페리페럴 계층/`reg_output_level`=band index만(C-LADDER 패턴바이트 맵은 출력단=B-SEAM과 함께 DEFERRED=YAGNI, pure-add 후속).
+> - **Task 6 HW 검증 (다음, 사용자+보드)**: 트레이스 빌드 = `env -u STM32_TOOLCHAIN cmake -B build-trace -G Ninja -DCMAKE_C_FLAGS="-mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard -DREG_TRACE"`(⚠ CPU 플래그 함께 — `-DCMAKE_C_FLAGS`는 캐시를 덮어써 툴체인 `CMAKE_C_FLAGS_INIT`의 CPU 플래그가 날아가 ARM-mode 빌드 실패. 2026-06-02 정정) → 플래시 → mon `[reg] ch0/ch1/scaled/band`; PB0 주입 시 ch0 추종·×6/clip·band 단계 + LCD bar 이동 + PB2/PB10/PB14 idle-HIGH·OSC 무구동·PB15 NC 확인. 상세 = plan Task 6.
+> - 미커밋: changelog/RESUME/NEXT_STEPS doc + 메모리(working tree). `ref/atmega16/M16_reverse/` 여전히 untracked(분석 ground-truth — 커밋 여부 사용자 결정).
+> - **이전 상태 (2026-05-31 b)**: ↓ Stage D 분석 완료 + spec 초안 (구현 전).
+
 > **상태 (2026-05-31 b, 마감)**: **Stage D slice 1 (레귤레이션 코어) — 분석 완료 + spec 초안·리뷰 대기.** disasm-adjudicated 분석(55-agent workflow, 3.7M tokens)으로 검증된 fact base 확정 → slice-1 spec 초안. **코드 변경 ✗**(분석+설계 단계). **다음 = 사용자 spec 리뷰 → `writing-plans` → 구현.**
 > - **검증 분석**: `docs/superpowers/analysis/2026-05-31-m16-regulation-core-verified.md` (29 bucket-A fact / 7 bucket-B; raw disasm = ground-truth, v001·재구성본은 hypothesis). **v001 5건 정정**: 스케일링 **×6**(>>6 아님 — 자기일관: >>6은 1000 clip 미도달), **단발 SW re-arm**(free-run 아님), Timer1 **0xFFB1**, 램프 **10단**, compare **`<`**. 파이프라인: 2ch 단발 ADC(ch0÷10/ch1÷50) → clip/floor/×6 → 21엔트리 내림차순 lookup → 패턴. 메모리 `project_m16_regulation_verified`.
 > - **spec 초안 (리뷰 대기)**: `docs/superpowers/specs/2026-05-31-stage-d-slice1-regulation-core-design.md`. compute 파이프라인(신규 `app_reg.c`+`adc1.c`)+`app_lcd_measure()` 라이브화+board.c 안전수정만; OSC 구동 **DEFERRED**. 결정: DP1 슈퍼루프 폴링 ADC / DP2 raw+측정보정(10-bit@2.56V vs 12-bit@3.3V 도메인, `>>2` 1차안) / DP3 spec→리뷰→plan→구현.
@@ -24,15 +37,13 @@
 
 ```bash
 cd /Users/tknoh/dev/work/gds_us_ctrl
-git checkout main                             # ✅ LCD 머지 완료 (acb4be1, tag hw-revA_fw-stage-lcd) — feat/stage-lcd-full-behavior 삭제됨
-git log --oneline -4                          # tip = acb4be1 (Merge LCD full behavior port)
-git tag -l 'hw-revA*'                         # ...-stage-a, -stage-b, -stage-lcd
-git branch                                    # feat/stage-d-osc-pin-io (Stage D, 미머지) 존재
-cd fw && env -u STM32_TOOLCHAIN cmake --build build   # 0-warning (FLASH 26.86%/RAM 10.16%)
-# 다음 작업 = slice-1 spec 리뷰 → writing-plans → 구현 (▼ STEP 1).
-# 분석 완료: docs/superpowers/analysis/2026-05-31-m16-regulation-core-verified.md
-# spec 초안(리뷰 대기): docs/superpowers/specs/2026-05-31-stage-d-slice1-regulation-core-design.md
-# (옛 pin-I/O spec은 RETIRED)
+git checkout feat/stage-d-regulation-core     # Stage D slice 1 구현 브랜치 (main 미머지, tip = adc1 L1/L2 fix)
+git log --oneline -7                           # d9c4801(spec) → 751639c(calc) → a134f7b(adc1) → d20ffe4(app_reg) → b64c205(wire) → dfecd3e(board) → d2942ad(adc1 fix)
+cd fw && env -u STM32_TOOLCHAIN cmake --build build   # 0-warning (FLASH 28.39%/RAM 10.55%)
+make -C test test                              # 호스트 순수함수 테스트 = all checks PASSED
+# 다음 작업 = Task 6 HW 검증 (▼ STEP 1) → 통과 시 머지/PR + 태그.
+# plan: docs/superpowers/plans/2026-05-31-stage-d-slice1-regulation-core.md (Task 6)
+# (옛 pin-I/O spec·br019 feat/stage-d-osc-pin-io = RETIRED)
 ```
 
 > 진단 가시화가 필요하면 `-DLCD_TRACE_RX` 트레이스 빌드(별도 `build-trace/`, CMakeLists에 한 줄 추가→빌드→원복→`build-trace/...elf` 플래시): `[lcd] rx vp=.. data=..` + `[lcd] commit cm temp=.. cfg=..` + `[lcd] boot cm=.. ip=..` 출력. 시리얼 리셋 글리치로 부팅줄 NULL 플러드가 섞이니 `tr -d '\000' < log | tr -s ' ' | grep '\['`로 정리해 읽기.
@@ -65,7 +76,7 @@ USART6 mon(@115200) = `/dev/cu.usbserial-BG02DMWU`. 단일-fd 캡처:
 
 ### ▶ STEP 1 — Stage D slice 1: 레귤레이션 코어 (spec-first, 측정 게이트 해제됨)
 
-> **진행 (2026-05-31 b)**: ✅ 분석 완료(검증 doc, advisor 통과) + ✅ spec 초안 작성. **현재 = 사용자 spec 리뷰 대기** → 통과 시 `writing-plans` → 구현. 상세는 최상단 상태 블록 + spec 문서. 아래는 원 slice 정의(spec에 반영됨, 참조용).
+> **진행 (2026-06-01)**: ✅ 분석 → ✅ spec → ✅ plan(`writing-plans`) → ✅ **구현 완료**(Task 1~5, 6 커밋, 빌드 0-warning, 호스트 테스트 PASS, cpp-reviewer APPROVED). **현재 = Task 6 실보드 HW 검증 대기**(REG_TRACE, 사용자+보드) → 통과 시 머지/PR + 태그. 상세 = 최상단 상태 블록 + plan 문서. 아래는 원 slice 정의(구현됨, 참조용).
 
 LCD 머지 뒤 재개. **slice 1 spec 작성** (`docs/superpowers/specs/`) → 사용자 리뷰 → `writing-plans` → 구현. Stage D는 LCD의 `lcd_measure_t` provider(측정값) + 스텁 훅 실체(us_command/set_pot 등)를 채우는 형태로 자연 통합됨. (brainstorming 완료 — 프레이밍/슬라이스 확정.)
 

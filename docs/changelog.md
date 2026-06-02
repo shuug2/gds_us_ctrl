@@ -2,6 +2,32 @@
 
 ## [Unreleased]
 
+### 2026-06-02 — Stage D slice 1 HW 기능검증(6a) PASS + Task 6 분리(6b calibration HW-gated)
+
+실보드 HW 검증 진행. 전압 가변 소스 부재로 Task 6을 **6a(기능/구조, 지금 가능)** + **6b(신호 calibration, HW 준비 후)** 로 분리(사용자 결정 = measure-first). 6a 전체 PASS → slice 1(compute, 출력 deferred)은 설계대로 통합 준비 완료. compute 수식은 호스트 단위테스트가 전 범위 커버.
+
+- **트레이스 빌드 명령 정정** (`879f43e`): plan Task 6 / RESUME의 `-DCMAKE_C_FLAGS="-DREG_TRACE"`가 캐시를 덮어써 툴체인 `CMAKE_C_FLAGS_INIT`의 CPU 플래그(-mcpu/-mthumb/-mfpu/-mfloat-abi)를 날려 ARM-mode 빌드 실패 → CPU 플래그를 함께 전달하도록 정정. 트레이스 ELF 0-warning, FLASH 28.45%/RAM 10.57%.
+- **6a 기능/구조 검증 PASS** (REG_TRACE 빌드, 사용자+보드):
+  - 6a-1 compute liveness: `[reg] ch0/ch1/scaled/band` ~500ms cadence. floating(신호 미연결) 시 ch0=3~5→scaled=18/24/30(**×6 라이브 확인**), 실 SENS_OUT 연결 후 ch0=0→**scaled=0(floor SCALE-05)→band=21(no-match off)** = scale 2분기+lookup off 경로 라이브 확인.
+  - 6a-2 무회귀: `[boot]/[lcd] ready/[cfg]` 배너 정상 + LCD 네비게이션 락업 없음.
+  - 6a-3 OSC 안전: **PB2/PB10/PB14 idle-HIGH 스코프 확인**(active-LOW=off, C6), OSC 무구동, PB12/PB13 미구동.
+  - 6a-4 LCD provider live: idle scaled=0 → **VAR_POWER=0 표시 정상**(provider 라이브, garbage/stuck 아님).
+- **6b 신호 calibration (DEFERRED, HW 준비 후)**: ① `>>2` 12→10bit 정규화 + 2.56V↔3.3V 레퍼런스 도메인 보정(DP2 first-cut→실측) ② ch0_avg/adc_scaled_value 물리단위 바인딩(B-UNITS/B3) ③ ADC offset/gain ④ OSC 출력 경로·비트매핑·극성(B-OSC-MAP/B-SEAM) + PB12/PB13 방향 확정. 전압 가변 + 실 초음파 구동 필요.
+- **설명 문서 신규** (`docs/superpowers/analysis/2026-06-02-m16-to-stm32-port-explained.md`): M16→STM32 포팅을 compute(알고리즘) + I/O(핀) 두 축으로 정리한 핸드오프/teaching 문서(권위 소스 아님, 참조 명시).
+
+### 2026-06-01 — Stage D slice 1 구현 완료 (레귤레이션 코어 compute, 출력단 DEFERRED) — HW 검증 대기
+
+브랜치 **`feat/stage-d-regulation-core`** (main 미머지). spec(`…/specs/2026-05-31-stage-d-slice1-regulation-core-design.md`) → plan(`…/plans/2026-05-31-stage-d-slice1-regulation-core.md`) → inline 구현. **compute 파이프라인만**(OSC 물리 구동 = B-SEAM, 벤치 측정까지 DEFERRED). 빌드 0-warning, 호스트 단위테스트 PASS, **cpp-reviewer APPROVED**(차단 0). **남은 것 = 실보드 HW 검증(REG_TRACE) → 머지/태그.**
+
+- **신규 `app_reg_calc.{c,h}` (HAL-free, 호스트 테스트)**: `reg_scale`(SCALE-04/05/06: `in≥1000→1000` / `in<3→0` / else `in×6`, 의도적 불연속) + `reg_output_level`(C2: 21엔트리 strictly-less lookup, no-match→21) + `reg_lookup_table[24]`(§4.3 byte-exact). 순수함수 분리 = spec §12 호스트 TDD를 실제 실행 가능하게(레포에 테스트 하네스 부재 → `fw/test/Makefile` + assert 하네스 신설). TDD RED→GREEN.
+- **신규 `adc1.{c,h}` 드라이버**: ADC1 init(12-bit, SW 트리거, 폴링) + `adc1_read(ch)` raw 12-bit; semantic 채널 enum→ADC_CHANNEL_8/9(PB0/PB1). cpp-reviewer L1/L2: `HAL_ADC_Start`/`PollForConversion` 실패 시 `Error_Handler`(타임아웃 스테일 샘플 누산 방지, 드라이버 기존 체크와 일관).
+- **신규 `app_reg.{c,h}` 상태 모듈**: `app_reg_tick()` 2ms `sys_tick` 델타 게이트 → ch0/ch1 교대 1변환/틱, `>>2` 정규화, mean-of-10/50 누산·커밋 → 최신 `ch0_avg`에 scale+lookup → `lcd_measure_t` 발행(curr_amp=ch0_avg, curr/max/last_power=adc_scaled_value; freq/energy/status=0). OSC GPIO 미구동.
+- **통합**: `main.c` `app_reg_init()`(app_init 뒤) / `app.c` `app_reg_tick()`(슈퍼루프 step 3) / `app_lcd.c` `app_lcd_measure()`→`app_reg_measure()`(스텁 라이브화).
+- **board.c 안전수정**: `CTRL_OSC_OUT_PINS = PB2|PB10|PB14`(옛 마스크 PB10|PB12|PB13|PB14|PB15 정정 — PB2 누락·PB15 spurious) + 확정 3채널 idle-HIGH(active-LOW=off, C6); PB12/PB13(OSC2/3←PC4/PA7, 이미지상 입력 C7)은 미설정(B-OSC-MAP 측정 대기).
+- **빌드**: `CMakeLists` + `stm32f4xx_hal_adc.c`, vendor include `SYSTEM`(LL ADC 헤더 `-Wunused-parameter`가 앱 0-warning 게이트 깨던 것 차단); `hal_conf.h` `HAL_ADC_MODULE_ENABLED`(앱레벨 config, I2C/TIM 선례 동일). **FLASH 26.86→28.39% / RAM 10.16→10.55%**.
+- **의도적 spec 정제 3건**: ①순수함수 `app_reg_calc`로 분리(호스트 테스트). ②`adc1`은 얇은 페리페럴 계층(정규화/누산은 app_reg). ③`reg_output_level`은 band index만 반환 — band→thermometer 패턴바이트 맵(C-LADDER)은 출력단(B-SEAM)과 함께 DEFERRED(slice 1에서 미표시·미구동 = YAGNI, pure-add로 후속 가능).
+- **다음**: Task 6 HW 검증(`-DREG_TRACE` 빌드 → PB0 주입 → ch0/scaled/band 추종 + LCD bar 확인 + PB2/10/14 idle-HIGH + PB15 NC 확인) → 머지/PR + 태그.
+
 ### 2026-05-31 (후속) — Stage D slice 1 분석 완료 + spec 초안 (레귤레이션 코어, 코드 변경 ✗)
 
 ATmega16 레귤레이션 코어를 STM32F410으로 흡수하는 Stage D slice 1 착수. disasm-adjudicated 다중소스 분석(55-agent workflow, 3.7M tokens) → spec 초안. **코드 변경 없음**(분석+설계 단계, spec 리뷰 대기).

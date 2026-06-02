@@ -7,6 +7,7 @@
 #include "dgus_lcd.h"
 #include "app_config.h"
 #include "app_lcd.h"
+#include "app_reg.h"
 
 void app_init(void)
 {
@@ -72,4 +73,7 @@ void app_loop_iter(void)
 
     /* 2. Display step machine — 4 ms cadence (spec §11), one VP-group per step. */
     app_lcd_tick();
+
+    /* 3. Regulation core — ~2 ms cadence (spec §6), compute-only this slice. */
+    app_reg_tick();
 }
