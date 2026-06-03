@@ -40,8 +40,6 @@
  * as on. With the all-zero stub both readings are identical (idle/last path, all
  * zeros). Stage D, when it fills us_run_status with real FSM states, gets the
  * intended curr/max display for every non-idle state. */
-#define US_IDLE  0u
-
 /* Bar buffers — file-static, computed once on the compute step then sent in chunks
  * (samd20 globals level_buf[20] / out_time_buf[20]). uint16_t so the 5-element
  * dgus_write_u16_array carries one word per LCD bar slot. */
