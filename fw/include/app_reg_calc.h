@@ -19,3 +19,10 @@ uint16_t reg_scale(uint16_t in);
  * Returns the FIRST band index i in 0..20 where reg_lookup_table[i] < scaled
  * (strictly-less). No match -> 21 (output off / fall-through @0x15B2). */
 uint8_t reg_output_level(uint16_t scaled);
+
+/* Soft-start ramp (slice 2a): counter (0..401, ~10 ms/step) -> scaled-domain
+ * output setpoint. 10-rung thermometer fill of M16 app_0x1226 (recon :249-258),
+ * scaled as fill_bits*128, saturating at full (1024) from rung 7. The exact
+ * pattern bytes (g_019F 2nd stage / PORTC bit) -> OSC mapping is deferred
+ * (B-SEAM), same as the lookup C-LADDER. Monotone non-decreasing. */
+uint16_t reg_ramp_level(uint16_t counter);

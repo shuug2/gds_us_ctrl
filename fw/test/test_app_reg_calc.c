@@ -60,10 +60,34 @@ static void test_table_values(void) {
     }
 }
 
+/* slice 2a soft-start ramp: 10-rung threshold ladder (M16 app_0x1226 recon
+ * :249-258). thresholds {41,81,...,401}; level = thermometer fill * 128,
+ * saturating at full (1024) from rung 7 (counter 281). Monotone non-decreasing. */
+static void test_reg_ramp_level(void) {
+    CHECK_EQ(reg_ramp_level(0),   128);    /* rung 0 (counter < 41) */
+    CHECK_EQ(reg_ramp_level(40),  128);    /* rung 0 upper edge */
+    CHECK_EQ(reg_ramp_level(41),  256);    /* rung 1 onset */
+    CHECK_EQ(reg_ramp_level(80),  256);    /* rung 1 upper edge */
+    CHECK_EQ(reg_ramp_level(240), 768);    /* rung 5 (201..240) */
+    CHECK_EQ(reg_ramp_level(280), 896);    /* rung 6 upper edge (241..280) */
+    CHECK_EQ(reg_ramp_level(281), 1024);   /* rung 7: first full (g_019F=0xFF) */
+    CHECK_EQ(reg_ramp_level(400), 1024);   /* rung 9 (361..400) */
+    CHECK_EQ(reg_ramp_level(401), 1024);   /* >= 401: full (caller hands off) */
+    CHECK_EQ(reg_ramp_level(5000),1024);   /* clamp above */
+    /* monotone non-decreasing across the whole counter range */
+    for (uint16_t c = 1; c <= 420; c++) {
+        if (reg_ramp_level(c) < reg_ramp_level((uint16_t)(c - 1))) {
+            printf("FAIL reg_ramp_level not monotone at c=%u\n", (unsigned)c);
+            failures++;
+        }
+    }
+}
+
 int main(void) {
     test_reg_scale();
     test_reg_output_level();
     test_table_values();
+    test_reg_ramp_level();
     if (failures) { printf("%d check(s) FAILED\n", failures); return 1; }
     printf("all checks PASSED\n");
     return 0;
