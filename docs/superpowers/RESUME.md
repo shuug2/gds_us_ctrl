@@ -1,5 +1,11 @@
 # RESUME — 다음 세션
 
+> **상태 (2026-06-03, 마감)**: **Stage D slice 2a (상태머신 + soft-start 램프) — 코드 완료(Task 1~3), Task 4 HW 검증만 남음(보드 미연결로 대기).** slice 1은 main 머지 완료(`5aea06f`, tag `hw-revA_fw-stage-d`). slice 2a는 brainstorming→spec→plan→subagent-driven 구현. 브랜치 **`feat/stage-d-slice2-softstart`**(main 미머지, tip `ae24ec4`). 빌드 0-warning(FLASH 28.52%/RAM 10.57%), 호스트 테스트 `all checks PASSED`, 3 Task 모두 2-stage 리뷰(spec+cpp-reviewer) APPROVED. **다음 = Task 4 HW 검증(보드 연결 시) → 통과 시 최종리뷰 + finishing(머지/PR) + 태그.** 상세 절차 = `HANDOFF.md`(루트) + plan Task 4.
+> - **slice 2a 구현 3커밋**: `d98b025`(순수 `reg_ramp_level` 10-rung thermometer fill + 호스트 테스트) / `ba67971`(`US_IDLE/US_RUNNING` enum→app_lcd.h) / `ae24ec4`(app_reg.c 상태머신 init=1 + 10ms 램프 cadence ≥401→state0 + sel MUX + us_run_status). 출력 OSC·정확한 패턴바이트·명령 FSM·overload·blink = **여전히 DEFERRED**.
+> - **slice 2a 핵심**: `sel = state==1 ? reg_ramp_level(ctr) : reg_scale(ch0_avg)`(state==0=slice-1 verbatim 무회귀). 램프 레벨을 LCD bar(curr_power)에 미러 = 라벨된 테스트 deviation(전압주입 없이 패널 육안 검증). spec `…/specs/2026-06-02-stage-d-slice2-softstart-ramp-design.md`, plan `…/plans/2026-06-03-stage-d-slice2-softstart-ramp.md`.
+> - **Task 4 HW 검증 (다음, 보드)**: 트레이스 빌드(⚠ CPU 플래그 포함) → 플래시 → 부팅 `[reg] st=1` sel 128→1024/band 18→0 ~4s + LCD bar 상승 + st→0 핸드오프 + 무회귀. 명령 = HANDOFF.md §Resume.
+> - **이전 상태 (2026-06-02)**: ↓ slice 1 6a PASS(아래 블록은 "머지 전" 시점 기록 — 이후 머지됨).
+
 > **상태 (2026-06-02, 마감)**: **Stage D slice 1 (레귤레이션 코어 compute) — HW 기능검증(6a) PASS, 통합 준비 완료.** 실보드 검증에서 Task 6을 **6a(기능/구조, 전압스윕 불필요)** + **6b(신호 calibration, HW 준비 후)** 로 분리(measure-first). **6a 전체 PASS**: compute liveness(×6 + floor→0 + band21 라이브), 무회귀(배너+LCD 네비), OSC 안전(PB2/PB10/PB14 idle-HIGH 스코프), LCD provider live(VAR_POWER=0). 펌웨어 빌드 0-warning, 호스트 단위테스트 `all checks PASSED`, cpp-reviewer는 코드 미변경분 APPROVED 유지. 브랜치 **`feat/stage-d-regulation-core`** (main 미머지). **다음 = finishing-a-development-branch 선택(머지/PR) + 태그 `hw-revA_fw-stage-d`. 6b calibration = 추적 후속(HW-gated).**
 > - **6b calibration (DEFERRED, HW 준비 후)**: `>>2` 정규화 + 2.56V↔3.3V 도메인 실측 보정(DP2) / ch0_avg·scaled 물리단위(B-UNITS/B3) / ADC offset·gain / OSC 출력경로·비트매핑·극성(B-OSC-MAP/B-SEAM) + PB12/PB13 방향. 전압 가변 + 실 초음파 구동 필요.
 > - **설명 문서**: `docs/superpowers/analysis/2026-06-02-m16-to-stm32-port-explained.md` (M16→STM32 포팅 compute+I/O 정리, 핸드오프용).

@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### 2026-06-03 — Stage D slice 2a (상태머신 + soft-start 램프) 코드 완료 — HW 검증 대기
+
+slice 1 머지 후 slice 2a 착수. brainstorming→spec→plan(`writing-plans`)→subagent-driven 구현(Task별 fresh subagent + 2-stage 리뷰). 브랜치 **`feat/stage-d-slice2-softstart`**(main 미머지, tip `ae24ec4`). **compute만**(출력 OSC·명령 FSM·overload·blink = DEFERRED, slice 1 measure-first 유지). 빌드 0-warning(FLASH 28.39→28.52%/RAM 10.55→10.57%), 호스트 테스트 `all checks PASSED`, 3 Task 모두 spec+cpp-reviewer APPROVED. **남은 것 = Task 4 실보드 HW 검증(REG_TRACE+LCD bar) → 최종리뷰 + 머지/태그.**
+
+- **`d98b025` 순수 `reg_ramp_level`**(호스트 TDD): 10-rung thermometer fill(M16 `app_0x1226` recon :249-258 = `g_019F` 0x01→0xFF), scaled 도메인 `{128,256,…,1024 포화 rung7+}`. 정확한 패턴바이트→OSC는 deferred(B-SEAM, C-LADDER와 동일). 경계/단조 호스트 테스트.
+- **`ba67971`**: `enum {US_IDLE=0,US_RUNNING=1}`를 `app_lcd.h` contract로 끌어올림(기존 `app_lcd_disp.c` 로컬 `#define US_IDLE` 제거). disp 게이트 `!= US_IDLE` 무변경.
+- **`ae24ec4` app_reg.c 상태머신**: `main_state` 부팅 init=1(M16 `@0x1B8A`), 10ms 램프 cadence(별도 `prev_ramp_ms` 게이트, Timer1 0xFFB1 등가) `ramp_counter` state==1에서만 증가, ≥401(`@0x137C`)→state0 단방향. sel MUX: `state==1?reg_ramp_level(ctr):reg_scale(ch0_avg)`(state==0=slice-1 verbatim 무회귀). `sel`→band(deferred)+`curr_power`(LCD bar, state==1 동안 램프 미러 = 라벨된 테스트 deviation)+`us_run_status=US_RUNNING`. REG_TRACE에 `st/rc/sel` 추가.
+- **리뷰**: cpp-reviewer가 시간델타 wraparound 안전·401 핸드오프 off-by-one clean·state==0 무회귀·정수 안전 확인. 비차단 minor 코멘트 제안은 "요청한 부분만 수정" 워크스페이스 규칙에 따라 미반영.
+- **다음**: Task 4 HW(보드 연결 시) — 부팅 `st=1` sel 128→1024/band 18→0 ~4s + LCD bar 상승 + st→0 핸드오프 + 무회귀. 절차 = `HANDOFF.md`(루트) §Resume / plan Task 4.
+
 ### 2026-06-02 — Stage D slice 1 HW 기능검증(6a) PASS + Task 6 분리(6b calibration HW-gated)
 
 실보드 HW 검증 진행. 전압 가변 소스 부재로 Task 6을 **6a(기능/구조, 지금 가능)** + **6b(신호 calibration, HW 준비 후)** 로 분리(사용자 결정 = measure-first). 6a 전체 PASS → slice 1(compute, 출력 deferred)은 설계대로 통합 준비 완료. compute 수식은 호스트 단위테스트가 전 범위 커버.
