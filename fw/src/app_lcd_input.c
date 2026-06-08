@@ -839,6 +839,12 @@ void app_lcd_input_dispatch(const dgus_frame_t *f)
     case SYS_PIC_NOW:
         if (data16 == 0 && state->boot_complete &&
             (uint32_t)(sys_tick_get_ms() - state->last_set_page_ms) >= 200u) {
+            /* Panel self-reset mid-run: the held RUN press is lost and no
+             * RUN_RELEASE will arrive, so stop the run (UI lost -> stop the
+             * actuator). This also re-syncs ICON_RUN: us_run_status -> IDLE
+             * makes the next disp_step see a real edge after init_mode clears
+             * the icon (spec §4.3). Harmless when already idle. */
+            app_lcd_hook_us_command(US_CMD_RUN_RELEASE);
             app_lcd_var_init();
             app_lcd_send_model_str(cfg->model_freq, cfg->model_type);
             app_lcd_init_mode(cfg);
