@@ -389,6 +389,65 @@ once per transition (no 4 ms spam). app_reg stays DGUS-free; disp renders
 the published run state (port of samd20 sig_run_status icon, main.c:4302)."
 ```
 
+### Task 2 code-review fix — SYS_PIC_NOW mid-run reset stops the run (spec §4.3)
+
+cpp-reviewer catch (검증됨): `SYS_PIC_NOW`=0(패널 자체 리셋)이 run 중 `app_lcd_init_mode`로 `ICON_RUN=0`을 클리어하나 disp `prev_run_on`은 미동기 → 아이콘 "정지" 고착. 더 위험한 동반 결함: momentary hold-to-run에서 패널 mid-hold 리셋 시 RUN_RELEASE 미도착 → `us_run_status` US_TOUCH 영구 고착(무한구동). **Option A(안전 포스처)**: 재init 시 RUN_RELEASE 발행 → FSM IDLE → 진짜 엣지로 아이콘 재동기 + 무한구동 해소. **Task 2 disp 코드(`ed2093f`) 무변경** — 수정은 `app_lcd_input.c` SYS_PIC_NOW 케이스 한 줄.
+
+**Files:** Modify `fw/src/app_lcd_input.c` (SYS_PIC_NOW 케이스, `case SYS_PIC_NOW:` 블록)
+
+- [ ] **Step 5: SYS_PIC_NOW 재init 블록에 RUN_RELEASE 추가**
+
+`fw/src/app_lcd_input.c` 의 SYS_PIC_NOW 케이스:
+```c
+    case SYS_PIC_NOW:
+        if (data16 == 0 && state->boot_complete &&
+            (uint32_t)(sys_tick_get_ms() - state->last_set_page_ms) >= 200u) {
+            app_lcd_var_init();
+            app_lcd_send_model_str(cfg->model_freq, cfg->model_type);
+            app_lcd_init_mode(cfg);
+        }
+        break;
+```
+을 다음으로 교체(재init 전 run 정지 — 안전 포스처, spec §4.3):
+```c
+    case SYS_PIC_NOW:
+        if (data16 == 0 && state->boot_complete &&
+            (uint32_t)(sys_tick_get_ms() - state->last_set_page_ms) >= 200u) {
+            /* Panel self-reset mid-run: the held RUN press is lost and no
+             * RUN_RELEASE will arrive, so stop the run (UI lost -> stop the
+             * actuator). This also re-syncs ICON_RUN: us_run_status -> IDLE
+             * makes the next disp_step see a real edge after init_mode clears
+             * the icon (spec §4.3). Harmless when already idle. */
+            app_lcd_hook_us_command(US_CMD_RUN_RELEASE);
+            app_lcd_var_init();
+            app_lcd_send_model_str(cfg->model_freq, cfg->model_type);
+            app_lcd_init_mode(cfg);
+        }
+        break;
+```
+
+- [ ] **Step 6: 빌드 0-warning + 호스트 무회귀**
+
+```bash
+cd /Users/tknoh/dev/work/gds_us_ctrl/fw && env -u STM32_TOOLCHAIN cmake --build build
+make -C /Users/tknoh/dev/work/gds_us_ctrl/fw/test test
+```
+Expected: 빌드 경고 0; `all checks PASSED`.
+
+- [ ] **Step 7: 커밋**
+
+```bash
+cd /Users/tknoh/dev/work/gds_us_ctrl
+git add fw/src/app_lcd_input.c
+git commit -m "fix(stage-d): stop run on SYS_PIC_NOW mid-run panel reset (slice 2b)
+
+Panel self-reset clears ICON_RUN via init_mode but leaves us_run_status
+stuck at US_TOUCH (held-RUN release lost) -> infinite drive + icon reads
+stopped while live. Issue US_CMD_RUN_RELEASE in the SYS_PIC_NOW re-init
+(UI lost -> stop actuator); the FSM->IDLE edge re-syncs ICON_RUN. disp
+edge code unchanged. spec §4.3."
+```
+
 ---
 
 ## Task 3: 실보드 HW 검증

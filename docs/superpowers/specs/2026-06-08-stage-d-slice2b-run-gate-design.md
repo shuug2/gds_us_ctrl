@@ -96,6 +96,14 @@ samd20은 START를 `!= US_REMOTE`로 게이트했다(§2.1) — 그 2-MCU 구조
   - 정지 시: `last_power = max_power`(latch).
 - `curr_power = sel`는 **라벨된 setpoint 표면으로 유지**(활성 중 현재 출력 레벨; IDLE→0). 실측 전력(B3 전달함수)은 6b/B-SEAM에서 대체. → VAR_POWER 숫자가 `max_power`(peak-hold)를 따라 램프 가시(전압주입 불필요, slice 2a가 실제 검증한 표면과 동일).
 
+### 4.3 패널 mid-run 리셋 처리 (`SYS_PIC_NOW`=0 → RUN_RELEASE, 안전 포스처)
+DGUS 패널이 run 중 **자체 리셋**(전원 글리치 등)하면 `SYS_PIC_NOW`(0x0014) `data16==0`(page 0 splash 안착)을 보고 → 입력층(`app_lcd_input.c:839`)이 `boot_complete` + 200ms 가드 후 `app_lcd_init_mode`로 재init하며 **`ICON_RUN=0`을 무조건 클리어**(`app_lcd.c:126`). `SYS_PIC_NOW=0`은 **진짜 패널 리셋만**(사용자 페이지 네비는 non-zero 페이지로 보고, 200ms 가드는 우리 set_page 자기피드백 억제) — 정상 run 중엔 발화 안 함.
+
+문제: momentary hold-to-run에서 패널이 mid-hold 리셋되면 RUN_RELEASE(`data=4`)가 영영 도착 안 해 **`us_run_status`가 `US_TOUCH`로 영구 고착(웰더 무한 구동)** + 패널 아이콘은 init이 클리어해 "정지" 표시(`prev_on` 미동기 → disp 엣지 미발화). 아이콘 거짓표시보다 무한구동이 더 위험.
+
+**결정(Option A, 안전 포스처 = UI 상실→액추에이터 정지)**: `SYS_PIC_NOW` 재init 블록에서 `app_lcd_hook_us_command(US_CMD_RUN_RELEASE)`를 발행 → `us_run_status→US_IDLE`(+`last_power` latch) → init이 `ICON_RUN=0`, 다음 `disp_step`이 **진짜 엣지**(true→false)로 아이콘 재동기. → 아이콘 고착 + 무한구동 **동시 해소**. **Task 2의 disp 엣지 코드는 무변경**(steady-state 정상). 단일 라인 변경(`app_lcd_input.c` SYS_PIC_NOW 케이스).
+> 잔여 한계(범위 밖): 패널이 `SYS_PIC_NOW`를 보고 못 하고 행(hang)하면 이 경로 미발화 → 무한구동 잔존. 일반 복구(run 명령 버퍼링/타임아웃 워치독)는 stop-conditions(overload/estop) 슬라이스 패밀리 = §9 deferred.
+
 ---
 
 ## 5. 명령 라우팅 (`app_reg_command`)
@@ -115,7 +123,7 @@ void app_reg_command(us_cmd_t cmd);
 ## 6. LCD 노출
 
 - **`us_run_status` enum 확장**: `app_lcd.h`의 `enum { US_IDLE=0, US_RUNNING=1 }` → **`enum { US_IDLE=0, US_REMOTE=1, US_TOUCH=2, US_COMM=3 }`**(samd20 §2.2). `US_RUNNING`(=1)은 `US_REMOTE`(=1)와 값 충돌하므로 **제거** — 잔여 참조는 2곳뿐(`app_lcd.h` 정의 + `app_reg.c:96` 발행), 둘 다 본 슬라이스가 교체(app_reg FSM이 `US_TOUCH`/`US_IDLE` 발행). disp 게이트 `!= US_IDLE`(`app_lcd_disp.c:156`)는 그대로 유효.
-- **ICON_RUN**(0x1152) 엣지 렌더: `app_lcd_disp.c`가 이전 running-ness(`prev_on`) 추적, `(us_run_status != US_IDLE)` 변화 시 `dgus_write_u16(ICON_RUN, on?1:0)` **1회**(매 4ms 스팸 방지). app_reg는 DGUS 미접근(계층 분리). init 클리어(`app_lcd.c:125`)는 유지.
+- **ICON_RUN**(0x1152) 엣지 렌더: `app_lcd_disp.c`가 이전 running-ness(`prev_on`) 추적, `(us_run_status != US_IDLE)` 변화 시 `dgus_write_u16(ICON_RUN, on?1:0)` **1회**(매 4ms 스팸 방지). app_reg는 DGUS 미접근(계층 분리). init 클리어(`app_lcd.c:126`)는 유지. **mid-run 패널 리셋 재동기 = §4.3**(SYS_PIC_NOW→RUN_RELEASE로 FSM IDLE화 → 진짜 엣지 재발화; disp 코드 무변경).
 - **VAR_POWER 숫자**(`disp_send_val`): `on?max_power:last_power` — 활성 중 peak-hold 상승, 정지 후 latch peak. = 램프 가시면(slice 2a §8.2가 확정한 "power 숫자" 표면).
 - **출력 바 `LV_OUTPUT`**: `disp_compute_output(curr_amp,…)` = **amplitude 구동, 무변경**. 전압주입 없으면 idle(slice 2a §8.2 by-design). 본 슬라이스가 바를 sel로 거짓 구동하지 않음.
 - energy/cycle/freq/amp-split = **0 유지**(weld-cycle deferred). `curr_amp=ch0_avg`(실측).
@@ -169,4 +177,4 @@ void app_reg_command(us_cmd_t cmd);
 - **부팅 IDLE 전환**이 통합 제품의 의도된 동작임(원 SAMD20이 M_START를 명령으로 게이트). slice 2a auto-run은 명시적 테스트 단순화였고 그 spec §10이 본 재검토를 예고함.
 - `curr_power = sel`는 라벨된 setpoint 표면(실측 전력 = B3 전달함수, 6b 대체). advisor가 mirror 완전 폐기 옵션(검증을 ICON_RUN+us_run_status로만)을 제시했으나, 전압주입 없는 벤치에서 램프 가시성을 위해 setpoint 표면 유지 + max/last는 faithful로 — 사용자 승인(2026-06-08 brainstorming).
 - 소스 arbitration(START `== US_IDLE` / RELEASE `== US_TOUCH`)은 단일 소스(TOUCH)뿐인 본 슬라이스에선 자명하나, 후속 REMOTE/COMM 소스가 끼어들 구조로 보존(§4.2 가드 분기 근거 포함).
-- **ICON_RUN 엣지 재assert**: disp는 `us_run_status` *전환* 시에만 ICON_RUN을 write. 만약 run 중 페이지 rebuild가 ICON_RUN을 재클리어하면 엣지 트래커가 재assert 못 함. momentary hold-to-run에선 RUN 버튼 유지 중 페이지 네비 불가 → **본 슬라이스 unreachable**(코드 추가 ✗). 후속 latched/COMM run 도입 시 재검토.
+- **ICON_RUN 엣지 재assert (해소됨, §4.3)**: disp는 `us_run_status` *전환* 시에만 ICON_RUN을 write. run 중 `SYS_PIC_NOW` 패널 자체 리셋이 `init_mode`로 ICON_RUN을 재클리어하는 경로가 **reachable**(코드 리뷰 catch — RUN 유지와 무관한 패널 이벤트). §4.3 Option A(재init 시 RUN_RELEASE)로 FSM을 IDLE화해 진짜 엣지로 재동기 + 무한구동도 해소. 잔여(패널 hang 시 미보고)는 §9 deferred.
