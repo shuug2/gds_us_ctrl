@@ -27,3 +27,18 @@ uint8_t reg_output_level(uint16_t scaled)
     }
     return 21u;                                /* no match -> output off (@0x15B2) */
 }
+
+uint16_t reg_ramp_level(uint16_t counter)
+{
+    /* M16 app_0x1226 rung thresholds (recon :249-258); per-rung level =
+     * thermometer fill (g_019F popcount = rung+1) * 128, saturating at 1024
+     * (full byte 0xFF) from rung 7. Exact pattern -> OSC deferred (B-SEAM). */
+    static const uint16_t thr[10] = {41u,81u,121u,161u,201u,241u,281u,321u,361u,401u};
+    static const uint16_t lvl[10] = {128u,256u,384u,512u,640u,768u,896u,1024u,1024u,1024u};
+    for (uint8_t i = 0u; i < 10u; i++) {
+        if (counter < thr[i]) {
+            return lvl[i];
+        }
+    }
+    return 1024u;   /* counter >= 401: full; caller transitions state to 0 */
+}

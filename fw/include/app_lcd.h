@@ -60,6 +60,11 @@ typedef enum {
     US_CMD_RUN_RELEASE,
 } us_cmd_t;
 
+/* us_run_status values. slice 2a fills US_RUNNING whenever the regulation loop
+ * is active; the command-source taxonomy (REMOTE/TOUCH/COMM) is slice 2b.
+ * disp gate = (us_run_status != US_IDLE). */
+enum { US_IDLE = 0, US_RUNNING = 1 };
+
 /* ether-input field selector (LV_ETHER_KEY 'I'/'M'/'G'); NONE = idle. */
 #define LCD_ETHER_INPUT_NONE  0xFFu
 #define LCD_ETHER_INPUT_IP    0u
