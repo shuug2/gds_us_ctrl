@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### 2026-06-08 — Stage D slice 2a HW 검증(Task 4) PASS + 바/아이콘 합격기준 정정
+
+브랜치 **`feat/stage-d-slice2-softstart`** 실보드 HW 검증(STLINK V3 + USART6 mon, REG_TRACE 빌드, 전압 주입 불필요). **compute(상태머신 + soft-start 램프) = PASS.** 펌웨어 코드 변경 없음(기검증 3커밋 그대로).
+
+- **부팅 램프 trace (reset 2회 재현)**: `st=1` `rc` 0→401, `sel` 128→256→384→512→640→896→**1024**(rc=300 포화), `band` 18→16→13→11→8→3→**0** — ~4s(rc 401 × 10ms cadence) 단조. `rc≥401`에서 **`st=0` 핸드오프** → 이후 idle `sel=18/band=20`·바닥 `sel=0/band=21` = **slice-1 verbatim 무회귀**. 배너 `[boot] stage-b ready`/`[lcd] ready=1`/`[cfg]` 정상.
+- **램프 패널 도달 입증**: LCD **power 숫자(VAR_POWER)** 가 램프 추종 상승(전압주입 없이 setpoint가 디스플레이까지 전파됨 확인).
+- **합격기준 2건 정정 (spec 디스플레이 계층 오독 → 펌웨어 수정 불필요)**:
+  - **출력 바 정지 = by-design**: 출력 바(`LV_OUTPUT`)는 `disp_compute_output(curr_amp,…)`로 구동되는 **amplitude 바**(samd20 충실 포팅)이지 `curr_power`가 아님. 램프 미러는 power **숫자**(`disp_send_val`: `VAR_POWER ← max_power ← sel`). 전압주입 없으면 `curr_amp` idle(≈3 ≤ 10) → 바 비움이 정상. (바를 `sel`로 구동 = 충실 위젯 거짓 구동 → 기각.)
+  - **running 아이콘 미점등 = 2b 몫**: `ICON_RUN`(0x1152)은 samd20 run **명령 FSM**(`ref/samd20/main.c:4302` = `sig_run_status` 엣지 + `M_START` + accumulator 리셋) 소속 → spec §9 명령 FSM = **slice 2b**. 2a는 `app_lcd.c:125` init 클리어만. `us_run_status != US_IDLE` 게이트(`app_lcd_disp.c:156`)는 숫자 소스 선택일 뿐 아이콘 미구동. us_run_status→ICON_RUN 직접 브리지는 충실 포팅 이탈이라 미적용.
+- **정정 반영**: spec §8.2 + plan Task 4에 검증결과 노트 추가. compute 검증의 권위 소스 = 시리얼 trace + power 숫자.
+- **다음**: 최종 cpp-reviewer(코드 미변경, 기 APPROVED 재확인) → finishing-a-development-branch(머지/PR) + 태그.
+
 ### 2026-06-03 — Stage D slice 2a (상태머신 + soft-start 램프) 코드 완료 — HW 검증 대기
 
 slice 1 머지 후 slice 2a 착수. brainstorming→spec→plan(`writing-plans`)→subagent-driven 구현(Task별 fresh subagent + 2-stage 리뷰). 브랜치 **`feat/stage-d-slice2-softstart`**(main 미머지, tip `ae24ec4`). **compute만**(출력 OSC·명령 FSM·overload·blink = DEFERRED, slice 1 measure-first 유지). 빌드 0-warning(FLASH 28.39→28.52%/RAM 10.55→10.57%), 호스트 테스트 `all checks PASSED`, 3 Task 모두 spec+cpp-reviewer APPROVED. **남은 것 = Task 4 실보드 HW 검증(REG_TRACE+LCD bar) → 최종리뷰 + 머지/태그.**

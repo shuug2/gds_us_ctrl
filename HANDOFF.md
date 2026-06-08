@@ -2,7 +2,7 @@
 
 **Generated**: 2026-06-03 (updated)
 **Branch**: `feat/stage-d-slice2-softstart` (main 미머지, tip `ae24ec4`)
-**Status**: Code-complete (Task 1~3) — **Task 4 HW 검증만 남음(보드 필요)**
+**Status**: **Task 4 실보드 HW 검증 PASS (2026-06-08), 통합 준비 완료** — compute(상태머신+램프) 시리얼 검증 통과, 펌웨어 미변경. 출력 바(amplitude)·running 아이콘(명령 FSM=2b)은 by-design/deferred로 합격기준 정정(spec §8.2). 남은 것 = 최종 리뷰 → finishing(머지/PR)+태그. 상세 = changelog 2026-06-08 / RESUME 2026-06-08.
 
 > 이 프로젝트의 1차 핸드오프는 `docs/superpowers/RESUME.md`(SessionStart hook 자동 로드) + `docs/NEXT_STEPS.md`. 본 `HANDOFF.md`는 보조. 응답은 **한국어**(코드/식별자 영어). 워크스페이스 규칙: **코드는 요청한 부분만 수정, 그 외 건드리지 않음.**
 
@@ -19,8 +19,8 @@ Stage D slice 2a: M16 부팅 **soft-start 램프**(출력 ~4s 누진 상승 후 
 
 ## Not Yet Done
 
-- [ ] **Task 4 — HW 검증** (보드 필요, 전압주입 불필요). 플랜 `docs/superpowers/plans/2026-06-03-stage-d-slice2-softstart-ramp.md` Task 4.
-- [ ] (Task 4 통과 후) 최종 cpp-reviewer 1회 → changelog/RESUME "done" → finishing-a-development-branch(머지/PR) + 태그 `hw-revA_fw-stage-d2`(또는 합의 태그명).
+- [x] **Task 4 — HW 검증** (2026-06-08 PASS). 램프 trace + power 숫자 검증, 바/아이콘 합격기준 정정(by-design/2b). 플랜 Task 4 검증결과 노트 참조.
+- [ ] 최종 cpp-reviewer 1회(코드 미변경 = 기 APPROVED 재확인) → finishing-a-development-branch(머지/PR) + 태그 `hw-revA_fw-stage-d2`(또는 합의 태그명).
 - [ ] (별개, HW 준비 후) **6b 신호 calibration**: `>>2` 정규화·2.56V↔3.3V 도메인·물리단위·B-OSC-MAP. 전압 가변 + 실 초음파 구동 필요.
 
 ## Failed Approaches (Don't Repeat These)

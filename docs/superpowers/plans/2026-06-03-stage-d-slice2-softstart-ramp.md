@@ -313,6 +313,18 @@ rm -rf fw/build-trace   # git-ignored; 커밋 안 함
 
 커밋 없음(트레이스 빌드는 의도적으로 비커밋).
 
+> **검증 결과 (2026-06-08) — PASS (compute), 합격기준 2건 정정.** STLINK V3 플래시 → USART6 mon. **부팅 램프 trace (2회 재현)**:
+> ```
+> st=1 rc=0   sel=128  band=18      st=1 rc=200 sel=640  band=8
+> st=1 rc=50  sel=256  band=16      st=1 rc=250 sel=896  band=3
+> st=1 rc=100 sel=384  band=13      st=1 rc=300 sel=1024 band=0   (포화)
+> st=1 rc=150 sel=512  band=11      st=1 rc=400 sel=1024 band=0
+> st=0 rc=401 sel=18 band=20  ← 핸드오프, 이후 idle = sel=0/band=21 (slice-1 verbatim)
+> ```
+> - ✅ sel 128→1024 단조 / band 18→0 단조 / ~4s (rc 401×10ms) / rc=401 핸드오프 / st=0 slice-1 무회귀 / 배너·`[boot]/[lcd]/[cfg]` 정상.
+> - ✅ LCD **power 숫자(VAR_POWER)** 램프 추종 상승 — 전압주입 없이 램프 패널 도달 입증.
+> - ⚠ **"LCD 출력 bar 상승" / "running 아이콘"** 두 육안 항목은 spec 디스플레이 계층 오독에 따른 잘못된 예측 — 정정: 출력 바 = `curr_amp` amplitude 바(idle 정지 by-design), `ICON_RUN` = 명령 FSM(2b) 소속. **펌웨어 수정 불필요.** 상세 = spec §8.2 검증결과 노트.
+
 ---
 
 ## Self-Review (작성 후 점검 결과)

@@ -133,6 +133,11 @@ uint16_t reg_ramp_level(uint16_t counter);
 - 무회귀: 배너·LCD 네비·OSC idle-HIGH(slice 1 6a) 유지.
 - trace에 `state`/`ramp_counter` 추가(REG_TRACE 게이트).
 
+> **검증 결과 (2026-06-08) — compute PASS, 육안 합격기준 2건 정정.** 시리얼 trace로 램프 전 구간 검증(sel 128→1024 단조 / band 18→0 / rc=401 ~4s 핸드오프 / st=0 = slice-1 verbatim 무회귀) + LCD **power 숫자(VAR_POWER)** 가 램프 추종 상승 = 전압주입 없이 램프가 패널까지 도달함을 입증(§8.2 목표 = 달성). 단, 위 두 육안 항목은 디스플레이 계층 오독에 따른 **잘못된 예측**이었음:
+> - **"LCD 출력 bar 상승"** ✗예측: 출력 바(`LV_OUTPUT`)는 `disp_compute_output(curr_amp,…)`로 구동되는 **amplitude 바**이지 `curr_power`가 아님. 램프 미러는 power **숫자**(`disp_send_val`: `VAR_POWER ← max_power ← sel`). 전압주입 없으면 `curr_amp` idle(≈3 ≤ 10) → 바 정지 = **by-design**(samd20 충실 포팅). 바를 `sel`로 구동하면 충실 위젯을 벤치 편의로 거짓 구동 → ✗.
+> - **"running 아이콘"** ✗예측: `ICON_RUN`(0x1152)은 samd20에서 run **명령 FSM** 소속(`ref/samd20/main.c:4302` = `sig_run_status` 엣지 + `M_START` + accumulator 리셋) → **slice 2b**(§9). 2a는 `app_lcd.c:125`에서 init 클리어만, 점등 안 함이 정상. `us_run_status != US_IDLE` 게이트(`app_lcd_disp.c:156`)는 숫자 소스(max/last_power) 선택일 뿐 아이콘 미구동.
+> 결론: **펌웨어 수정 불필요** — compute 합격, 바/아이콘은 예상된 거동. 본 §8.2 두 육안 항목은 **power 숫자 상승**으로 대체.
+
 ---
 
 ## 9. 범위 밖 / deferred
