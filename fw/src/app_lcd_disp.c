@@ -188,10 +188,20 @@ static void disp_send_val(const lcd_measure_t *m)
 void app_lcd_disp_step(void)
 {
     static uint8_t s = 0u;       /* not named `step` to avoid -Wshadow vs samd20 param */
+    static bool prev_run_on = false;   /* slice 2b: ICON_RUN edge tracker */
 
     const lcd_measure_t   *m  = app_lcd_measure();
     const lcd_app_state_t *st = app_lcd_state();
     const app_config_t    *cfg = app_lcd_cfg();
+
+    /* slice 2b: drive ICON_RUN on us_run_status running-ness edges (write once on
+     * change, not every 4 ms step). samd20 sets ICON_RUN in the sig_run_status edge
+     * handler (main.c:4302); here disp renders the FSM state app_reg publishes. */
+    bool run_on = (m->us_run_status != US_IDLE);
+    if (run_on != prev_run_on) {
+        dgus_write_u16(ICON_RUN, run_on ? 1u : 0u);
+        prev_run_on = run_on;
+    }
 
     switch (s) {
         case 0:     /* compute output bar */
