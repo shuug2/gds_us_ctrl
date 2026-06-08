@@ -81,9 +81,12 @@ app_lcd_disp_step() (4ms step machine)                          [app_lcd_disp.c]
 | 트리거 | 가드 | 동작 |
 |--------|------|------|
 | `app_reg_init` (부팅) | — | `us_run_status=US_IDLE`, `main_state=0`, `ramp_counter=0`, `max_power=last_power=0`. **auto-run 폐기.** |
-| `US_CMD_START` | `us_run_status != US_REMOTE` | `us_run_status=US_TOUCH`; `main_state=1`; `ramp_counter=0`; `max_power=0`(re-arm 리셋). = soft-start 램프 재발화. |
+| `US_CMD_START` | `us_run_status == US_IDLE` | `us_run_status=US_TOUCH`; `main_state=1`; `ramp_counter=0`; `max_power=0`(re-arm 리셋). = soft-start 램프 재발화. **idle→run 엣지만**(§4.2). |
 | `US_CMD_RUN_RELEASE` | `us_run_status == US_TOUCH` | `last_power = max_power`(latch, §2.4); `us_run_status=US_IDLE`. = us_off 등가. |
 | `US_CMD_SEEK` / `US_CMD_RESET` | — | **본 슬라이스 무동작**(mon trace만). 입력층이 이미 RESET icon/page 복원 처리. regulation 효과 = deferred(§9). |
+
+### 4.2 START 가드 = `== US_IDLE` (samd20 `!= US_REMOTE`에서 의도적 분기)
+samd20은 START를 `!= US_REMOTE`로 게이트했다(§2.1) — 그 2-MCU 구조에선 press가 `sig_run_status=ON`만 세우고 **soft-start 램프는 M16의 `M_START` OFF→ON 엣지로 구동**됐으므로, 이미 ON인 상태의 재press는 엣지를 안 만들어 램프가 중단 없이 진행했다. 통합 코드는 램프를 직접 소유하므로, `!= US_REMOTE`를 그대로 쓰면 **RUN 유지 중 패널 auto-repeat(`data=3` 반복)** 가 매 폴마다 `ramp_counter=0`으로 램프를 재시작 → 401 미도달 → lookup 핸드오프 실패(HW §8.2 item 2 실패 모드). 따라서 **`== US_IDLE`**(real idle→run 엣지)로 가드 — TOUCH-only 슬라이스에선 strictly 안전(활성 run 재시작 불가)하며 M16 엣지구동 램프에 충실. REMOTE/COMM 소스 + 재press energy 리셋 정제는 후속 슬라이스(§9).
 
 - `app_reg_tick`의 ramp cadence/MUX는 slice 2a 그대로 — 단 10ms 램프 증가 게이트에 **활성 run 조건 추가**: `(us_run_status != US_IDLE) && main_state==1`일 때만 `ramp_counter++`. IDLE 중엔 동결(release를 ramp 도중에 해도 카운터 stale 증가/wrap 없음; 다음 START가 0으로 리셋). 10ms 게이트의 `≥401 → main_state=0` 핸드오프 유지.
 
@@ -165,4 +168,5 @@ void app_reg_command(us_cmd_t cmd);
 
 - **부팅 IDLE 전환**이 통합 제품의 의도된 동작임(원 SAMD20이 M_START를 명령으로 게이트). slice 2a auto-run은 명시적 테스트 단순화였고 그 spec §10이 본 재검토를 예고함.
 - `curr_power = sel`는 라벨된 setpoint 표면(실측 전력 = B3 전달함수, 6b 대체). advisor가 mirror 완전 폐기 옵션(검증을 ICON_RUN+us_run_status로만)을 제시했으나, 전압주입 없는 벤치에서 램프 가시성을 위해 setpoint 표면 유지 + max/last는 faithful로 — 사용자 승인(2026-06-08 brainstorming).
-- 소스 arbitration(`!= US_REMOTE` / `== US_TOUCH`)은 단일 소스(TOUCH)뿐인 본 슬라이스에선 자명 통과하나, 후속 REMOTE/COMM 소스가 끼어들 구조로 보존.
+- 소스 arbitration(START `== US_IDLE` / RELEASE `== US_TOUCH`)은 단일 소스(TOUCH)뿐인 본 슬라이스에선 자명하나, 후속 REMOTE/COMM 소스가 끼어들 구조로 보존(§4.2 가드 분기 근거 포함).
+- **ICON_RUN 엣지 재assert**: disp는 `us_run_status` *전환* 시에만 ICON_RUN을 write. 만약 run 중 페이지 rebuild가 ICON_RUN을 재클리어하면 엣지 트래커가 재assert 못 함. momentary hold-to-run에선 RUN 버튼 유지 중 페이지 네비 불가 → **본 슬라이스 unreachable**(코드 추가 ✗). 후속 latched/COMM run 도입 시 재검토.

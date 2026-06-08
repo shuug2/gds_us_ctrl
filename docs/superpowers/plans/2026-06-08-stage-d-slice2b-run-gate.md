@@ -122,10 +122,15 @@ void app_reg_command(us_cmd_t cmd)
 {
     switch (cmd) {
     case US_CMD_START:
-        /* Touch RUN press: start unless a higher-priority remote source owns the
-         * run (samd20 main.c:3676, arbitration != US_REMOTE). Re-arm the soft-start
-         * ramp and reset the running peak (samd20 max_power=0 on start). */
-        if (g_reg.us_run_status != (uint8_t)US_REMOTE) {
+        /* Touch RUN press: re-arm the soft-start ramp only on a real idle->run edge.
+         * M16's ramp is edge-driven on M_START OFF->ON; a repeated/auto-repeat press
+         * while already running must NOT restart it (else ramp_counter resets and
+         * never reaches 401 -> no handoff to lookup -> output stuck at ramp start).
+         * samd20 gated on != US_REMOTE because its ramp was already edge-driven
+         * downstream; for a TOUCH-only slice == US_IDLE is strictly safer (can't
+         * restart an active run). REMOTE/COMM source arbitration + re-press energy
+         * reset = later slices. */
+        if (g_reg.us_run_status == (uint8_t)US_IDLE) {
             g_reg.us_run_status = (uint8_t)US_TOUCH;
             g_reg.main_state    = 1u;
             g_reg.ramp_counter  = 0u;
