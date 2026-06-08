@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### 2026-06-08 — Stage D slice 2b (RUN 명령 게이트) 코드 완료 — HW 검증 대기
+
+slice 2a 머지 후 slice 2b 착수. brainstorming→spec→plan(`writing-plans`)→subagent-driven 구현(Task별 fresh subagent + 2-stage 리뷰). 브랜치 **`feat/stage-d-slice2b-run-gate`**(main 미머지). **터치 RUN start/stop 게이트만**(SEEK/RESET regulation 효과·overload·weld-cycle·Modbus·OSC 구동·blink = DEFERRED). 빌드 0-warning(FLASH 28.64%/RAM 10.60%), 호스트 테스트 `all checks PASSED`(순수함수 무회귀; 신규 순수함수 없음), 전체 cpp-reviewer **APPROVED**(HW 검증 대기). **남은 것 = Task 3 실보드 HW 검증 → 최종 머지/태그.**
+
+- **사실 출처(소스 직독)**: 터치 RUN = **momentary hold-to-run, model_type 무관**(samd20 `main.c:3676` press→`us_run_status=US_TOUCH`/`sig_run_status=ON`, `3699` release→IDLE/OFF). Modbus=latched(`H_REG_START/STOP`=US_COMM, Stage C). `us_off`(`4180`)가 **`last_=max_` latch**.
+- **`decfc28` run FSM + taxonomy + 라우팅**: `app_reg_command(us_cmd_t)` 신설(`app_lcd_hook_us_command`에서 라우팅). **부팅 IDLE**(slice 2a auto-run 폐기). START는 **`== US_IDLE` 엣지만** re-arm(advisor catch: `!= US_REMOTE`면 패널 auto-repeat가 램프 재시작→401 미도달; M16은 `M_START` 엣지구동). RUN_RELEASE는 `== US_TOUCH`만 정지(last_power=max_power latch). enum `{US_IDLE,US_RUNNING}`→`{US_IDLE=0,US_REMOTE=1,US_TOUCH=2,US_COMM=3}`(US_RUNNING 제거). sel MUX에 IDLE→0; ramp 증가 게이트에 활성 조건. 활성 lookup 경로 = slice-1 verbatim.
+- **`ed2093f` ICON_RUN 엣지 렌더**: `app_lcd_disp_step`이 `us_run_status` running-ness 엣지(`prev_run_on`)에 ICON_RUN 1회 write(4ms 스팸 방지). app_reg DGUS-free 유지(계층 분리).
+- **`4264bab` SYS_PIC_NOW mid-run 리셋 → 정지**(cpp-reviewer catch, spec §4.3): 패널 자체 리셋(`SYS_PIC_NOW`=0, page-0 splash, 진짜 리셋만)이 `init_mode`로 ICON_RUN을 클리어하나 held-RUN release 미도착 → `us_run_status` US_TOUCH 고착(무한구동)+아이콘 거짓표시. 재init 시 `US_CMD_RUN_RELEASE` 발행(UI 상실→액추에이터 정지, Option A) → FSM IDLE이 무한구동+아이콘 동시 해소. disp 코드 무변경.
+- **리뷰**: Task별 spec+cpp-reviewer APPROVED + 전체 통합 cpp-reviewer APPROVED(엔드투엔드 superloop 순서 무race·slice-1 무회귀·enum 마이그레이션·max/last 라이프사이클·부팅 clean·SYS_PIC_NOW 순서). 비차단 노트 2건: ① IDLE에서 `curr_amp` 무조건 발행→출력 바 = idle ADC 노이즈 플로어 HW 확인(plan Task 3 item 6, 범위 밖=B-SEAM) ② FSM 전환 호스트 미테스트(HW 게이트로 의도, spec §8.1).
+- **다음**: Task 3 HW(보드 연결 시) — 부팅 IDLE / RUN hold→`rc` 0→401→`st=0` + ICON_RUN 점등 + VAR_POWER 추종 / release→소등+latch / re-arm / 무회귀. 절차 = `HANDOFF.md` §Resume / plan Task 3. SEEK/RESET·overload·OSC·6b = 여전히 DEFERRED.
+
 ### 2026-06-08 — Stage D slice 2a HW 검증(Task 4) PASS + 바/아이콘 합격기준 정정
 
 브랜치 **`feat/stage-d-slice2-softstart`** 실보드 HW 검증(STLINK V3 + USART6 mon, REG_TRACE 빌드, 전압 주입 불필요). **compute(상태머신 + soft-start 램프) = PASS.** 펌웨어 코드 변경 없음(기검증 3커밋 그대로).

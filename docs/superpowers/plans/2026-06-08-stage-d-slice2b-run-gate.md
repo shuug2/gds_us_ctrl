@@ -487,6 +487,7 @@ DEV=$(ls /dev/cu.usbserial-* | head -1)
 | 3 | **RUN release** (RUN 뗌) | mon `us_command=3` + `[reg] cmd=3 run=0`; **ICON_RUN 소등**; `sel=0`; VAR_POWER = last_power(latch peak, 고정). |
 | 4 | **re-arm** (다시 press) | `max_power` 0 리셋 → VAR_POWER 0에서 재상승 + `st=1 rc` 0부터 램프 재발화(가시적). |
 | 5 | **무회귀** | 활성 `st=0` lookup = slice-1 거동; OSC PB2/PB10/PB14 idle-HIGH(slice 1 6a); LCD 배너/네비/SETUP 정상. |
+| 6 | **IDLE 출력 바 (final-review 확인)** | 부팅/RUN release 후 IDLE에서 **출력 바(`LV_OUTPUT`) 비움/안정** 확인. `curr_amp=ch0_avg`는 IDLE에서도 무조건 발행되므로(드라이브 off=B-SEAM, 범위 밖), idle ADC 노이즈 플로어가 0 아니면 바 stub 가능. ≈0이면 정상; 유의미 stub면 noise-floor 기록(향후 6b). |
 
 - ARM-mode 빌드 에러 시: CPU 플래그 누락(Step 1).
 - 출력 바(`LV_OUTPUT`)는 amplitude(`curr_amp`) 구동이라 전압주입 없으면 정지 = by-design(slice 2a §8.2). 램프 가시면은 **VAR_POWER 숫자**.
