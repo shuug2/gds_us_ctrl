@@ -12,7 +12,8 @@
   - **출력 바 정지 = by-design**: 출력 바(`LV_OUTPUT`)는 `disp_compute_output(curr_amp,…)`로 구동되는 **amplitude 바**(samd20 충실 포팅)이지 `curr_power`가 아님. 램프 미러는 power **숫자**(`disp_send_val`: `VAR_POWER ← max_power ← sel`). 전압주입 없으면 `curr_amp` idle(≈3 ≤ 10) → 바 비움이 정상. (바를 `sel`로 구동 = 충실 위젯 거짓 구동 → 기각.)
   - **running 아이콘 미점등 = 2b 몫**: `ICON_RUN`(0x1152)은 samd20 run **명령 FSM**(`ref/samd20/main.c:4302` = `sig_run_status` 엣지 + `M_START` + accumulator 리셋) 소속 → spec §9 명령 FSM = **slice 2b**. 2a는 `app_lcd.c:125` init 클리어만. `us_run_status != US_IDLE` 게이트(`app_lcd_disp.c:156`)는 숫자 소스 선택일 뿐 아이콘 미구동. us_run_status→ICON_RUN 직접 브리지는 충실 포팅 이탈이라 미적용.
 - **정정 반영**: spec §8.2 + plan Task 4에 검증결과 노트 추가. compute 검증의 권위 소스 = 시리얼 trace + power 숫자.
-- **다음**: 최종 cpp-reviewer(코드 미변경, 기 APPROVED 재확인) → finishing-a-development-branch(머지/PR) + 태그.
+- **통합 완료**: 최종 cpp-reviewer **APPROVED**(401 핸드오프 off-by-one 없음·state==0 slice-1 verbatim 무회귀·시간델타 wraparound·counter 경계 안전) → **main `--no-ff` 머지(`43fda87`, 2-parent) + tag `hw-revA_fw-stage-d2`**. 머지 후 빌드 0-warning(FLASH 28.52%/RAM 10.57%) + 호스트 테스트 `all checks PASSED`, 피처 브랜치 삭제. origin push ✗(로컬 main 144 ahead = local-authoritative).
+- **다음**: slice 2b — 명령 FSM(START re-arm·ICON_RUN 점등·SEEK/RESET) + overload + blink; OSC 물리 출력(B-SEAM) + 6b calibration = HW-gated DEFERRED.
 
 ### 2026-06-03 — Stage D slice 2a (상태머신 + soft-start 램프) 코드 완료 — HW 검증 대기
 
