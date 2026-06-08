@@ -16,3 +16,9 @@ void app_reg_tick(void);
 
 /* Live measured values for the LCD display machine (single owner). */
 const lcd_measure_t *app_reg_measure(void);
+
+/* Route a panel/comm ultrasonic command into the run FSM (slice 2b). Called from
+ * app_lcd_hook_us_command. START/RUN_RELEASE gate the run; SEEK/RESET = no-op this
+ * slice (deferred, spec §9). Superloop single-thread — mutates FSM state in place.
+ * us_cmd_t is visible via the already-included app_lcd.h. */
+void app_reg_command(us_cmd_t cmd);

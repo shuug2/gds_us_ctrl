@@ -60,10 +60,11 @@ typedef enum {
     US_CMD_RUN_RELEASE,
 } us_cmd_t;
 
-/* us_run_status values. slice 2a fills US_RUNNING whenever the regulation loop
- * is active; the command-source taxonomy (REMOTE/TOUCH/COMM) is slice 2b.
+/* us_run_status command-source taxonomy (samd20 main.c:110-113). slice 2b run FSM
+ * publishes US_TOUCH while a touch-started run is active, US_IDLE when stopped.
+ * REMOTE (physical switch / IPC) and COMM (Modbus) are reserved for later slices.
  * disp gate = (us_run_status != US_IDLE). */
-enum { US_IDLE = 0, US_RUNNING = 1 };
+enum { US_IDLE = 0, US_REMOTE = 1, US_TOUCH = 2, US_COMM = 3 };
 
 /* ether-input field selector (LV_ETHER_KEY 'I'/'M'/'G'); NONE = idle. */
 #define LCD_ETHER_INPUT_NONE  0xFFu

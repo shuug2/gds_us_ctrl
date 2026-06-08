@@ -33,8 +33,12 @@ typedef struct {
     uint8_t  cur_ch;                  /* 0 = SENS_OUT, 1 = OSC (alternation) */
 
     uint8_t  main_state;              /* 1 = soft-start ramp, 0 = lookup regulation */
-    uint16_t ramp_counter;           /* 0..401, advances ~every 10 ms while state==1 */
+    uint16_t ramp_counter;           /* 0..401, advances ~every 10 ms while running */
     uint32_t prev_ramp_ms;           /* 10 ms ramp cadence gate */
+
+    uint8_t  us_run_status;          /* slice 2b: US_IDLE/REMOTE/TOUCH/COMM (FSM owns) */
+    uint16_t max_power;              /* running peak of sel during the active run */
+    uint16_t last_power;             /* peak latched on stop (us_off, samd20 4180) */
 
     uint32_t prev_ms;
 #ifdef REG_TRACE
@@ -52,7 +56,47 @@ void app_reg_init(void)
     adc1_init();
     g_reg.prev_ms      = sys_tick_get_ms();
     g_reg.prev_ramp_ms = g_reg.prev_ms;
-    g_reg.main_state   = 1u;          /* boot into soft-start (M16 init=1, @0x1B8A) */
+    /* slice 2b: boot IDLE (us_run_status=0, main_state=0 via memset). The output
+     * runs only on a RUN command (app_reg_command); slice-2a auto-run retired. */
+}
+
+void app_reg_command(us_cmd_t cmd)
+{
+    switch (cmd) {
+    case US_CMD_START:
+        /* Touch RUN press: re-arm the soft-start ramp only on a real idle->run edge.
+         * M16's ramp is edge-driven on M_START OFF->ON; a repeated/auto-repeat press
+         * while already running must NOT restart it (else ramp_counter resets and
+         * never reaches 401 -> no handoff to lookup -> output stuck at ramp start).
+         * samd20 gated on != US_REMOTE because its ramp was already edge-driven
+         * downstream; for a TOUCH-only slice == US_IDLE is strictly safer (can't
+         * restart an active run). REMOTE/COMM source arbitration + re-press energy
+         * reset = later slices. */
+        if (g_reg.us_run_status == (uint8_t)US_IDLE) {
+            g_reg.us_run_status = (uint8_t)US_TOUCH;
+            g_reg.main_state    = 1u;
+            g_reg.ramp_counter  = 0u;
+            g_reg.max_power     = 0u;
+        }
+        break;
+    case US_CMD_RUN_RELEASE:
+        /* Touch RUN release: only a touch-started run stops here (samd20
+         * main.c:3699 / us_off main.c:4180). Latch last_power = running peak. */
+        if (g_reg.us_run_status == (uint8_t)US_TOUCH) {
+            g_reg.last_power    = g_reg.max_power;
+            g_reg.us_run_status = (uint8_t)US_IDLE;
+        }
+        break;
+    case US_CMD_SEEK:
+    case US_CMD_RESET:
+    default:
+        /* Regulation effect deferred (spec §9): the input layer already does the
+         * RESET icon/page restore; SEEK/RESET drive is B-SEAM. */
+        break;
+    }
+#ifdef REG_TRACE
+    mon_printf("[reg] cmd=%u run=%u\r\n", (unsigned)cmd, (unsigned)g_reg.us_run_status);
+#endif
 }
 
 const lcd_measure_t *app_reg_measure(void)
@@ -87,13 +131,18 @@ static void reg_acquire_step(void)
 
 static void reg_publish_measure(void)
 {
-    /* spec §7: amp + scaled level live; cycle/freq/energy/status stay 0. */
+    /* slice 2b run-gated: curr_power = live setpoint (0 when idle); max_power =
+     * running peak during the run; last_power latched on stop (app_reg_command).
+     * cycle/freq/energy stay 0 (weld-cycle deferred). */
+    uint8_t active = (uint8_t)(g_reg.us_run_status != (uint8_t)US_IDLE);
     g_measure.curr_amp   = g_reg.ch0_avg;
-    g_measure.curr_power = g_reg.adc_scaled_value;
-    g_measure.max_power  = g_reg.adc_scaled_value;
-    g_measure.last_power = g_reg.adc_scaled_value;
-    /* slice 2a: system is active from boot (no stop command yet = slice 2b). */
-    g_measure.us_run_status = (uint8_t)US_RUNNING;
+    g_measure.curr_power = active ? g_reg.adc_scaled_value : 0u;
+    if (active && (g_reg.adc_scaled_value > g_reg.max_power)) {
+        g_reg.max_power = g_reg.adc_scaled_value;
+    }
+    g_measure.max_power     = g_reg.max_power;
+    g_measure.last_power    = g_reg.last_power;
+    g_measure.us_run_status = g_reg.us_run_status;
 }
 
 void app_reg_tick(void)
@@ -105,7 +154,7 @@ void app_reg_tick(void)
      * regulation at RAMP_DONE_COUNT (M16 @0x137C). */
     if ((uint32_t)(now - g_reg.prev_ramp_ms) >= REG_RAMP_MS) {
         g_reg.prev_ramp_ms = now;
-        if (g_reg.main_state == 1u) {
+        if ((g_reg.us_run_status != (uint8_t)US_IDLE) && (g_reg.main_state == 1u)) {
             g_reg.ramp_counter++;
             if (g_reg.ramp_counter >= RAMP_DONE_COUNT) {
                 g_reg.main_state = 0u;
@@ -120,11 +169,17 @@ void app_reg_tick(void)
 
     reg_acquire_step();
 
-    /* Output setpoint MUX (spec §3.1): soft-start ramp while state==1, else the
-     * slice-1 scale of the latest ch0_avg. state==0 path == slice 1 verbatim. */
-    uint16_t sel = (g_reg.main_state == 1u)
-                 ? reg_ramp_level(g_reg.ramp_counter)
-                 : reg_scale(g_reg.ch0_avg);
+    /* Output setpoint MUX (spec §3.1): idle (no run command) forces 0; while
+     * running, soft-start ramp during state==1, else the slice-1 scale of the
+     * latest ch0_avg. The running state==0 path == slice 1 verbatim. */
+    uint16_t sel;
+    if (g_reg.us_run_status == (uint8_t)US_IDLE) {
+        sel = 0u;
+    } else if (g_reg.main_state == 1u) {
+        sel = reg_ramp_level(g_reg.ramp_counter);
+    } else {
+        sel = reg_scale(g_reg.ch0_avg);
+    }
     g_reg.adc_scaled_value = sel;
     g_reg.band             = reg_output_level(sel);
 
@@ -133,10 +188,11 @@ void app_reg_tick(void)
 #ifdef REG_TRACE
     if ((uint32_t)(now - g_reg.trace_ms) >= REG_TRACE_MS) {
         g_reg.trace_ms = now;
-        mon_printf("[reg] st=%u rc=%u ch0=%u ch1=%u sel=%u band=%u\r\n",
-                   (unsigned)g_reg.main_state, (unsigned)g_reg.ramp_counter,
-                   (unsigned)g_reg.ch0_avg, (unsigned)g_reg.ch1_avg,
-                   (unsigned)g_reg.adc_scaled_value, (unsigned)g_reg.band);
+        mon_printf("[reg] run=%u st=%u rc=%u ch0=%u ch1=%u sel=%u band=%u\r\n",
+                   (unsigned)g_reg.us_run_status, (unsigned)g_reg.main_state,
+                   (unsigned)g_reg.ramp_counter, (unsigned)g_reg.ch0_avg,
+                   (unsigned)g_reg.ch1_avg, (unsigned)g_reg.adc_scaled_value,
+                   (unsigned)g_reg.band);
     }
 #endif
 }
