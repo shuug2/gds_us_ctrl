@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### 2026-06-08 — Stage D slice 2b HW 검증 일부 PASS + V30 RUN 버튼 에셋 quirk fix (RUN 재검증 대기)
+
+실보드 HW 검증 세션(ST-LINK 플래시 + SWD g_measure read + USART6 mon, REG_TRACE+LCD_TRACE_RX 빌드). **부팅 IDLE·RESET/SEEK 라우팅 PASS, RUN은 V30 에셋 quirk로 막혀 펌웨어 fix 적용, RUN 재검증은 보드 재연결 후(세션 중 USB 분리).**
+
+- **✅ 부팅 IDLE**: `[reg] run=0 st=0 rc=0 sel=0 band=21`, auto-ramp 없음(SWD `us_run_status=0` 불변) = slice 2a auto-run 폐기 확인.
+- **✅ 명령 라우팅**: RESET → `[lcd-hook] us_command=2` `[reg] cmd=2 run=0`; SEEK → `us_command=1` `cmd=1 run=0`. hook→`app_reg_command` HW 확인, RESET/SEEK no-op(spec §9) 정상.
+- **원인규명(systematic-debugging)**: RUN press 무반응. `[lcd-hook]` 미발화 트레이스 → upstream 격리 → `LCD_TRACE_RX` 빌드로 수신 프레임 관측 = **V30 RUN 버튼이 `KEY_MULTI(0x1080)` 키값 0을 press·release 양 edge 반환**(RESET=1/SEEK=2는 정상, data=0은 RUN 고유). `handle_key_multi`(samd20 포팅)는 data=3/4만 처리 → RUN 명령 미발화. **LCD 스테이지 버그A(SETUP_MODEL data=0)와 동일 = V30 DGUS 에셋 root, slice 2b 코드 무관.** 에셋 점검: `hw/lcd/dgus/13TouchFile.bin`은 컴파일 출력, 편집 DWIN 프로젝트 repo 부재.
+- **fix `b78cbbf`** (사용자 결정 = Option B 펌웨어 적응, `app_lcd_input.c` 한 파일, FSM/enum/app_reg 무변경, spec §4.4): `handle_key_multi` `data16==0` 분기 추가 → `app_lcd_measure()->us_run_status`로 START(IDLE)/RUN_RELEASE(running) 매핑. down/up data=0 쌍이 hold-to-run 재구성, self-syncing(edge 누락→다음 press가 정지로 복구). set_pot은 START에서만. 빌드 0-warning(FLASH 28.96% trace), 호스트 PASS.
+- **다음**: 보드 재연결 → 재플래시(`fw/build-trace/` 준비됨) → RUN press→`cmd=0 run=2`+램프+ICON_RUN→release→정지+latch→re-arm 재검증 + fix `b78cbbf` cpp-reviewer → finishing + 태그 `hw-revA_fw-stage-d2b`. (A 에셋 정상화 = DWIN 툴 가용 시 후속.)
+
 ### 2026-06-08 — Stage D slice 2b (RUN 명령 게이트) 코드 완료 — HW 검증 대기
 
 slice 2a 머지 후 slice 2b 착수. brainstorming→spec→plan(`writing-plans`)→subagent-driven 구현(Task별 fresh subagent + 2-stage 리뷰). 브랜치 **`feat/stage-d-slice2b-run-gate`**(main 미머지). **터치 RUN start/stop 게이트만**(SEEK/RESET regulation 효과·overload·weld-cycle·Modbus·OSC 구동·blink = DEFERRED). 빌드 0-warning(FLASH 28.64%/RAM 10.60%), 호스트 테스트 `all checks PASSED`(순수함수 무회귀; 신규 순수함수 없음), 전체 cpp-reviewer **APPROVED**(HW 검증 대기). **남은 것 = Task 3 실보드 HW 검증 → 최종 머지/태그.**
