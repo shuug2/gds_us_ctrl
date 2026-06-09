@@ -104,6 +104,12 @@ DGUS 패널이 run 중 **자체 리셋**(전원 글리치 등)하면 `SYS_PIC_NO
 **결정(Option A, 안전 포스처 = UI 상실→액추에이터 정지)**: `SYS_PIC_NOW` 재init 블록에서 `app_lcd_hook_us_command(US_CMD_RUN_RELEASE)`를 발행 → `us_run_status→US_IDLE`(+`last_power` latch) → init이 `ICON_RUN=0`, 다음 `disp_step`이 **진짜 엣지**(true→false)로 아이콘 재동기. → 아이콘 고착 + 무한구동 **동시 해소**. **Task 2의 disp 엣지 코드는 무변경**(steady-state 정상). 단일 라인 변경(`app_lcd_input.c` SYS_PIC_NOW 케이스).
 > 잔여 한계(범위 밖): 패널이 `SYS_PIC_NOW`를 보고 못 하고 행(hang)하면 이 경로 미발화 → 무한구동 잔존. 일반 복구(run 명령 버퍼링/타임아웃 워치독)는 stop-conditions(overload/estop) 슬라이스 패밀리 = §9 deferred.
 
+### 4.4 V30 RUN 버튼 매핑 (`KEY_MULTI data=0`, HW-traced 2026-06-08)
+**실보드 HW 검증 중 발견**: V30 DGUS 패널의 RUN 버튼은 `KEY_MULTI`(0x1080)을 **키값 0**으로 press·release **양 edge**에 반환한다(`13TouchFile.bin` 에셋 설정). RESET=**1**, SEEK=**2**는 samd20·펌웨어와 정확히 일치(HW 트레이스 `[lcd-hook] us_command` 발화 확인). 그러나 samd20 충실 포팅 `handle_key_multi`는 RUN을 press=3/release=4로 기대 → **data=0이 어느 분기에도 안 걸려 RUN 명령 미발화**(LCD 스테이지 버그A·comm-display와 동일한 "V30 에셋이 root" 클래스). 편집 가능한 DWIN 프로젝트는 repo 부재.
+
+**결정(사용자, 2026-06-08): 펌웨어 적응(Option B)**. `handle_key_multi`에 `data16==0` 분기 추가 — **live `us_run_status`로 매핑**: `app_lcd_measure()->us_run_status == US_IDLE`이면 `US_CMD_START`(+set_pot), 아니면 `US_CMD_RUN_RELEASE`. `data=0`이 RUN에 **고유**(RESET=1/SEEK=2와 불충돌)하므로 모호성 없음. down/up data=0 쌍이 **hold-to-run을 재구성**(down=idle→START, up=running→RELEASE), **self-syncing**(edge 누락 시 다음 press가 정지로 복구) + §4.3 SYS_PIC_NOW가 IDLE 강제. 기존 `data=3/4` 분기는 forward-compat로 유지. **FSM/enum/app_reg 무변경, `app_lcd_input.c` 한 파일만.** set_pot은 START 경로에서만(DAC stub, F2).
+> A(에셋 수정 = RUN 키 press=3/release=4)는 프로젝트 선례에 맞으나 off-repo DWIN 툴 + 버튼 타입 변경 가능 여부 미확인이라 후속 옵션으로 둠.
+
 ---
 
 ## 5. 명령 라우팅 (`app_reg_command`)
