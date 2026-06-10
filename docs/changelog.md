@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### 2026-06-10 — slice 2b 통합 cpp-reviewer 리뷰 APPROVED (b78cbbf + 27d45c3)
+
+V30 RUN quirk fix `b78cbbf` + 금일 의미론 수정 `27d45c3` 통합 cpp-reviewer 리뷰 = **APPROVED**(CRITICAL/HIGH 0건). 코너 케이스 전수 검증: data=0 START/RELEASE 매핑(더블 프레스·release 유실·ceiling 후 orphaned release·`swallow_start` 누출/오흡수·SYS_PIC_NOW 상호작용), 워밍업 단발성(`main_state=1` 쓰기 = init 1곳, 오버플로 안전), ceiling 산술(×10ms 단위·0=off·uint32 래핑-안전), ADC 누산 오버플로 무, ISR 비접근(슈퍼루프 단일스레드 무race). 스펙 편차 4건 = 전부 2026-06-10 분석 문서가 승인(스펙 부분 대체 관계 확인).
+
+- **비차단 4건 처분**: M2(same-burst stale `us_run_status` 의도 주석)·L1(`app_reg_tick`의 `app_lcd_cfg()` 라이브 읽기 헤더 주석) = 주석 추가 커밋 `c10b0aa`(코드 무변경, main 28.67%/trace 29.00% 0-warning, 호스트 PASS). M1(app_lcd↔app_reg 순환 의존 → 후속 슬라이스에서 파라미터 주입 리팩터링 권고)·L2(`reg_ramp_level` 레퍼런스 API 잔류 = 의도적 보존) = deferred.
+- **남은 것** = HW 재검증(보드 재연결 시: 부팅 ~4s 워밍업 1회 → RUN press 즉시 `cmd=0 run=2`+`sel=scale(ch0_avg)`·ICON_RUN·램프 없음·500ms ceiling 자동정지·release swallow 1회) → finishing(머지) + 태그 `hw-revA_fw-stage-d2b`.
+
 ### 2026-06-10 — IPC 의미론 교차검증 → 램프 원본충실 회귀 + on-time ceiling + ADC 페이스 복원
 
 samd20 소스 × M16 디스어셈블리 교차 검증으로 두-MCU IPC 런타임 의미론 확정(산출물 `docs/superpowers/analysis/2026-06-10-samd20-m16-ipc-semantics-verified.md`). 비판적 검토에서 발견 4건 → 사용자 결정(①은 원본충실 회귀, 나머지는 권고대로) 반영. `app_reg.c`/`app_reg.h`/`app_reg_calc.c`(주석만) 수정, 빌드 0-warning(main+trace), 호스트 PASS.
