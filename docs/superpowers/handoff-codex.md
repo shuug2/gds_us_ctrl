@@ -62,7 +62,7 @@ You are implementing a finalized, reviewed plan. Follow it exactly — do not re
   (time2str/energy2str), or I2C_POT writes — explicitly out of scope.
 - Do NOT add HW flashing/probe steps. The board is unavailable; the plan's "Deferred to a follow-up HW task"
   section is NOT for you.
-- Do NOT run graphify or regenerate docs/codemaps. Do NOT modify the spec or plan files.
+- Do NOT regenerate docs/codemaps. Do NOT modify the spec or plan files.
 
 ## IF REALITY DIVERGES FROM THE PLAN
 - If a build fails or a symbol is missing despite following the plan, make the MINIMAL fix to reach a green

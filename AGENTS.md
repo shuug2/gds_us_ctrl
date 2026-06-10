@@ -103,11 +103,6 @@ cmake --build build --target flash
 
 **먼저 `docs/NEXT_STEPS.md`를 읽고 진행 상황과 다음 작업을 확인.**
 
-분석 산출물:
-- `graphify-out/graph.html` — 코드 그래프 (브라우저)
-- `graphify-out/GRAPH_REPORT.md` — 감사 리포트
-- `graphify-out/graph.json` — 재사용 가능 (graphify query/path/explain 가능)
-
 미해결 핵심 질문 (회로도 필요):
 1. ATmega16 PA4/PC0/PC1/PC4 ↔ SAMD20 핀 매핑
 2. 7-세그먼트 디스플레이 유지 여부

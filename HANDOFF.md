@@ -4,7 +4,7 @@
 **Branch**: `feat/stage-d-slice2b-run-gate` (main 미머지, tip `b78cbbf`)
 **Status**: ✅ **코드 완료 + 통합 cpp-reviewer APPROVED.** HW 검증 일부 PASS(부팅 IDLE / RESET·SEEK 라우팅). **RUN은 V30 에셋 quirk로 막혀 펌웨어 fix `b78cbbf` 적용 — RUN/ICON_RUN/램프 재검증은 보드 재연결 후.** fix `b78cbbf`는 cpp-reviewer 미수행.
 
-> 1차 핸드오프 = `docs/superpowers/RESUME.md`(SessionStart 자동 로드) + `docs/NEXT_STEPS.md`. 본 `HANDOFF.md`는 보조(HW 절차 상세). 응답 **한국어**(코드/식별자 영어). 워크스페이스: **코드는 요청한 부분만 수정**. graphify per-session 스킵.
+> 1차 핸드오프 = `docs/superpowers/RESUME.md`(SessionStart 자동 로드) + `docs/NEXT_STEPS.md`. 본 `HANDOFF.md`는 보조(HW 절차 상세). 응답 **한국어**(코드/식별자 영어). 워크스페이스: **코드는 요청한 부분만 수정**. graphify 미사용(2026-06-10 사용 중단, 산출물 삭제).
 
 ## Goal
 

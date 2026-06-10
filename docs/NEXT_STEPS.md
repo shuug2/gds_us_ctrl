@@ -174,10 +174,7 @@ Stage A 에서 이미 발견된 패턴 (typo / Phase 2 reality 불일치 / scope
 - USART1 BRR=0x341 (115246 baud) ✅, CR1=0x202C ✅, CR3=0x1 (EIE) ✅
 
 ### 5.4 graphify
-- vendor 포함 corpus 3M 단어 / 280 파일 — 임계 초과
-- Stage A 두 세션 모두 사용자 graphify 스킵 채택
-- 사용자 메모리 `feedback_graphify_after_docs` 정책은 유지하되 매 세션 강제 ✗
-- 다음 세션 진입 시 동일 결정 필요
+- **사용 중단 (2026-06-10, 사용자 결정)** — `graphify-out/` 산출물 삭제, `.gitignore` 항목·메모리 정책(`feedback_graphify_after_docs`) 제거. 재생성하지 말 것.
 
 ### 5.5 컨텍스트
 - Opus 4.7 (1M context) 환경에서 Stage A 단일 세션 ~36% 사용
