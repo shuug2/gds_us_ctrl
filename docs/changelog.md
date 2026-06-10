@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### 2026-06-10 — IPC 의미론 교차검증 → 램프 원본충실 회귀 + on-time ceiling + ADC 페이스 복원
+
+samd20 소스 × M16 디스어셈블리 교차 검증으로 두-MCU IPC 런타임 의미론 확정(산출물 `docs/superpowers/analysis/2026-06-10-samd20-m16-ipc-semantics-verified.md`). 비판적 검토에서 발견 4건 → 사용자 결정(①은 원본충실 회귀, 나머지는 권고대로) 반영. `app_reg.c`/`app_reg.h`/`app_reg_calc.c`(주석만) 수정, 빌드 0-warning(main+trace), 호스트 PASS.
+
+- **램프 의미론 정정(원본충실 회귀)**: M16 램프는 per-START 소프트스타트가 아니라 **부팅 1회 워밍업**(0x0195 nonzero 쓰기는 @0x1B8A 뿐, 재진입 불가; 램프 중 OSC 플래그 0 + 명령 디스패처 스킵 @0x041E; 진폭은 samd20 I2C_POT 소관). → boot 1회 ~4s 워밍업(명령 무시·sel=0) 후 **START 즉시 구동**. slice 2a per-START 램프 폐기, `reg_ramp_level()`은 출력 경로에서 제거(검증 레퍼런스로 보존, 호스트 테스트 유지). 기존 "M16 ramp is edge-driven on M_START" 주석은 디스어셈블리와 모순으로 폐기.
+- **TOUCH run on-time ceiling(의도적 안전 추가, 원본 비충실 명기)**: 원본 `limit_on_time`은 REMOTE/COMM+SYS_HAND 전용(`main.c:5296`, 터치 런 무제한). V30 RUN 버튼 data=0 quirk(release 유실→무한구동) 대비로 US_TOUCH 런에 `limit_on_time×10ms`(기본 500ms, 패널 편집, 0=off) ceiling 적용. ceiling 정지 후 잔여 release가 START로 매핑되는 역전은 `swallow_start` 1회 소비로 보정(data=4 release는 RUN_RELEASE-while-IDLE에서 해소).
+- **ADC 획득 페이스 복원**: 2ms/1채널 교대(ch0_avg 40ms·ch1_avg 400ms = 원본 8.3/42ms 대비 5~10×低) → **1ms 양채널**(ch0_avg 10ms·ch1_avg 50ms).
+- **deferred 명문화**: RESET→SEEK 500ms 자동 체인(+SEEK 500ms 자동해제, `main.c:5388-5408`) = SEEK/RESET 구현 시 필수 의미론. **B-SEAM 가설 축소**: OSC 구동 = 명령 3선 active-LOW 레벨 미러 유력(룩업/램프는 미연결 7-seg 표시 전용이었을 공산) → 벤치 측정을 "3선 미러 확인"으로 축소. M16 PA7/PC1/PC4는 samd20 대응 없음(IPC 아님). M_OVLD 극성은 이중부정 혼동 위험 — 포팅 시 실측 필수.
+- **HW 재검증 절차 변경**: RUN 검증 기대치가 "램프 0→401"에서 **"부팅 워밍업 1회(~4s) 후 RUN 즉시 sel=scale(ch0_avg)·release 정지·500ms ceiling"**으로 바뀜.
+- **LCD 포팅 전수 감사(후속) = 합격**(분석 문서 §6b): samd20 parse_lcd_comm 34 VP·표시 TX·init/SYS_PIC_NOW 복구 전부 1:1 대응 + V30 적응 4건/의도적 편차 문서화 확인, 코드 무변경. **미문서 갭 3건 deferred 기록**: ① ICON_RESET/SEEK/ERROR_RESET 점등 엣지(RESET→SEEK 체인 구현 시 포함) ② `us_on_time_200m` 미공급(LV_TIME 바 런 중 0 — app_reg 저비용 후속 후보) ③ `LV_WORK_CNT` 증가(용접 사이클 deferred 소속). set_pot(I2C_POT)은 진폭 제어 실체로 격상 — 실출력 = B-SEAM 3선 미러 + I2C_POT(F2) 두 축.
+
 ### 2026-06-08 — Stage D slice 2b HW 검증 일부 PASS + V30 RUN 버튼 에셋 quirk fix (RUN 재검증 대기)
 
 실보드 HW 검증 세션(ST-LINK 플래시 + SWD g_measure read + USART6 mon, REG_TRACE+LCD_TRACE_RX 빌드). **부팅 IDLE·RESET/SEEK 라우팅 PASS, RUN은 V30 에셋 quirk로 막혀 펌웨어 fix 적용, RUN 재검증은 보드 재연결 후(세션 중 USB 분리).**
