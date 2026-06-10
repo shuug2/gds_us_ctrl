@@ -124,7 +124,11 @@ static void handle_key_multi(uint16_t data16)
          * 2026-06-08). Map to START vs RUN_RELEASE by the live run state so the
          * down/up data=0 pair reconstructs hold-to-run; self-syncing (a dropped edge
          * is corrected by the next press). The legacy data=3/4 branches above stay
-         * for forward-compat if the asset is later fixed to send them. See spec §4.4. */
+         * for forward-compat if the asset is later fixed to send them. See spec §4.4.
+         * Note: us_run_status is published by app_reg_tick, so back-to-back data=0
+         * frames drained in the same loop iteration both read the stale (pre-tick)
+         * status; app_reg_command's US_IDLE guard rejects the double-START and the
+         * release becomes a dropped edge (self-syncing per spec §4.4). */
         if (app_lcd_measure()->us_run_status == US_IDLE) {
             app_lcd_hook_us_command(US_CMD_START);
             app_lcd_hook_set_pot(cfg->output_power);    /* DAC on run start (stub, F2) */
