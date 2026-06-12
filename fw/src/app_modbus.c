@@ -191,6 +191,8 @@ static void apply_writes(void)
         dgus_write_u16(DISP_MULTI_EN, cfg->multi_ctrl ? 1u : 0u);
         save = true;
     } else if (g_mb.holding[MB_REG_EN_SAFTY] != cfg->f_safty) {
+        /* no 0/1 normalization: samd20 stores as-is (4533) — the LCD input
+         * path normalizes its own writes; comm writes stay faithful */
         cfg->f_safty = (uint8_t)g_mb.holding[MB_REG_EN_SAFTY];
         dgus_write_u16(DISP_SAFTY, cfg->f_safty);
         save = true;
@@ -204,7 +206,9 @@ static void apply_writes(void)
     }
 
     if (save) {
-        /* Whole-map FRAM commit — codebase pattern (data_save_commit). */
+        /* Whole-map FRAM commit — codebase pattern (data_save_commit).
+         * ~2 ms at 400 kHz nominal; the 50 ms/call I2C timeout governs the
+         * worst case (bus hang). Same budget as the LCD DATA_SAVE path. */
         app_config_save_all(cfg);
     }
     /* mirror_live() runs right after in app_modbus_tick(): the next read
