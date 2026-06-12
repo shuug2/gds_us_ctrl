@@ -38,6 +38,7 @@ uint16_t mb_crc16(const uint8_t *buf, uint8_t len)
 static uint8_t mb_read_regs(const mb_core_t *mb, const uint8_t *frame,
                             uint8_t fc, uint8_t resp[MB_RESP_MAX])
 {
+    /* contract: caller (mb_core_decode) guarantees frame[0..5] are valid */
     uint16_t addr = (uint16_t)(((uint16_t)frame[2] << 8) | frame[3]);
     uint16_t num  = (uint16_t)(((uint16_t)frame[4] << 8) | frame[5]);
     uint8_t  j    = 3;
@@ -51,7 +52,7 @@ static uint8_t mb_read_regs(const mb_core_t *mb, const uint8_t *frame,
 
     resp[0] = mb->device_addr;
     resp[1] = fc;
-    resp[2] = (uint8_t)(num * 2u);
+    resp[2] = (uint8_t)((uint16_t)(num * 2u));
     for (uint16_t i = addr; i < (uint16_t)(addr + num); i++) {
         resp[j++] = (uint8_t)(mb->holding[i] >> 8);
         resp[j++] = (uint8_t)(mb->holding[i]);

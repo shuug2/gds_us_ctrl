@@ -113,6 +113,13 @@ static void test_read_regs_bounds(void) {
     CHECK_EQ(mb_core_decode(&mb, req, 8, MB_MODE_RTU, resp, &fc), 0);
     mk_req(req, 5, 0x03, 0x0000, 0x0033);   /* count 51 > 50 */
     CHECK_EQ(mb_core_decode(&mb, req, 8, MB_MODE_RTU, resp, &fc), 0);
+
+    /* fence-posts: last valid register reads fine; one past = silence */
+    mk_req(req, 5, 0x03, 0x0031, 0x0001);   /* addr 49, num 1 -> ok */
+    CHECK_EQ(mb_core_decode(&mb, req, 8, MB_MODE_RTU, resp, &fc), 7);
+    CHECK_EQ(fc, 0x03);
+    mk_req(req, 5, 0x03, 0x0032, 0x0001);   /* addr 50, num 1 -> silence */
+    CHECK_EQ(mb_core_decode(&mb, req, 8, MB_MODE_RTU, resp, &fc), 0);
 }
 
 /* Silence paths: other addr, bad CRC, unsupported FC, runt frame (samd20:
