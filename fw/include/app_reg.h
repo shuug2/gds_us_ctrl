@@ -15,9 +15,12 @@ void app_reg_init(void);
 /* Superloop regulation step; gates internally on sys_tick_get_ms() deltas:
  * 1 ms both-channel ADC accumulate/average, ~2 ms scale + lookup on the
  * latest ch0_avg + lcd_measure_t publish, ~10 ms boot warm-up advance.
- * Also reads limit_on_time live from app_lcd_cfg() for the TOUCH on-time
- * ceiling (evaluated every call, not on the 2 ms gate). */
-void app_reg_tick(void);
+ * limit_on_time (x10 ms, 0 = ceiling off) is injected by the caller from the
+ * live config each call (cpp-review M1: app_reg must not call back into
+ * app_lcd) — passing it per call keeps the panel-edit-takes-effect-immediately
+ * semantics; the TOUCH on-time ceiling is evaluated every call, not on the
+ * 2 ms gate. */
+void app_reg_tick(uint16_t limit_on_time);
 
 /* Live measured values for the LCD display machine (single owner). */
 const lcd_measure_t *app_reg_measure(void);

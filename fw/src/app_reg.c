@@ -172,7 +172,7 @@ static void reg_publish_measure(void)
     g_measure.us_run_status = g_reg.us_run_status;
 }
 
-void app_reg_tick(void)
+void app_reg_tick(uint16_t limit_on_time)
 {
     uint32_t now = sys_tick_get_ms();
 
@@ -198,9 +198,10 @@ void app_reg_tick(void)
      * the run flag on an internal countdown (g_018F, Timer1 ISR @0x0572).
      * limit_on_time = x10 ms, panel-editable (LV_MAX_ON_TIME), 0 disables. */
     if (g_reg.us_run_status == (uint8_t)US_TOUCH) {
-        /* Live-read each tick on purpose: a panel edit of LV_MAX_ON_TIME takes
-         * effect immediately, even mid-run (codebase-idiomatic live config). */
-        uint16_t lim = app_lcd_cfg()->limit_on_time;
+        /* limit_on_time is injected by the caller from the live config each
+         * call (M1: no call back into app_lcd), so a panel edit of
+         * LV_MAX_ON_TIME still takes effect immediately, even mid-run. */
+        uint16_t lim = limit_on_time;
         if ((lim != 0u) &&
             ((uint32_t)(now - g_reg.run_start_ms) >=
              (uint32_t)lim * ON_TIME_UNIT_MS)) {

@@ -74,6 +74,8 @@ void app_loop_iter(void)
     /* 2. Display step machine — 4 ms cadence (spec §11), one VP-group per step. */
     app_lcd_tick();
 
-    /* 3. Regulation core — ~2 ms cadence (spec §6), compute-only this slice. */
-    app_reg_tick();
+    /* 3. Regulation core — ~2 ms cadence (spec §6), compute-only this slice.
+     * limit_on_time injected from the live config (cpp-review M1: app_reg
+     * must not reach back into app_lcd); per-iter read = live panel edits. */
+    app_reg_tick(app_lcd_cfg()->limit_on_time);
 }
