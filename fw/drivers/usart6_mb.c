@@ -10,6 +10,7 @@
  *  - Undetectable corner: if exactly 256 bytes (a full wrap) land between two
  *    polls the head looks unmoved — the merged frame then fails CRC and the
  *    master retries. Real frames are <= ~10 B; not reachable in practice. */
+#include <stdbool.h>
 #include "stm32f4xx_hal.h"
 #include "periph.h"
 #include "clock.h"     /* Error_Handler */
@@ -29,7 +30,7 @@ static uint16_t s_prev_head;     /* DMA position at the previous poll */
 static uint32_t s_last_rx_ms;    /* last time the DMA position moved */
 static uint32_t s_baud   = 19200u;
 static uint8_t  s_gap_ms = 2u;
-static uint8_t  s_open;
+static bool     s_open;
 
 static uint16_t rx_head(void)
 {
@@ -42,6 +43,13 @@ static uint16_t rx_head(void)
 
 void usart6_mb_open(uint8_t speed_idx, uint8_t parity_idx)
 {
+    /* Double-open guard: the app_modbus state machine always closes before
+     * reopening; a second open here would silently kill the live DMA stream
+     * mid-transfer and reset the ring state. Make it a no-op instead. */
+    if (s_open) {
+        return;
+    }
+
     __HAL_RCC_DMA2_CLK_ENABLE();
 
     /* Re-init USART6 at the Modbus line config. GPIO PC6/PC7 AF8 was set by
@@ -99,25 +107,25 @@ void usart6_mb_open(uint8_t speed_idx, uint8_t parity_idx)
         Error_Handler();
     }
     SET_BIT(USART6->CR3, USART_CR3_DMAR);
-    s_open = 1u;
+    s_open = true;
 }
 
 void usart6_mb_close(void)
 {
-    if (s_open == 0u) {
+    if (!s_open) {
         return;
     }
     CLEAR_BIT(USART6->CR3, USART_CR3_DMAR);
     (void)HAL_DMA_Abort(&hdma_usart6_rx);
     (void)HAL_DMA_DeInit(&hdma_usart6_rx);
     (void)HAL_UART_DeInit(&huart6);
-    s_open = 0u;
+    s_open = false;
     /* caller re-runs usart6_init() to restore the mon line config */
 }
 
 uint8_t usart6_mb_rx_frame(uint8_t *buf, uint8_t maxlen)
 {
-    if (s_open == 0u) {
+    if (!s_open) {
         return 0;
     }
     uint32_t now  = sys_tick_get_ms();
@@ -153,13 +161,14 @@ uint8_t usart6_mb_rx_frame(uint8_t *buf, uint8_t maxlen)
 
 void usart6_mb_send(const uint8_t *buf, uint8_t len)
 {
-    if (s_open == 0u) {
+    if (!s_open) {
         return;
     }
     /* Blocking TX (spec). Timeout scaled to the frame time: 11 bits/char
      * (start + 8 + parity + stop) + 50 ms margin. Worst case 105 B @2400
      * ~= 482 ms — bounded superloop stall, spec-approved. */
     uint32_t timeout = ((uint32_t)len * 11000u) / s_baud + 50u;
+    /* HAL pTxData is non-const; TX path is read-only on the buffer. */
     (void)HAL_UART_Transmit(&huart6, (uint8_t *)buf, len, timeout);
 
     /* Echo guard (plan Deviations 7): if the auto-DE transceiver loops our
