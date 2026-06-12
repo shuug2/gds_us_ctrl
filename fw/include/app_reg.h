@@ -1,7 +1,7 @@
 /* fw/include/app_reg.h — Stage D regulation core: superloop step that acquires
  * the 2-ch ADC (1 ms pace), averages (10/50), scales, and runs the lookup at
  * the ~2 ms regulation cadence. Run gate: one M16-faithful boot warm-up
- * (~4 s, commands ignored), then RUN = immediate level-follow with a TOUCH
+ * (~4 s, commands ignored), then RUN = immediate level-follow with a TOUCH/COMM
  * on-time ceiling (limit_on_time x10 ms). Owns the live lcd_measure_t the LCD
  * display reads. NO physical output yet (OSC drive deferred — B-SEAM). */
 #pragma once

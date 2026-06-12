@@ -50,7 +50,7 @@ typedef struct {
     uint16_t last_power;             /* peak latched on stop (us_off, samd20 4180) */
     uint16_t max_amp;                /* running peak of curr_amp during the run */
     uint16_t last_amp;               /* amp latched on stop (samd20 last_amp) */
-    uint32_t run_start_ms;           /* TOUCH run start (on-time ceiling base) */
+    uint32_t run_start_ms;           /* TOUCH/COMM run start (on-time ceiling base) */
     uint8_t  swallow_start;          /* 1 = next START is the orphaned release of a
                                       * timeout-stopped run (V30 data=0 quirk) */
 
@@ -222,7 +222,8 @@ void app_reg_tick(uint16_t limit_on_time)
 
     /* Run on-time ceiling (limit_on_time x10 ms, 0 = off, panel-editable).
      * COMM runs: samd20-faithful (main.c:5296 applies it to COMM/REMOTE in
-     * SYS_HAND; 2026-06-10 analysis doc authority). TOUCH runs: intentional
+     * SYS_HAND; 2026-06-10 analysis doc authority — REMOTE ceiling lands with
+     * the REMOTE slice, NOT covered here). TOUCH runs: intentional
      * STM32 safety addition — the V30 RUN button's data=0 quirk can lose the
      * release edge (infinite run); the M16 itself also force-cleared the run
      * flag on an internal countdown (g_018F, Timer1 ISR @0x0572).

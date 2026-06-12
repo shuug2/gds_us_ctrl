@@ -60,10 +60,10 @@ typedef enum {
     US_CMD_RUN_RELEASE,
 } us_cmd_t;
 
-/* us_run_status command-source taxonomy (samd20 main.c:110-113). slice 2b run FSM
- * publishes US_TOUCH while a touch-started run is active, US_IDLE when stopped.
- * REMOTE (physical switch / IPC) and COMM (Modbus) are reserved for later slices.
- * disp gate = (us_run_status != US_IDLE). */
+/* us_run_status command-source taxonomy (samd20 main.c:110-113). The run FSM
+ * publishes the owning source (US_TOUCH = panel, US_COMM = Modbus, Stage C)
+ * while a run is active, US_IDLE when stopped. REMOTE (physical switch / IPC)
+ * is reserved for a later slice. disp gate = (us_run_status != US_IDLE). */
 enum { US_IDLE = 0, US_REMOTE = 1, US_TOUCH = 2, US_COMM = 3 };
 
 /* ether-input field selector (LV_ETHER_KEY 'I'/'M'/'G'); NONE = idle. */
