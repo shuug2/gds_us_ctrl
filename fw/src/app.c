@@ -8,6 +8,7 @@
 #include "app_config.h"
 #include "app_lcd.h"
 #include "app_reg.h"
+#include "app_modbus.h"
 
 void app_init(void)
 {
@@ -78,4 +79,8 @@ void app_loop_iter(void)
      * limit_on_time injected from the live config (cpp-review M1: app_reg
      * must not reach back into app_lcd); per-iter read = live panel edits. */
     app_reg_tick(app_lcd_cfg()->limit_on_time);
+
+    /* 4. Modbus slave — occupancy re-eval + one RTU frame per iter (spec §2).
+     * After app_reg_tick so the mirror sees this iter's freshest measure. */
+    app_modbus_tick();
 }
