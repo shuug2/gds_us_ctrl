@@ -155,12 +155,101 @@ static void test_filters(void) {
     CHECK_EQ(resp[4], 7);                   /* holding[0] low byte */
 }
 
+/* FC 06 — store + echo (echo bytes == request bytes for a valid write). */
+static void test_write_reg(void) {
+    mb_core_t mb;
+    uint8_t req[8], resp[MB_RESP_MAX];
+    uint8_t fc = 0xEE;
+    mb_core_init(&mb, 5);
+
+    mk_req(req, 5, 0x06, MB_REG_OUT_POWER, 80);
+    uint8_t n = mb_core_decode(&mb, req, 8, MB_MODE_RTU, resp, &fc);
+    CHECK_EQ(n, 8);
+    CHECK_EQ(fc, 0x06);
+    CHECK_EQ(mb.holding[MB_REG_OUT_POWER], 80);
+    CHECK_EQ(memcmp(resp, req, 8), 0);      /* FC06 echo == request */
+
+    /* port safety fix: out-of-range write = silence + no state change
+     * (samd20 wrote holdingReg[addr] UNBOUNDED = arbitrary memory write). */
+    mk_req(req, 5, 0x06, 50, 1);
+    CHECK_EQ(mb_core_decode(&mb, req, 8, MB_MODE_RTU, resp, &fc), 0);
+    CHECK_EQ(fc, 0);
+}
+
+/* FC 05 — coil set/clear; port fix: proper 0x05 echo, 8 bytes (samd20 answered
+ * fc=0x02 and 9 bytes — copy-paste bug). */
+static void test_write_coil(void) {
+    mb_core_t mb;
+    uint8_t req[8], resp[MB_RESP_MAX];
+    uint8_t fc = 0xEE;
+    mb_core_init(&mb, 5);
+
+    mk_req(req, 5, 0x05, 3, 0xFF00);
+    uint8_t n = mb_core_decode(&mb, req, 8, MB_MODE_RTU, resp, &fc);
+    CHECK_EQ(n, 8);
+    CHECK_EQ(fc, 0x05);
+    CHECK_EQ(mb.coils[3], 0xFF);
+    CHECK_EQ(resp[1], 0x05);
+    CHECK_EQ(memcmp(resp, req, 8), 0);      /* with the fixed echo, == request */
+
+    mk_req(req, 5, 0x05, 3, 0x0000);
+    n = mb_core_decode(&mb, req, 8, MB_MODE_RTU, resp, &fc);
+    CHECK_EQ(n, 8);
+    CHECK_EQ(mb.coils[3], 0x00);
+
+    mk_req(req, 5, 0x05, 50, 0xFF00);       /* out of range */
+    CHECK_EQ(mb_core_decode(&mb, req, 8, MB_MODE_RTU, resp, &fc), 0);
+}
+
+/* FC 01/02 — bit packing: partial byte, multi-byte, and the full-byte case
+ * (count%8==0) that samd20 left empty (port fix). */
+static void test_read_coils(void) {
+    mb_core_t mb;
+    uint8_t req[8], resp[MB_RESP_MAX];
+    uint8_t fc = 0xEE;
+    mb_core_init(&mb, 5);
+    mb.coils[0] = 1; mb.coils[2] = 1; mb.coils[9] = 1; mb.coils[15] = 1;
+
+    /* 10 coils from 0: 2 bytes (8 + rem 2). byte0 = 0b00000101, byte1 = 0b10. */
+    mk_req(req, 5, 0x01, 0, 10);
+    uint8_t n = mb_core_decode(&mb, req, 8, MB_MODE_RTU, resp, &fc);
+    CHECK_EQ(n, 7);                         /* addr fc cnt b0 b1 crc2 */
+    CHECK_EQ(fc, 0x01);
+    CHECK_EQ(resp[2], 2);
+    CHECK_EQ(resp[3], 0x05);
+    CHECK_EQ(resp[4], 0x02);
+
+    /* 16 coils from 0 (count%8==0): samd20 bug left byte1 = 0. Fixed: bit15. */
+    mk_req(req, 5, 0x01, 0, 16);
+    n = mb_core_decode(&mb, req, 8, MB_MODE_RTU, resp, &fc);
+    CHECK_EQ(n, 7);
+    CHECK_EQ(resp[2], 2);
+    CHECK_EQ(resp[3], 0x05);
+    CHECK_EQ(resp[4], 0x82);                /* coil9 -> bit1, coil15 -> bit7 */
+
+    /* FC 02 echoes its own code */
+    mk_req(req, 5, 0x02, 0, 8);
+    n = mb_core_decode(&mb, req, 8, MB_MODE_RTU, resp, &fc);
+    CHECK_EQ(n, 6);                         /* addr fc cnt b0 crc2 */
+    CHECK_EQ(fc, 0x02);
+    CHECK_EQ(resp[1], 0x02);
+    CHECK_EQ(resp[3], 0x05);
+
+    mk_req(req, 5, 0x01, 45, 8);            /* 45 + 8 > 50: silence */
+    CHECK_EQ(mb_core_decode(&mb, req, 8, MB_MODE_RTU, resp, &fc), 0);
+    mk_req(req, 5, 0x01, 0, 0);             /* zero count: silence */
+    CHECK_EQ(mb_core_decode(&mb, req, 8, MB_MODE_RTU, resp, &fc), 0);
+}
+
 int main(void) {
     test_crc16();
     test_core_init();
     test_read_regs();
     test_read_regs_bounds();
     test_filters();
+    test_write_reg();
+    test_write_coil();
+    test_read_coils();
     if (failures) { printf("%d check(s) FAILED\n", failures); return 1; }
     printf("all checks PASSED\n");
     return 0;

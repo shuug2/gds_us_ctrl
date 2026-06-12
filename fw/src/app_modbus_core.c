@@ -63,6 +63,101 @@ static uint8_t mb_read_regs(const mb_core_t *mb, const uint8_t *frame,
     return j;
 }
 
+/* FC 06 — samd20 write_reg: store raw + echo the request. The app layer
+ * interprets the value (clamp/persist/command) in its apply pass. */
+static uint8_t mb_write_reg(mb_core_t *mb, const uint8_t *frame,
+                            uint8_t resp[MB_RESP_MAX])
+{
+    /* contract: caller (mb_core_decode) guarantees frame[0..5] are valid */
+    uint16_t addr = (uint16_t)(((uint16_t)frame[2] << 8) | frame[3]);
+    uint16_t val  = (uint16_t)(((uint16_t)frame[4] << 8) | frame[5]);
+
+    /* Port safety fix (NOT samd20): samd20 wrote holdingReg[addr] unbounded —
+     * an out-of-range register write was an arbitrary memory write. */
+    if (addr >= MB_REG_COUNT) {
+        return 0;
+    }
+    mb->holding[addr] = val;
+
+    resp[0] = mb->device_addr;
+    resp[1] = 0x06u;
+    resp[2] = frame[2];
+    resp[3] = frame[3];
+    resp[4] = frame[4];
+    resp[5] = frame[5];
+    uint16_t crc = mb_crc16(resp, 6u);
+    resp[6] = (uint8_t)(crc >> 8);
+    resp[7] = (uint8_t)(crc);
+    return 8u;
+}
+
+/* FC 01/02 — samd20 read_coil/read_input_coil folded (identical bodies, own FC
+ * echo). Port fix: samd20 wrote NO bits into the last byte when count%8==0
+ * (its remainder loop ran zero times) — full bytes now always fill. */
+static uint8_t mb_read_coils(const mb_core_t *mb, const uint8_t *frame,
+                             uint8_t fc, uint8_t resp[MB_RESP_MAX])
+{
+    /* contract: caller (mb_core_decode) guarantees frame[0..5] are valid */
+    uint16_t addr = (uint16_t)(((uint16_t)frame[2] << 8) | frame[3]);
+    uint16_t num  = (uint16_t)(((uint16_t)frame[4] << 8) | frame[5]);
+
+    /* Port safety fix: out-of-range = silence (samd20 read past coils[50]). */
+    if ((num == 0u) || ((uint32_t)addr + num > MB_COIL_COUNT)) {
+        return 0;
+    }
+
+    uint8_t bytes = (uint8_t)(num / 8u);
+    uint8_t rem   = (uint8_t)(num % 8u);
+    if (rem != 0u) {
+        bytes++;
+    }
+
+    resp[0] = mb->device_addr;
+    resp[1] = fc;
+    resp[2] = bytes;
+
+    uint8_t k = 3;
+    uint8_t l = (uint8_t)addr;
+    for (uint8_t i = bytes; i != 0u; i--) {
+        uint8_t nbits = ((i > 1u) || (rem == 0u)) ? 8u : rem;
+        for (uint8_t j = 0; j != nbits; j++) {
+            resp[k] ^= (uint8_t)((mb->coils[l] ? 1u : 0u) << j);
+            l++;
+        }
+        k++;
+    }
+    uint16_t crc = mb_crc16(resp, k);
+    resp[k]      = (uint8_t)(crc >> 8);
+    resp[k + 1u] = (uint8_t)(crc);
+    return (uint8_t)(k + 2u);
+}
+
+/* FC 05 — samd20 write_coil semantics (any nonzero -> 0xFF). Port fix: echo
+ * fc 0x05 / 8 bytes (samd20 answered 0x02 / 9 bytes — copy-paste bug). */
+static uint8_t mb_write_coil(mb_core_t *mb, const uint8_t *frame,
+                             uint8_t resp[MB_RESP_MAX])
+{
+    /* contract: caller (mb_core_decode) guarantees frame[0..5] are valid */
+    uint16_t addr = (uint16_t)(((uint16_t)frame[2] << 8) | frame[3]);
+    uint16_t val  = (uint16_t)(((uint16_t)frame[4] << 8) | frame[5]);
+
+    if (addr >= MB_COIL_COUNT) {
+        return 0;
+    }
+    mb->coils[addr] = (val != 0u) ? 0xFFu : 0x00u;
+
+    resp[0] = mb->device_addr;
+    resp[1] = 0x05u;
+    resp[2] = frame[2];
+    resp[3] = frame[3];
+    resp[4] = frame[4];
+    resp[5] = frame[5];
+    uint16_t crc = mb_crc16(resp, 6u);
+    resp[6] = (uint8_t)(crc >> 8);
+    resp[7] = (uint8_t)(crc);
+    return 8u;
+}
+
 uint8_t mb_core_decode(mb_core_t *mb, const uint8_t *frame, uint8_t len,
                        uint8_t mode, uint8_t resp[MB_RESP_MAX], uint8_t *fc_out)
 {
@@ -93,9 +188,19 @@ uint8_t mb_core_decode(mb_core_t *mb, const uint8_t *frame, uint8_t len,
     memset(resp, 0, MB_RESP_MAX);
 
     switch (frame[1]) {
+    case 0x01u:
+    case 0x02u:
+        n = mb_read_coils(mb, frame, frame[1], resp);
+        break;
     case 0x03u:
     case 0x04u:
         n = mb_read_regs(mb, frame, frame[1], resp);
+        break;
+    case 0x05u:
+        n = mb_write_coil(mb, frame, resp);
+        break;
+    case 0x06u:
+        n = mb_write_reg(mb, frame, resp);
         break;
     default:
         return 0;   /* unsupported FC: silence (samd20 builds no exception) */
