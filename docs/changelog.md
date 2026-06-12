@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### 2026-06-12 c — Stage C slice 1: Modbus 코어 + RTU 구현 (코드 완결, HW E2E 대기)
+
+plan(`docs/superpowers/plans/2026-06-12-stage-c-modbus-slice1-core-rtu.md`, 셀프리뷰 포함 `5463370`) → subagent-driven 구현(Task별 구현→spec리뷰→cpp-reviewer 2단 게이트, 리뷰 코멘트 전건 반영). 브랜치 **`feat/stage-c-modbus-core-rtu`**(base = stacked tip `refactor/stage-d-m1-cfg-param-injection`).
+
+- **`ea7258f`/`8226091`/`ce0a6e8` 순수 코어 `app_modbus_core.{c,h}`** (+리뷰 fix `6688fd1`/`ed94472`/`32ef033`): samd20 modbus.c 충실 포팅 — CRC16(swap 컨벤션 문서화), FC 01/02/03/04/05/06, holdingReg/coils[50], RTU 주소+CRC 필터/TCP 스킵(slice 2 대비), 미지원 FC·범위 밖 = 무응답. HAL-free, 호스트 TDD 전수(`fw/test/test_app_modbus_core.c`, CRC 표준벡터+fence-post+TCP 분기). **포팅 수정 3건**(승인 편차): 요청 범위검사(원본 = OOB read + **무경계 임의 write**), FC05 에코(원본 0x02/9B 복붙버그), FC01/02 count%8==0 마지막 바이트 미충전.
+- **`107d04f` mon 게이트 + `76ed82a` 전송층 `usart6_mb.{c,h}`** (+리뷰 fix `de1e077` double-open 가드): DMA2 S1 Ch5 circular free-running RX(no-ISR, usart1 선례) + **samd20 max_break_cnt 갭 프레이밍**(250µs표→ms 그리드: 14/7/4/2ms; 스펙의 IDLE-line 인터럽트 대신 — 의미론 동일, plan §Deviations 1) + blocking TX(길이 비례 timeout) + **TX 후 RX flush**(auto-DE 에코가 자기 FC06 응답을 요청으로 재해석하는 루프 차단, §Deviations 7). 패리티 = 9-bit word length 처리.
+- **`a60f2d1` run FSM 소스 확장** (+주석 정정 `918d524`): `app_reg_command(cmd, src)`(US_TOUCH/US_COMM), 소스일치 정지(samd20 충실), `swallow_start`는 TOUCH 전용, on-time ceiling을 COMM 런에도(원본충실; REMOTE ceiling은 REMOTE 슬라이스), max_amp/last_amp 추적(DISP_AMP 미러용, `lcd_measure_t` 확장).
+- **`349bd91` 통합층 `app_modbus.{c,h}`** (+주석 `1564131`): 매 tick 라이브 미러(samd20 대비 신선도↑·클램프 정규화, §Deviations 6), FC06 1-change else-if 체인(samd20 클램프 verbatim + EN_* LCD 에코 + work_cnt 리셋) + **`app_config_save_all` 전체맵 FRAM 커밋**(원본 DELAY3→ADDR_TRIGGER2/TRIGGER2→ADDR_DELAY2 복붙버그 구조적 해소), 명령 4종 consume-and-clear→US_COMM 라우팅(START 수락 시 set_pot 스텁), **USART6 점유 전환 = 매 tick cfg 평가**(samd20 메인루프 게이트 등가; comm hook은 로그 전용 유지 = app_lcd↔app_modbus 순환 차단, §Deviations 5). 슈퍼루프 step 4 + 부팅 `app_modbus_init()` 배선.
+- 게이트: main 클린 재빌드 **0-warning**(FLASH 40780B 31.1%/RAM 12.3%), 트레이스 구성(REG_TRACE+LCD_TRACE_RX) 0-warning, 호스트 테스트 ×2 PASS. **HW E2E(mbpoll 매트릭스 6항목) = 보드 연결 후**(plan §HW-gated; 트레이스 검증은 Modbus 미점유 상태에서 — addr=NONE).
+
 ### 2026-06-12 b — Stage C slice 1 (Modbus 코어+RTU) 스펙 승인 — plan은 새 세션
 
 Modbus 작업 개시(사용자 요청 "RTU/TCP 코드 선행"). brainstorming(슬라이스/점유 전환/기능 범위/접근 3택) → 스펙 작성·셀프리뷰·**사용자 승인**(`ef359c5`, `docs/superpowers/specs/2026-06-12-stage-c-modbus-slice1-core-rtu-design.md`). slice 1 = 순수 코어(`app_modbus_core`, 호스트테스트) + USART6 RTU(DMA+IDLE, `usart6_mb`) + 통합(`app_modbus`: 레지스터 미러/FRAM 커밋/US_COMM 명령/mon 점유 전환); TCP(W5500) = slice 2. 셀프리뷰 정정 3건 = DISP_POWER/AMP max/last 미러(amp 추적 추가), MODEL_* read-only, 드라이버/FSM 시그니처 확정. V30 회로 추적 = RS-485 방향 자동(U13 트랜시버 + U16, FW DE 제어 불필요). **다음 = 새 세션에서 writing-plans → 구현**(컨텍스트 50% 규칙 분할).
