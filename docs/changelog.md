@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### 2026-06-12 b — Stage C slice 1 (Modbus 코어+RTU) 스펙 승인 — plan은 새 세션
+
+Modbus 작업 개시(사용자 요청 "RTU/TCP 코드 선행"). brainstorming(슬라이스/점유 전환/기능 범위/접근 3택) → 스펙 작성·셀프리뷰·**사용자 승인**(`ef359c5`, `docs/superpowers/specs/2026-06-12-stage-c-modbus-slice1-core-rtu-design.md`). slice 1 = 순수 코어(`app_modbus_core`, 호스트테스트) + USART6 RTU(DMA+IDLE, `usart6_mb`) + 통합(`app_modbus`: 레지스터 미러/FRAM 커밋/US_COMM 명령/mon 점유 전환); TCP(W5500) = slice 2. 셀프리뷰 정정 3건 = DISP_POWER/AMP max/last 미러(amp 추적 추가), MODEL_* read-only, 드라이버/FSM 시그니처 확정. V30 회로 추적 = RS-485 방향 자동(U13 트랜시버 + U16, FW DE 제어 불필요). **다음 = 새 세션에서 writing-plans → 구현**(컨텍스트 50% 규칙 분할).
+
 ### 2026-06-12 — HW 비의존 후속 2건: M1 파라미터 주입 리팩터링 + us_on_time_200m 공급 (stacked 브랜치)
 
 보드 부재 중 진행 가능한 deferred 항목 2건을 **stacked 브랜치 `refactor/stage-d-m1-cfg-param-injection`**(base = slice 2b tip `322a779`)에서 처리. slice 2b 브랜치와 `fw/build-trace/`(재플래시용 바이너리)는 무변경 보존 — HW 재검증 절차(HANDOFF §Resume)는 그대로 유효.
