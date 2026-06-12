@@ -156,7 +156,7 @@ static void reg_acquire_step(void)
     }
 }
 
-static void reg_publish_measure(void)
+static void reg_publish_measure(uint32_t now)
 {
     /* slice 2b run-gated: curr_power = live setpoint (0 when idle); max_power =
      * running peak during the run; last_power latched on stop (app_reg_command).
@@ -166,6 +166,17 @@ static void reg_publish_measure(void)
     g_measure.curr_power = active ? g_reg.adc_scaled_value : 0u;
     if (active && (g_reg.adc_scaled_value > g_reg.max_power)) {
         g_reg.max_power = g_reg.adc_scaled_value;
+    }
+    if (active) {
+        /* LV_TIME bar: live on-time in 200 ms units from the run-start stamp
+         * (samd20 main.c:5223 cadence counter equivalent). Only TOUCH runs
+         * exist this slice, so run_start_ms is always the active run's stamp;
+         * REMOTE/COMM slices must stamp their own start. When idle the field
+         * keeps the last run's final value — samd20 shows the latched
+         * last_time when stopped, and disp feeds this one field on both paths
+         * (app_lcd_disp.c:183 note). */
+        g_measure.us_on_time_200m =
+            reg_on_time_200m((uint32_t)(now - g_reg.run_start_ms));
     }
     g_measure.max_power     = g_reg.max_power;
     g_measure.last_power    = g_reg.last_power;
@@ -238,7 +249,7 @@ void app_reg_tick(uint16_t limit_on_time)
     g_reg.adc_scaled_value = sel;
     g_reg.band             = reg_output_level(sel);
 
-    reg_publish_measure();
+    reg_publish_measure(now);
 
 #ifdef REG_TRACE
     if ((uint32_t)(now - g_reg.trace_ms) >= REG_TRACE_MS) {

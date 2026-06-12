@@ -26,3 +26,9 @@ uint8_t reg_output_level(uint16_t scaled);
  * pattern bytes (g_019F 2nd stage / PORTC bit) -> OSC mapping is deferred
  * (B-SEAM), same as the lookup C-LADDER. Monotone non-decreasing. */
 uint16_t reg_ramp_level(uint16_t counter);
+
+/* LV_TIME bar source: elapsed run ms -> 200 ms units, capped at 200 (= 40 s).
+ * samd20 increments us_on_time_200m every 200 ms while running with a <200
+ * guard (main.c:5223); computing live from the run-start stamp is equivalent
+ * and needs no per-200ms cadence state. */
+uint8_t reg_on_time_200m(uint32_t run_elapsed_ms);
