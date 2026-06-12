@@ -111,7 +111,9 @@ typedef struct {
 /* Live measured values the display machine renders (spec §4.3).
  * Stubbed (all-zero) until Stage D regulation fills this provider. */
 typedef struct {
-    uint16_t curr_amp;
+    uint16_t curr_amp, max_amp, last_amp;   /* amp peak/latch — Modbus DISP_AMP
+                                             * mirror (spec §3.1), same pattern
+                                             * as max_power/last_power */
     uint16_t curr_power, max_power, last_power;
     uint16_t curr_freq, last_freq;          /* Hz; displayed /100 */
     uint32_t curr_energy, last_energy;

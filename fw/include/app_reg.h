@@ -25,8 +25,10 @@ void app_reg_tick(uint16_t limit_on_time);
 /* Live measured values for the LCD display machine (single owner). */
 const lcd_measure_t *app_reg_measure(void);
 
-/* Route a panel/comm ultrasonic command into the run FSM (slice 2b). Called from
- * app_lcd_hook_us_command. START/RUN_RELEASE gate the run; SEEK/RESET = no-op this
- * slice (deferred, spec §9). Superloop single-thread — mutates FSM state in place.
- * us_cmd_t is visible via the already-included app_lcd.h. */
-void app_reg_command(us_cmd_t cmd);
+/* Route an ultrasonic command into the run FSM. src = command source
+ * (US_TOUCH from the panel hook, US_COMM from Modbus — samd20 us_run_status
+ * taxonomy). START arms only from US_IDLE; RUN_RELEASE stops only the run its
+ * own source started (samd20: comm STOP ==US_COMM, touch release ==US_TOUCH).
+ * SEEK/RESET = no-op this slice (deferred, spec §9). Superloop single-thread —
+ * mutates FSM state in place. us_cmd_t comes from the included app_lcd.h. */
+void app_reg_command(us_cmd_t cmd, uint8_t src);
