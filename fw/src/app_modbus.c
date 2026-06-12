@@ -100,7 +100,12 @@ static void apply_writes(void)
         if (app_lcd_measure()->us_run_status == (uint8_t)US_COMM) {
             /* START accepted: samd20 comm START writes the amplitude pot in
              * the same breath (I2C_POT, main.c:4400) — stub hook logs until
-             * B-SEAM/F2 resolves the pot identity. */
+             * B-SEAM/F2 resolves the pot identity.
+             * NOTE: g_measure publishes on app_reg_tick's ~2 ms gate, so this
+             * snapshot is one publish stale and the guard evaluates FALSE in
+             * the same iter the run starts — harmless while set_pot is a log
+             * stub, but B-SEAM must replace it with a live app_reg accessor
+             * (final integration review 2026-06-12). */
             app_lcd_hook_set_pot(cfg->output_power);
         }
         g_mb.holding[MB_REG_START] = 0u;
@@ -244,6 +249,9 @@ static void apply_config(void)
         usart6_init();                            /* restore mon 115200 8N1 */
         mon_set_enabled(true);
         g_applied.owned = 0u;
+        /* NOTE: a US_COMM run active at this point keeps running until the
+         * on-time ceiling stops it (samd20-faithful link-loss behavior;
+         * ceiling=0 disables that net — power cycle is then the only stop). */
         mon_printf("[mb] release usart6 (mode=%u addr=%u)\r\n",
                    (unsigned)cfg->comm_mode, (unsigned)cfg->comm_address);
     }
