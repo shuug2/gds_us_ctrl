@@ -174,6 +174,13 @@ static void test_write_reg(void) {
     mk_req(req, 5, 0x06, 50, 1);
     CHECK_EQ(mb_core_decode(&mb, req, 8, MB_MODE_RTU, resp, &fc), 0);
     CHECK_EQ(fc, 0);
+
+    /* TCP mode: write path also skips addr/CRC filtering (PDU only) */
+    mk_req(req, 0xEE, 0x06, MB_REG_ON_TIME, 1500);
+    req[6] = 0; req[7] = 0;                 /* garbage CRC, ignored in TCP */
+    CHECK_EQ(mb_core_decode(&mb, req, 6, MB_MODE_TCP, resp, &fc), 8);
+    CHECK_EQ(fc, 0x06);
+    CHECK_EQ(mb.holding[MB_REG_ON_TIME], 1500);
 }
 
 /* FC 05 — coil set/clear; port fix: proper 0x05 echo, 8 bytes (samd20 answered
@@ -238,6 +245,12 @@ static void test_read_coils(void) {
     mk_req(req, 5, 0x01, 45, 8);            /* 45 + 8 > 50: silence */
     CHECK_EQ(mb_core_decode(&mb, req, 8, MB_MODE_RTU, resp, &fc), 0);
     mk_req(req, 5, 0x01, 0, 0);             /* zero count: silence */
+    CHECK_EQ(mb_core_decode(&mb, req, 8, MB_MODE_RTU, resp, &fc), 0);
+
+    /* fence-posts: last valid coil reads fine; one past = silence */
+    mk_req(req, 5, 0x01, 49, 1);
+    CHECK_EQ(mb_core_decode(&mb, req, 8, MB_MODE_RTU, resp, &fc), 6);
+    mk_req(req, 5, 0x01, 50, 1);
     CHECK_EQ(mb_core_decode(&mb, req, 8, MB_MODE_RTU, resp, &fc), 0);
 }
 

@@ -119,7 +119,7 @@ static uint8_t mb_read_coils(const mb_core_t *mb, const uint8_t *frame,
     uint8_t k = 3;
     uint8_t l = (uint8_t)addr;
     for (uint8_t i = bytes; i != 0u; i--) {
-        uint8_t nbits = ((i > 1u) || (rem == 0u)) ? 8u : rem;
+        uint8_t nbits = ((i == 1u) && (rem != 0u)) ? rem : 8u;
         for (uint8_t j = 0; j != nbits; j++) {
             resp[k] ^= (uint8_t)((mb->coils[l] ? 1u : 0u) << j);
             l++;
