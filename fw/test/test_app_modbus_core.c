@@ -20,7 +20,7 @@ static int failures = 0;
 } while (0)
 
 /* Build an 8-byte RTU request: addr, fc, u16 a, u16 b, CRC. Returns 8. */
-static uint8_t __attribute__((unused)) mk_req(uint8_t *f, uint8_t addr, uint8_t fc,
+static uint8_t mk_req(uint8_t *f, uint8_t addr, uint8_t fc,
                       uint16_t a, uint16_t b)
 {
     f[0] = addr; f[1] = fc;
@@ -53,9 +53,107 @@ static void test_core_init(void) {
     CHECK_EQ(mb.coils[MB_COIL_COUNT - 1u], 0);
 }
 
+/* FC 03 — single + multi + response CRC validity + FC 04 echo. */
+static void test_read_regs(void) {
+    mb_core_t mb;
+    uint8_t req[8], resp[MB_RESP_MAX];
+    uint8_t fc = 0xEE;
+
+    mb_core_init(&mb, 5);
+    mb.holding[2] = 0x1234;
+    mb.holding[3] = 0x00AB;
+
+    /* single reg @0x0002 */
+    mk_req(req, 5, 0x03, 0x0002, 0x0001);
+    uint8_t n = mb_core_decode(&mb, req, 8, MB_MODE_RTU, resp, &fc);
+    CHECK_EQ(n, 7);             /* addr fc cnt hi lo crc2 */
+    CHECK_EQ(fc, 0x03);
+    CHECK_EQ(resp[0], 5);
+    CHECK_EQ(resp[1], 0x03);
+    CHECK_EQ(resp[2], 2);
+    CHECK_EQ(resp[3], 0x12);
+    CHECK_EQ(resp[4], 0x34);
+    /* response carries a valid CRC over its own first n-2 bytes */
+    uint16_t crc = mb_crc16(resp, (uint8_t)(n - 2u));
+    CHECK_EQ(resp[5], (uint8_t)(crc >> 8));
+    CHECK_EQ(resp[6], (uint8_t)crc);
+
+    /* two regs @0x0002 */
+    mk_req(req, 5, 0x03, 0x0002, 0x0002);
+    n = mb_core_decode(&mb, req, 8, MB_MODE_RTU, resp, &fc);
+    CHECK_EQ(n, 9);
+    CHECK_EQ(resp[2], 4);
+    CHECK_EQ(resp[5], 0x00);
+    CHECK_EQ(resp[6], 0xAB);
+
+    /* full-map read: 50 regs from 0 -> 3 + 100 + 2 = 105 */
+    mk_req(req, 5, 0x03, 0x0000, 0x0032);
+    n = mb_core_decode(&mb, req, 8, MB_MODE_RTU, resp, &fc);
+    CHECK_EQ(n, 105);
+
+    /* FC 04 mirrors FC 03 with its own echo */
+    mk_req(req, 5, 0x04, 0x0002, 0x0001);
+    n = mb_core_decode(&mb, req, 8, MB_MODE_RTU, resp, &fc);
+    CHECK_EQ(n, 7);
+    CHECK_EQ(fc, 0x04);
+    CHECK_EQ(resp[1], 0x04);
+}
+
+/* Port safety fix: out-of-range reads = silence (samd20 read past the table). */
+static void test_read_regs_bounds(void) {
+    mb_core_t mb;
+    uint8_t req[8], resp[MB_RESP_MAX];
+    uint8_t fc = 0xEE;
+    mb_core_init(&mb, 5);
+
+    mk_req(req, 5, 0x03, 0x0031, 0x0002);   /* 49 + 2 > 50 */
+    CHECK_EQ(mb_core_decode(&mb, req, 8, MB_MODE_RTU, resp, &fc), 0);
+    CHECK_EQ(fc, 0);
+    mk_req(req, 5, 0x03, 0x0000, 0x0000);   /* zero count */
+    CHECK_EQ(mb_core_decode(&mb, req, 8, MB_MODE_RTU, resp, &fc), 0);
+    mk_req(req, 5, 0x03, 0x0000, 0x0033);   /* count 51 > 50 */
+    CHECK_EQ(mb_core_decode(&mb, req, 8, MB_MODE_RTU, resp, &fc), 0);
+}
+
+/* Silence paths: other addr, bad CRC, unsupported FC, runt frame (samd20:
+ * no exception responses). TCP mode skips addr + CRC filtering. */
+static void test_filters(void) {
+    mb_core_t mb;
+    uint8_t req[8], resp[MB_RESP_MAX];
+    uint8_t fc = 0xEE;
+    mb_core_init(&mb, 5);
+    mb.holding[0] = 7;
+
+    mk_req(req, 9, 0x03, 0x0000, 0x0001);   /* not our address */
+    CHECK_EQ(mb_core_decode(&mb, req, 8, MB_MODE_RTU, resp, &fc), 0);
+    CHECK_EQ(fc, 0);
+
+    mk_req(req, 5, 0x03, 0x0000, 0x0001);
+    req[6] ^= 0xFFu;                        /* corrupt CRC */
+    CHECK_EQ(mb_core_decode(&mb, req, 8, MB_MODE_RTU, resp, &fc), 0);
+
+    mk_req(req, 5, 0x10, 0x0000, 0x0001);   /* FC 16 unsupported */
+    CHECK_EQ(mb_core_decode(&mb, req, 8, MB_MODE_RTU, resp, &fc), 0);
+
+    mk_req(req, 5, 0x03, 0x0000, 0x0001);
+    CHECK_EQ(mb_core_decode(&mb, req, 3, MB_MODE_RTU, resp, &fc), 0);  /* runt */
+    CHECK_EQ(mb_core_decode(&mb, req, 7, MB_MODE_RTU, resp, &fc), 0);  /* short */
+
+    /* TCP mode: wrong addr AND garbage CRC bytes still processed (slice 2
+     * strips MBAP; samd20 decode_comm(mode!=0) identical). len 6 = PDU only. */
+    req[0] = 0xEEu; req[6] = 0; req[7] = 0;
+    uint8_t n = mb_core_decode(&mb, req, 6, MB_MODE_TCP, resp, &fc);
+    CHECK_EQ(n, 7);
+    CHECK_EQ(fc, 0x03);
+    CHECK_EQ(resp[4], 7);                   /* holding[0] low byte */
+}
+
 int main(void) {
     test_crc16();
     test_core_init();
+    test_read_regs();
+    test_read_regs_bounds();
+    test_filters();
     if (failures) { printf("%d check(s) FAILED\n", failures); return 1; }
     printf("all checks PASSED\n");
     return 0;
