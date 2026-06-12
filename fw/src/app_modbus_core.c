@@ -18,13 +18,12 @@ uint16_t mb_crc16(const uint8_t *buf, uint8_t len)
 {
     uint16_t crc = 0xFFFFu;
     for (uint8_t i = 0; i < len; i++) {
-        crc ^= buf[i];
+        crc = (uint16_t)(crc ^ buf[i]);
         for (uint8_t j = 8; j != 0; j--) {
             if ((crc & 0x0001u) != 0u) {
-                crc >>= 1;
-                crc ^= 0xA001u;
+                crc = (uint16_t)((crc >> 1u) ^ 0xA001u);
             } else {
-                crc >>= 1;
+                crc = (uint16_t)(crc >> 1u);
             }
         }
     }
