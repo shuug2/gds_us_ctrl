@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### 2026-06-12 — HW 비의존 후속 2건: M1 파라미터 주입 리팩터링 + us_on_time_200m 공급 (stacked 브랜치)
+
+보드 부재 중 진행 가능한 deferred 항목 2건을 **stacked 브랜치 `refactor/stage-d-m1-cfg-param-injection`**(base = slice 2b tip `322a779`)에서 처리. slice 2b 브랜치와 `fw/build-trace/`(재플래시용 바이너리)는 무변경 보존 — HW 재검증 절차(HANDOFF §Resume)는 그대로 유효.
+
+- **`ce81d89` M1 리팩터링(리뷰 deferred 해소)**: `app_reg_tick(void)`→`app_reg_tick(uint16_t limit_on_time)`. app_reg가 `app_lcd_cfg()`를 역호출하던 순환 고리 제거 — 슈퍼루프(`app.c`)가 매 iter 라이브 config에서 주입하므로 패널 편집 즉시반영 의미론 보존. 동작 보존 리팩터링.
+- **`ec1b6d4` us_on_time_200m 공급(LCD 감사 갭 ② 해소)**: 순수함수 `reg_on_time_200m(elapsed_ms)`(200ms 단위, cap 200=40s; samd20 main.c:5223 등가) 신설 + 호스트 TDD. `app_reg`가 러닝 중 `run_start_ms` 기준 라이브 발행, idle 시 마지막 값 latch 유지(samd20 `last_time` 표시 등가 — disp 단일필드 노트 `app_lcd_disp.c:183` 정합). LV_TIME 바 런 중 0 고착 해소. 갭 ①(아이콘 엣지 = RESET→SEEK 체인 소속)·③(work_cnt = weld-cycle) = 여전히 deferred.
+- **`cb6ce44` cpp-reviewer 반영**: 리뷰 = **APPROVED-WITH-COMMENTS**(CRITICAL/HIGH 0, M3건/L1건). M3 = START 엣지 `us_on_time_200m=0` 명시(samd20:4306 literal + ≤2ms stale-pairing 윈도우 제거), M2 = 잔존 `lim` 로컬 제거(REG_TRACE print의 `lim` 참조 = 잠재 트레이스-빌드 break였음 → `-DREG_TRACE` syntax-check로 검출·수정), M1 = publish ~2ms 게이트 전파 주석. L1(`ON_TIME_UNIT_MS` suffix) = pre-existing, 미반영.
+- 게이트: main 빌드 0-warning(FLASH 28.72%/RAM 10.64%), 호스트 테스트 PASS, REG_TRACE 경로 syntax-check PASS. **HW 확인 항목(후속)**: LV_TIME 바가 런 중 200ms 단위로 차오르고 정지 후 마지막 값 유지 — slice 2b HW 재검증과 별개로 본 브랜치 머지 시점에 확인.
+
 ### 2026-06-10 — slice 2b 통합 cpp-reviewer 리뷰 APPROVED (b78cbbf + 27d45c3)
 
 V30 RUN quirk fix `b78cbbf` + 금일 의미론 수정 `27d45c3` 통합 cpp-reviewer 리뷰 = **APPROVED**(CRITICAL/HIGH 0건). 코너 케이스 전수 검증: data=0 START/RELEASE 매핑(더블 프레스·release 유실·ceiling 후 orphaned release·`swallow_start` 누출/오흡수·SYS_PIC_NOW 상호작용), 워밍업 단발성(`main_state=1` 쓰기 = init 1곳, 오버플로 안전), ceiling 산술(×10ms 단위·0=off·uint32 래핑-안전), ADC 누산 오버플로 무, ISR 비접근(슈퍼루프 단일스레드 무race). 스펙 편차 4건 = 전부 2026-06-10 분석 문서가 승인(스펙 부분 대체 관계 확인).
