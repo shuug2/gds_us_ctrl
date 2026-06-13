@@ -21,7 +21,8 @@ static const uint8_t kEthMac[6] = { 0x00, 0x08, 0xdc, 0x78, 0x91, 0x71 };
 
 static bool    s_available   = false;
 static bool    s_dhcp_active  = false;   /* DHCP_init done → drive in app_eth_tick */
-static uint8_t s_dhcp_buf[1024];         /* ioLibrary DHCP RX buffer (min 548) */
+/* _Alignas: ioLibrary casts this to (RIP_MSG*) which has uint32_t fields. */
+static _Alignas(uint32_t) uint8_t s_dhcp_buf[1024];  /* DHCP RX buffer (min 548) */
 
 bool app_eth_available(void) { return s_available; }
 
