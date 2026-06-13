@@ -11,7 +11,14 @@
 - ③ ceiling 자동정지: `on-time ceiling (56 x10ms) -> stop`(이 보드 FRAM `limit_on_time=56`=560ms) → 이어진 held-button release `cmd=0 **run=0**` = **swallow_start 1회 소비, 재시동 없음**(V30 data=0 quirk 보정 동작 실증).
 - ④ ceiling 전 release: `us_command=3 → cmd=3 run=0`. ⑤ swallow 후 재press 정상 `run=2`. ⑥ RESET `data=1→cmd=2 run=0`/SEEK `data=2→cmd=1 run=0` no-op + ICON_RUN 점등/소등 시각 확인(사용자).
 - **main 머지**(`e9b593d`, `--no-ff` 2-parent) + 태그 `hw-revA_fw-stage-d2b`. 머지 후 main 빌드 0-warning(text 37088B ≈28.7%)·호스트 PASS. origin push ✗(local-authoritative 유지).
-- **다음** = m1-주입 머지(머지 시 LV_TIME 바 HW 확인) → Modbus HW E2E(mbpoll) → modbus 머지. 머지 체인 slice2b✅→m1→modbus.
+
+### 2026-06-13 b — M1 파라미터 주입 + us_on_time_200m: LV_TIME 바 HW 확인 PASS → main 머지
+
+같은 보드 세션 연속. m1-주입 브랜치(`refactor/stage-d-m1-cfg-param-injection`)의 LV_TIME 바 동작을 일회용 트레이스로 검증 후 main 머지(`83e4e9c`, `--no-ff`).
+
+- **검증**: 일회용 트레이스(REG_TRACE 출력에 `t200=us_on_time_200m` 추가 + 간격 100ms — 검증 후 폐기, 리뷰 코드 무변경 머지) → 런 중 `t200` 0→1→2 **200ms 케이던스** + ceiling(56×10ms=560ms) 정지 후 `run=0 t200=2` **latch** + 재press `t200=0` **리셋** 수치 확인. LV_TIME 바 fill/latch/reset 시각 확인(사용자). reg_on_time_200m 순수함수는 기존 호스트 테스트로 검증됨.
+- **머지 범위 주의**: m1 브랜치 tip은 `5463370`(modbus plan)이었음 — modbus 설계문서(spec `ef359c5`/session-close `f56f17d`/plan `5463370`)가 m1 브랜치 위에 얹혀 있었기 때문(설계 단계를 m1 위에서 진행 후 modbus 코드 브랜치를 분기). 첫 브랜치-tip 머지가 modbus 문서까지 끌고 와서 **되돌리고(`reset --hard e9b593d`) m1 작업 마지막 커밋 `9083aa4`로 재머지**. modbus 설계문서는 modbus 브랜치 머지 때 코드와 함께 합류 예정.
+- 머지 후 main 0-warning·호스트 PASS. **다음** = Modbus HW E2E(mbpoll RS-485) → modbus 머지. 머지 체인 slice2b✅→m1✅→modbus.
 
 ### 2026-06-12 c — Stage C slice 1: Modbus 코어 + RTU 구현 (코드 완결, HW E2E 대기)
 
