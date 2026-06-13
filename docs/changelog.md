@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### 2026-06-13 d — Stage C slice 2a (Modbus TCP/W5500 static): brainstorming → spec → plan
+
+HW 비의존 세션. slice 1 머지 후 slice 2(Modbus TCP) 착수 — 설계 단계만(코드 변경 ✗). 브랜치 `feat/stage-c-modbus-tcp-static`(base = main `e351cad`).
+
+- **brainstorming**(질문 4개): ① 범위 = **slice 2a = static IP만**(W5500 벤더스택+SPI1+TCP 서버), DHCP=slice 2b ② 프레이밍 = **표준 Modbus TCP**(MBAP 에코+CRC 제거) — samd20 비표준 raw 응답 quirk 폐기; 코어 무수정 ③ 드라이버 = **공식 WIZnet ioLibrary upstream** 벤더 ④ 활성화 = boot 1회 non-fatal init + `comm_mode==ETH`일 때만 TCP(RTU 점유 거울=택일).
+- **컨텍스트 탐색 확정**: 코어 `MB_MODE_TCP` 스킵경로 준비됨(addr+CRC 생략, 응답엔 항상 CRC 부착) → TCP 글루에서 trailing CRC 2B 절단+MBAP 래핑+unit 에코. W5500 핀 pinmap §SPI1: PA4(소프트 CS)/PA5/6/7(AF5)/PC5(NRST)/PC4(INT). `cfg`에 `comm_mode`+`ether_ip/nm/gw[4]` 영속 확인. samd20 포팅 소스 = WIZnet ioLibrary + `process_tcp.c`/`ethernet.c`.
+- **spec** `65c7d25` (`docs/superpowers/specs/2026-06-13-stage-c-modbus-slice2a-tcp-design.md`): 모듈(벤더 wiznet / spi1 / app_modbus_tcp_frame[순수] / app_eth / app_modbus_tcp / app_modbus 통합), 표준 프레이밍 데이터흐름, 점유/게이팅, 테스트, §8 미해소 6건.
+- **advisor 검토**(설계 승인, 프레이밍 산술 검증 FC03 len=5/FC06 len=6) → plan에 5건 반영: ⓐ apply-path 추출은 HW 검증된 민감 코드(동작보존) ⓑ 벤더 ioLibrary=Task1(버전핀+API확인, 현 master 기본 `_WIZCHIP_=W6300`→W5500 설정 필수) ⓒ 순수 프레이밍 함수 명시 분리(host test) ⓓ 1-frame-per-recv 가정 문서화 ⓔ MBAP length 빅엔디안.
+- **plan** `79526fb` (`docs/superpowers/plans/2026-06-13-stage-c-modbus-slice2a-tcp.md`, 9 task): T1 벤더 ioLibrary(경고격리 CMake lib, downstream 게이트) → T2 SPI1 드라이버 → T3 순수 MBAP 프레이밍(TDD host test) → T4 apply-path 노출(동작보존) → T5 W5500 non-fatal 브링업 → T6 소켓 FSM 전송층(port 502) → T7 슈퍼루프 통합(ETH 게이팅 + **mirror gap 수정**: 기존 tick이 ETH면 조기 return해 mirror_live 미호출) → T8 빌드/host 게이트+cpp-reviewer → T9 HW E2E(mbpoll -m tcp, 보드 게이트).
+- **다음 = plan Task 1부터 구현**. 호스트 게이트 후 HW E2E → 머지+태그 `hw-revA_fw-stage-c2a`.
+
 ### 2026-06-13 c — Stage C slice 1: Modbus 코어+RTU 실보드 HW E2E (mbpoll RS-485) PASS
 
 같은 보드 세션 연속. `feat/stage-c-modbus-core-rtu`(코드 완결, 최종 cpp-reviewer APPROVED) 빌드를 ST-LINK V3로 플래시(클린 빌드 0-warning) 후, Mac↔V30 RS-485(`/dev/cu.usbserial-AB0MLYXA`) + `mbpoll`로 plan §HW-gated 매트릭스 6항목 전수 검증. 코드 변경 없음(순수 HW 검증).
