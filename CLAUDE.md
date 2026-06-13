@@ -96,6 +96,7 @@ cmake --build build --target flash
 - 페리페럴 GPIO는 그 드라이버가 직접 책임 (`drivers/usart.c`가 PC6/PC7 AF 설정).
 - HAL 핸들 변수는 `src/periph.c`에 단일 정의, `include/periph.h`로 extern.
 - **MCU 간 통신 = 순수 GPIO 시그널링** (이전 SAMD20↔ATmega16 통신은 UART/SPI/TWI 미사용).
+- **ETH/네트워크 설정 저장 주의**: DHCP 리스 IP는 static과 **동일한 `cfg->ether_ip`** 필드에 미러되므로, 리스가 떠 있는 상태에서 `comm_mode=ETH_STATIC`로 바꿔 LCD 저장하면 그 리스 IP가 static IP로 FRAM에 굳음 (의도된 동작 — 메모리 `project_eth_dhcp_static_persist`). static 테스트 시 IP 필드를 직접 입력할 것.
 
 ---
 
@@ -103,14 +104,16 @@ cmake --build build --target flash
 
 **먼저 `docs/NEXT_STEPS.md`를 읽고 진행 상황과 다음 작업을 확인.**
 
-미해결 핵심 질문 (회로도 필요):
-1. ATmega16 PA4/PC0/PC1/PC4 ↔ SAMD20 핀 매핑
-2. 7-세그먼트 디스플레이 유지 여부
-3. `I2C_POT`의 정체 (외부 칩 vs ATmega16 인터페이스)
+**현재 진행 (2026-06-13 j)**: Phase 1+2 · Stage A/B(LCD) · LCD full port · Stage D(ATmega16 흡수: 레귤레이션 compute·상태머신·RUN 게이트·m1) · Stage C(Modbus RTU+TCP static/DHCP) **전부 main 머지 완료**. 남은 것 = HW-gated deferred(B-SEAM OSC 물리 구동 · 6b signal calibration · SEEK/RESET 효과 · overload · weld-cycle). 상세 진입 = `docs/NEXT_STEPS.md`, 세션별 상태 = `docs/superpowers/RESUME.md`(자동 로드), 변경 이력 = `docs/changelog.md`.
+
+해소된 핵심 질문 (V30 회로도 + ATmega16 분석으로 확정):
+1. ATmega16 PA4 = 초음파 출력개시 신호 입력 / PC0 = overload 출력 / PC1·PC4 = 초음파 보드 신호 입력
+2. 7-세그먼트 = 없음 (DGUS LCD 단독)
+3. `I2C_POT` = U4 외부 I2C 디지털 포텐셔미터 @0x28 (EEPROM과 I2C1 버스 공유, 진폭 제어 실체)
 
 확정 결정:
 - RTOS 미사용 (슈퍼루프 유지)
 - W5500 (SPI1), DGUS LCD (USART1), I2C EEPROM 모두 유지
-- Modbus Serial OR TCP 택일 모드
+- Modbus Serial OR TCP 택일 모드 — **구현 완료**(RTU=USART6 점유 / TCP=W5500, `comm_mode`로 택일)
 - CubeMX UI 미사용, HAL/CMSIS는 `fw/vendor/` in-tree 카피 (Phase 1+2 spec 결정)
 - MCU 클럭 96 MHz (HSI ×12, source of truth는 `fw/src/clock.c`)

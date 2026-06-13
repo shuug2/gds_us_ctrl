@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### 2026-06-13 j — Stage C slice 2 deferred HW 검증 (보드 ETH_DHCP .70 연결) — 코드 무수정
+
+보드 연결 세션(ST-LINK V3, W5500 실장 + DHCP 망, 보드 부팅 시 ETH_DHCP 리스 `.70`). slice 2 deferred HW 항목 중 ① ICON_RUN, ③ RAM-only 재리스 검증. **펌웨어 무수정**(분석·확인만).
+
+- **① ICON_RUN over TCP = PASS**: `mbpoll -m tcp` START(reg 28 wire 0x1B)=1 → `US_COMM` run 진입(STATUS reg 30 bit0=1) → **on-time ceiling 자동정지 정량 측정 537–617ms = 목표 560ms**(`limit_on_time=ON_TIME=56`×10ms) → IDLE 복귀. ceiling은 `app_reg.c:234`에서 `US_COMM`에도 적용(`#ifdef REG_TRACE`라 프로덕션엔 mon 트레이스 없음 — STATUS 폴로 측정). START 6회 연속 발사로 **ICON_RUN 6/6 육안 확인**(user). START는 `US_IDLE`에서만 arm(`app_reg.c` guard)이라 1.5s 간격 안전.
+- **③ RAM-only 재리스 = 동작 규명(코드 확정), 현 상태 유지(user 수용)**: LCD `comm_mode=ETH_STATIC` SAVE + 전원사이클 후 IP가 `.128`(이전 static)이 아닌 **`.70`(직전 DHCP 리스)으로 굳음**. 사용자 가설("저장 시 IP 필드에 남아있던 .70이 같이 저장")이 **코드로 확인됨**. 체인: ⓐ DHCP 리스 `.70`이 `cfg->ether_ip[]`에 미러(`app_eth.c:64-70`, eth 코드 자체는 FRAM 미기록=주석대로 RAM-only) → ⓑ comm/ether 페이지 진입 시 섀도우 시드 `temp_ether_ip=cfg->ether_ip=.70` + IP 필드 렌더(`app_lcd_render.c:147-153`)=**필드에 .70 표시된 이유** → ⓒ comm_mode→STATIC만 변경(IP 미편집) → ⓓ DATA_SAVE → `app_config_save_all(cfg)`이 `cfg->ether_ip(.70)`을 FRAM 기록(`app_config.c:611,73`) → ⓔ 재부팅 시 FRAM에서 `.70` 로드(`app_config.c:118`) → ⓕ static 경로가 `cfg->ether_ip=.70` 사용 → `[eth] up ip=192.168.1.70`(static 배너, `app_eth.c:116-130`). **핵심**: eth 모듈 "RAM-only(no FRAM)"는 문자 그대로 사실이나, 리스가 static과 **동일 필드**에 미러되므로 LCD 전체-설정 저장 경로를 통해 FRAM에 새어듦(WYSIWYG; "DHCP 받은 IP를 static 고정" 워크플로로는 합리적). 공장 기본 `ether_ip=0.0.0.0`(`app_config.c:35`)이라 이전 `.128`은 하드코딩 기본이 아닌 과거 입력값 → `.70`으로 대체됨. **사용자 결정: 무수정·현 상태 유지.** 메모리 `project_eth_dhcp_static_persist` 기록.
+- **② RTU FC06 회귀 = PASS**(보드 LCD `comm_mode=SERIAL`+`addr=1`+`9600/EVEN` SAVE+전원사이클, RS-485 마스터 `mbpoll -m rtu -b 9600 -P even`). config는 openocd로 `g_cfg`(0x20000a5c)+0x2A 직독 확정(`addr=01 speed=02 parity=00 mode=00`). 매트릭스: FC03 regs 7-9 = `55/56/567`(=TCP 미러 동일) / FC06 80→80(범위내)·30→**50**(클램프 LOW)·120→**100**(클램프 HIGH)·55→55(복원). **slice 2(TCP/W5500)가 RTU 경로 무회귀** 입증. 첫 read 1회 transient 타임아웃→재시도 정상(포트 워밍업).
+- 보드 현 상태: **SERIAL/addr=1/9600/EVEN**(핸드오프 벤치 기본과 일치), OUT_POWER=55, FRAM `ether_ip=.70` 잔여(무해). 빌드/git 무변경(0-warning, 호스트 3스위트 PASS, 작업트리 클린).
+
 ### 2026-06-13 i — Stage C slice 2 (Modbus TCP static+DHCP) main 머지 + 태그
 
 Option B(2a/2b 합쳐 2b 통째)로 main 머지. `finishing-a-development-branch` 절차(게이트 검증→환경 감지→머지→태그→브랜치 삭제).

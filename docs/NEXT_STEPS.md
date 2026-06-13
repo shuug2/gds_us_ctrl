@@ -1,40 +1,43 @@
 # NEXT_STEPS — 다음 세션 진입 가이드
 
 > CLAUDE.md 에 명시된 first-load 문서. 새 세션 시작 시 본 파일을 가장 먼저 읽고 진행 상황 + 다음 작업을 확인.
+>
+> **본 문서 최신화: 2026-06-13 j** — Stage C/D 완료 + Stage C slice-2 deferred HW 종결 반영. 변경 이력 = `docs/changelog.md`(최신 위), 세션별 상태 로그 = `docs/superpowers/RESUME.md`(SessionStart 자동 로드), slice-2 상세 핸드오프 = 루트 `HANDOFF.md`.
 
 ---
 
-## 1. 현재 상태 (2026-05-25 기준)
+## 1. 현재 상태 (2026-06-13 j)
 
-> **⚠ 활성 작업 (2026-06-01 갱신) — 아래 표보다 우선**: LCD 포팅 = ✅ main 머지 완료(`acb4be1`, tag `hw-revA_fw-stage-lcd`). **Stage D slice 1 (레귤레이션 코어 compute) = 구현 완료** — 브랜치 **`feat/stage-d-regulation-core`** (main 미머지). spec→plan→inline 구현(6 커밋), 빌드 0-warning, 호스트 단위테스트 PASS, **cpp-reviewer APPROVED**. **compute 파이프라인만**(2ch ADC→×6 scale→21엔트리 lookup→`lcd_measure_t` 발행); OSC 물리 구동 = **B-SEAM 벤치 측정까지 DEFERRED**. **(2026-06-02 갱신) HW 기능검증 6a = PASS** (compute liveness/무회귀/OSC idle-HIGH 스코프/LCD provider). Task 6은 6a(기능, 완료) + **6b(신호 calibration, HW 준비 후 = DEFERRED)** 로 분리. **(2026-06-03 갱신) slice 1 = main 머지 완료(`5aea06f`, tag `hw-revA_fw-stage-d`). Stage D slice 2a(상태머신 + soft-start 램프) = 코드 완료(Task 1~3, 브랜치 `feat/stage-d-slice2-softstart` tip `ae24ec4`, 빌드 0-warning, 호스트 테스트 PASS, 2-stage 리뷰 APPROVED). (2026-06-08 갱신) slice 2a Task 4 실보드 HW 검증 = PASS(부팅 램프 sel 128→1024/band 18→0/~4s/rc=401 st=0 핸드오프/slice-1 무회귀 + power 숫자 램프 추종). 펌웨어 미변경. 출력 바(amplitude=curr_amp, 전압주입 없으면 idle 정지 by-design)·running 아이콘(samd20 명령 FSM=slice 2b)은 예상 거동 → spec §8.2 합격기준 정정. **slice 2a = main 머지 완료(`43fda87`, `--no-ff`, tag `hw-revA_fw-stage-d2`), 머지 후 빌드/테스트 PASS + cpp-reviewer APPROVED. (2026-06-08 b 갱신) slice 2b(RUN 명령 게이트) = 코드 완료 — 브랜치 `feat/stage-d-slice2b-run-gate`(main 미머지). 터치 RUN start/stop 게이트만(부팅 IDLE 전환·momentary hold-to-run·ICON_RUN·us_run_status taxonomy). 3 코드커밋(`decfc28`/`ed2093f`/`4264bab`), 빌드 0-warning(FLASH 28.64%/RAM 10.60%), 호스트 PASS, Task별 + 전체 통합 cpp-reviewer APPROVED. 다음 = Task 3 실보드 HW 검증(보드 연결 시) → finishing(머지/PR) + 태그 `hw-revA_fw-stage-d2b`. SEEK/RESET 효과·overload·weld-cycle·Modbus·OSC 물리 출력(B-SEAM)·6b calibration = 여전히 DEFERRED.** (2026-06-08 HW 세션) 부팅 IDLE·RESET/SEEK 라우팅 HW PASS; RUN은 V30 에셋 quirk(RUN 버튼이 `KEY_MULTI` data=0 양 edge 반환)로 막혀 펌웨어 fix `b78cbbf`(spec §4.4) 적용 — RUN/ICON_RUN/램프 재검증 + fix cpp-reviewer = 보드 재연결 후. 정밀 상태 = `docs/superpowers/RESUME.md`(자동 로드, **2026-06-08 c 블록**)·`docs/changelog.md 2026-06-08`·`HANDOFF.md`(루트, §Resume 절차)·plan `docs/superpowers/plans/2026-06-08-stage-d-slice2b-run-gate.md`. 아래 1.1 표는 Stage A/B 머지 시점(2026-05-25) 스냅샷.
+**통합 핵심 기능 대부분 흡수 완료.** STM32F410RBT 단일 MCU로 기존 SAMD20 + ATmega16 기능을 통합 중. LCD·레귤레이션·Modbus(RTU+TCP)까지 main에 있고, 남은 것은 대부분 **실 초음파/가변전압이 있어야 검증 가능한 출력·효과 계층**.
 
-### 1.1 슬라이스 현황
+### 1.1 스테이지 현황 (전부 main 머지 완료)
 
-| Phase | 상태 | tip | 비고 |
-|-------|------|-----|------|
-| Phase 1+2 Bootstrap | ✅ main 머지 완료 (2026-05-05) | `b8afe1c` (merge) | 96 MHz HSI×12 + TIM11 1ms tick + USART6 mon + PB3 heartbeat |
-| Stage A LCD I/O | ✅ **main 머지 완료 (2026-05-25)** | `4651453` (merge), tag `hw-revA_fw-stage-a` | DGUS LCD wire 통신 + 1Hz cadence 검증. 33 commits 병합 |
-| Stage B LCD app 데이터 | ✅ **main 머지 완료 (2026-05-25)** | `540008d` (merge), tag `hw-revA_fw-stage-b` | FRAM(FM24C16B @0x50) config load + `init_lcd_mode` 포팅. HW 검증 통과(BOOT0 forced-jump). 7 commits. FLASH 22.30%/RAM 8.81% |
-| ATmega16 FW↔I/O 분석 | ✅ 완료 + **보드-진실 정정 (2026-05-25 후속)** | — | 산출물 `docs/superpowers/analysis/atmega16-io-behavior.md` (**§0.1 정정 절 추가**). OSC 매핑 보드 직독 확정 + 소스오브트루스 전환(디컴파일→보드 측정) |
-| **사용자 HW 재측정 (다음, 차단)** | ⏸ **측정 대기** | — | 분석 §0.1 B1(5 OSC핀 방향)·B2(극성/비트매핑)·B3(전달함수)·B4(ADC ch1)·B5(state 0/1). 사용자가 측정 후 행동 재분석 제공 예정 |
-| **Stage D — Ultrasonic regulation 흡수** | ⬜ 측정 후 | — | 분석 §0.1/§8. 구조부(ADC층·TIM cadence·상태머신 골격·출력드라이버 추상화) 선포팅 가능, 전달함수·핀방향·매핑은 B1~B5 대기. "ref verbatim 포팅" 전제 폐기 |
-| Stage C — Modbus RTU on USART6 | ⬜ 미시작 (Stage D와 독립) | — | 속도/패리티 = FRAM `comm_speed_idx`/`comm_parity_idx` |
-| Stage A I/O (Stage D와 일부 중첩) | ⬜ 미시작 | — | CON_OVLD / CON_START / CTRL_OSC0~4 GPIO |
+| Stage | 내용 | tag |
+|-------|------|-----|
+| Phase 1+2 | 부트스트랩 — 96 MHz HSI×12 + TIM11 1ms tick + USART6 mon + PB3 heartbeat | `b8afe1c` (merge) |
+| Stage A | DGUS LCD I/O — wire 통신 + 1Hz cadence | `hw-revA_fw-stage-a` |
+| Stage B | LCD application 데이터 사전 셋업 (`init_lcd_mode` 포팅) | `hw-revA_fw-stage-b` |
+| LCD full port | LCD 전체 거동 포팅 (comm 표시 등, DGUS 에셋 root) | `hw-revA_fw-stage-lcd` |
+| Stage D | ATmega16 흡수 — 레귤레이션 compute · 상태머신 · soft-start · RUN 게이트 · m1(param 주입) | `hw-revA_fw-stage-d` / `-d2` / `-d2b` |
+| Stage C | Modbus 흡수 — slice 1 RTU(USART6) + slice 2 TCP(W5500 static+DHCP) | `hw-revA_fw-stage-c1` / `-c2b` |
 
-> **2026-05-25 머지/정리 세션 처리 내역**:
-> - Stage A 머지 전: `docs/requirements.md` 보강분 커밋(`e322644`), stale NEXT_STEPS/RESUME → `historical/` archive(`cea0c3a`)
-> - `--no-ff` 머지(`4651453`) + 태그 `hw-revA_fw-stage-a`, 빌드 검증 FLASH 18.94% / RAM 8.37% ✅
-> - repo 정리(`25fb41f`): `ref/`·`fw/cube/*.ioc`·`AGENTS.md`·`docs/fw_analysis.md`·`.claude`/`.codex` track, `graphify-out/` gitignore
-> - worktree `gds_us_ctrl-stageA` + 브랜치 `feat/stage-a-lcd-io` 삭제 — 현재 **`main` 단독, working tree clean**
-> - origin push ✗ (로컬만)
+> ⚠ `hw-revA_fw-stage-c2a`는 **없음** — pre-refactor slice 2a는 1s PHY-폴 버그 보유라 태그하지 않음. `-c2b`가 static+DHCP 전부 커버.
 
-### 1.2 Stage A 작업 요약 (머지 완료)
+**slice-2 deferred HW (2026-06-13 j 전수 종결, 코드 무수정)**:
+- ① **ICON_RUN over TCP = PASS** — START→US_COMM run→on-time ceiling 자동정지(실측 537–617ms = 560ms)→IDLE + ICON_RUN 육안
+- ② **RTU FC06 회귀 = PASS** — FC03 미러(`55/56/567` = TCP 동일) + FC06 클램프(80/30→50/120→100/55), slice 2 무회귀
+- ③ **RAM-only 재리스 = 동작 규명·수용** — DHCP 리스 IP가 LCD `comm_mode=ETH_STATIC` 저장 시 static IP로 FRAM에 굳음(가설 맞음, 무수정). 상세 = 메모리 `project_eth_dhcp_static_persist`
 
-- 33 commits, 13 Task 완료. 모든 substantive Task spec compliance reviewer ≥ 12/12 ✅ APPROVE
-- Build: FLASH 18.94% / RAM 8.37%. HW verify: wire-level + cadence + fault ✅
-- visible 페이지 변경은 Stage B 의존 (samd20 application 데이터 사전 셋업)
+### 1.2 남은 작업 (전부 미착수)
 
-상세: **`docs/superpowers/historical/2026-05-06-RESUME.md`** (489 라인 — 전체 상태 + reviewer 결과 + drift 정정 + HW verify 결과).
+**HW-gated deferred** — 전압 가변 / 실 초음파 rig 있어야 **검증** 가능 (단 설계·코드는 지금도 가능):
+- **B-SEAM OSC 물리 구동** — 레귤레이션 compute의 마지막 블로커(OSC 출력 바인딩; 분석 §6 "명령 3선 active-LOW 레벨 미러" 가설, 벤치 측정으로 확정)
+- **6b signal calibration** — `>>2` 정규화 + 2.56V↔3.3V 도메인 실측 보정, ch0/scaled 물리단위, ADC offset·gain, OSC 비트매핑·극성
+- **SEEK/RESET 효과** — RESET→SEEK 500ms 자동 체인 + SEEK 자동해제(분석 §5)
+- **overload 보호** — CON_OVLD 입력 + 보호 동작
+- **weld-cycle 머신** — work_cnt 증가, energy_ctrl/multi_ctrl run 분기(samd20 main.c:5234+, spec §8)
+
+**설계상 이연(slice 2)**: DHCP 핫플러그(링크 드롭 후 재획득 — 현재 LINKWAIT→UP 단방향), SERIAL boot-skip.
 
 ---
 
@@ -43,224 +46,146 @@
 ### 2.1 사전 점검
 
 ```bash
-cd /Users/tknoh/dev/work/gds_us_ctrl   # main repo (stageA worktree 는 삭제됨)
-git status                             # working tree clean 기대
+cd /Users/tknoh/dev/work/gds_us_ctrl   # main repo
+git status                             # working tree clean 기대 (untracked .understand-anything/, ref/atmega16/M16_reverse/ = 무관)
 git log --oneline -5
-git tag -l 'hw-revA*'                  # hw-revA_fw-stage-a 확인
+git tag -l 'hw-revA*'                  # 위 §1.1 태그들 확인
+
+# 빌드 + 호스트 테스트 sanity
+env -u STM32_TOOLCHAIN cmake -S fw -B fw/build -G Ninja
+env -u STM32_TOOLCHAIN cmake --build fw/build      # 0-warning 기대
+make -C fw/test test                                # 3 스위트 PASS 기대
 ```
 
-### 2.2 결정 완료 — 다음 슬라이스 = **Stage B**
+### 2.2 다음 작업 후보 (사용자 선택)
 
-사용자 확정 (2026-05-25): **다음 세션은 Stage B 시작.** (머지 여부 / 슬라이스 선택은 이미 결정됨 — 추가 질문 불필요)
+- **신규 스테이지** (HW 불필요, 설계/코드 단계 가능) — weld-cycle 머신 / SEEK·RESET 효과 / overload 보호 흡수. `superpowers:brainstorming`부터 → spec → plan → 구현. 코드-우선(호스트 테스트), HW 검증은 rig 준비 시(기존 패턴: code-complete → host-gate → HW E2E).
+- **B-SEAM OSC 물리 구동 + 6b calibration** — 실 초음파 rig/스코프 필요. 흡수의 마지막 HW 검증 핵심.
+- 진입 절차 = **§3** (subagent-driven-development 패턴).
 
-- Stage B = LCD application 데이터 사전 셋업 — samd20 `init_lcd_mode` 흐름 포팅, Stage A 의 visible 페이지 변경 완성
-- 진입 절차는 **§4** 그대로 따름. 정석 흐름:
-  1. 새 worktree 생성 (`feat/stage-b-lcd-app`)
-  2. `superpowers:brainstorming` — §4.2 의 Q1~Q5 결정점 탐색
-  3. spec 작성 + self-review → plan 작성
-  4. `superpowers:subagent-driven-development` 로 Task 1 부터 진행
+### 2.3 보드 현 상태 (2026-06-13 j 마감 시점)
+
+- **SERIAL / addr=1 / 9600 / EVEN** (핸드오프 벤치 기본과 일치), OUT_POWER=55, FRAM `ether_ip=.70` 잔여(무해).
+- ETH 재검증 시: LCD에서 `comm_mode=ETH_STATIC`(static `.70`) 또는 `ETH_DHCP` 전환 + SAVE + **물리 전원사이클**. ETH E2E 재현 절차 = 루트 `HANDOFF.md`(⚠ 시리얼 캡처 함정 절 필독).
 
 ---
 
-## 3. Stage A 머지 절차 — ✅ 완료 (2026-05-25, 기록용)
+## 3. 신규 스테이지 진입 절차 (subagent-driven-development 패턴)
 
-> 아래 절차로 머지 완료됨 (`4651453` + tag `hw-revA_fw-stage-a` + repo 정리 `25fb41f`). 다음 세션에서는 재실행 불필요 — 기록 보존용.
-
-### 3.1 권장 흐름 — main repo 에서 직접 머지
-
-```bash
-cd /Users/tknoh/dev/work/gds_us_ctrl   # main repo (worktree 가 아닌 본 디렉토리)
-git checkout main
-git pull origin main 2>/dev/null || true
-git fetch ../gds_us_ctrl-stageA feat/stage-a-lcd-io
-git merge --no-ff feat/stage-a-lcd-io -m "Merge Stage A LCD I/O Bring-up (33 commits)"
-git tag hw-revA_fw-stage-a   # CLAUDE.md 태깅 규칙
-```
-
-### 3.2 머지 후 정리
-
-```bash
-# Worktree 제거 (선택)
-cd /Users/tknoh/dev/work/gds_us_ctrl
-git worktree remove ../gds_us_ctrl-stageA
-git branch -d feat/stage-a-lcd-io
-
-# 또는 worktree 유지 (Stage B 작업도 worktree 분리 진행할 경우)
-```
-
-### 3.3 머지 후 검증
-
-```bash
-# main 에서 빌드 + 검증
-cd fw && env -u STM32_TOOLCHAIN cmake --build build
-arm-none-eabi-size build/gds_us_ctrl.elf
-# Expected: text 24336 / data 476 / bss 2276
-```
-
----
-
-## 4. Stage B 시작 절차 (다음 슬라이스 권장)
-
-### 4.1 Stage B 개요
-
-**목표**: Stage A 의 LCD wire 통신 + 1Hz cadence 위에 application 데이터 사전 셋업 layer 추가. visible 페이지 변경 완성.
-
-samd20 ref `main.c:3175` `init_lcd_mode()` + `main.c:2942` `change_lcd_page()` 흐름 포팅:
-- `send_model_str(model_freq, model_type)` — "GDS-15/20/30..." 모델 문자열 송신 (`main.c:2376`)
-- 11+ VP 사전 채움: `DISP_ENERGY_EN`, `DISP_MULTI_EN`, `LV_DM_DELAY/WELD/HOLD`, `LV_TM_WELD/HOLD`, `LV_WORK_CNT`, `LV_ENERGY_EDIT`, `ICON_RESET/SEEK/RUN`, `DISP_HORNDOWN`
-- boot 시퀀스: `dgus_set_page(0)` → **delay_ms(1000)** → 위 VP 들 사전 셋업 → `dgus_set_page(LCD_RUN_STD)`
-- 페이지별 분기: `LCD_RUN_STD` / `LCD_RUN_HAND` / `LCD_RUN_MULTI` / `LCD_MODEL_SETUP` 등 별도 데이터 셋업
-
-### 4.2 진입 절차 (subagent-driven-development 패턴)
-
-1. **Worktree 생성** (Stage A 와 격리):
+1. **Worktree 생성** (선택, 격리 작업 시):
    ```bash
    cd /Users/tknoh/dev/work/gds_us_ctrl
-   git worktree add ../gds_us_ctrl-stageB -b feat/stage-b-lcd-app
-   cd ../gds_us_ctrl-stageB
+   git worktree add ../gds_us_ctrl-<stage> -b feat/<stage-name>
    ```
+   (단일 슬라이스/소규모는 main에서 직접 브랜치도 가능 — 최근 stage-c/d 슬라이스는 feature 브랜치 직접 사용)
 
-2. **`superpowers:brainstorming` 스킬** — Stage B 의 결정점 (Q1-Q5):
-   - Q1: 데모 범위 — 단일 페이지 (LCD_RUN_STD) full app 데이터만? 아니면 4-5 페이지 분기? 모델 SETUP 페이지 포함?
-   - Q2: 데이터 source — hardcoded (`#define MODEL_FREQ 0`) vs RAM 변수 (Stage C 의 Modbus 로 갱신 가능) vs Flash 영구 저장
-   - Q3: VP 매핑 — Stage A 의 dgus_lcd.h DGUS_DEMO_* 매크로 패턴 확장 (DGUS_APP_* 매크로 신설)
-   - Q4: API 표면 — `app_lcd_init_mode(model_t)` 단일 진입점? 아니면 `app_lcd_send_model_str()` + `app_lcd_init_data()` + `app_lcd_change_page()` 분리?
-   - Q5: 페이지별 데이터 — samd20 의 `change_lcd_page()` 의 페이지 분기 (LCD_RUN_STD vs LCD_RUN_HAND vs LCD_MODEL_SETUP) 모두 포팅 vs 일부만?
+2. **`superpowers:brainstorming`** — 결정점(범위/구조/데이터 source/API 표면/이연 범위) 탐색 후 사용자 확정.
 
-3. **spec 작성 + self-review** — `docs/superpowers/specs/<YYYY-MM-DD>-stage-b-lcd-app-design.md`
+3. **spec 작성 + self-review** — `docs/superpowers/specs/<YYYY-MM-DD>-<stage>-design.md`.
 
-4. **plan 작성** — `docs/superpowers/plans/<YYYY-MM-DD>-stage-b-lcd-app.md` (Stage A 의 13 Task 패턴 미러)
+4. **`superpowers:writing-plans`** — `docs/superpowers/plans/<YYYY-MM-DD>-<stage>.md` (Task 분해, HW-gated Task 분리).
 
-5. **subagent-driven-development 시작** — Task 1 부터 dispatch
+5. **`superpowers:subagent-driven-development`** — Task별 fresh subagent + 2-stage 리뷰(spec compliance + cpp-reviewer). 호스트 게이트(빌드 0-warning + 테스트) 통과 후, HW E2E는 보드 게이트로 분리.
 
-### 4.3 Stage B 의 Stage A 코드 의존성
+6. **finishing-a-development-branch** — HW 검증 통과 시 머지(`--no-ff`, local-authoritative main, origin push ✗) + 태그 `hw-revA_fw-stage-<x>`.
 
-이미 사용 가능 (Stage A 에서 완료):
-- `usart1_init()`, `usart1_send_blocking()` — USART1 raw layer
-- `dgus_init()`, `dgus_set_page()`, `dgus_write_u16()`, `dgus_write_u32()`, `dgus_write_bytes()`, `dgus_write_u16_array()`, `dgus_write_text()`, `dgus_read_var()`, `dgus_reset_lcd()` — DGUS 9 함수 풀 패리티
-- `dgus_rx_poll()`, `dgus_is_echo()` — RX 파서
-- `dgus_frame_t` — frame struct
-- `DGUS_DEMO_BOOT_PAGE`, `DGUS_DEMO_UPTIME_VP` 등 매크로 (Stage B 가 확장하거나 별도 `DGUS_APP_*` 매크로 신설 가능)
-
-신규 필요:
-- 모델 정보 enum/struct (`model_freq`, `model_type`)
-- 페이지별 application 데이터 표 (각 페이지가 어떤 VP 들을 요구하는지)
-- 페이지 변경 wrapper (`app_lcd_change_page(page)`) — 페이지별 데이터 셋업 + set_page 묶음
-
-### 4.4 Stage B 도중 발견 가능성 높은 결함
-
-Stage A 에서 이미 발견된 패턴 (typo / Phase 2 reality 불일치 / scope 가정 오류) 과 유사한 drift 가 spec/plan 에 잠재할 수 있음. 발견 시 **Task 8/9/10/12 정정 패턴 미러** 사용:
-1. spec 정정 commit
-2. plan verbatim sync commit
-3. 코드 first-time commit
-4. RESUME 갱신 commit
+> drift 발견 시: spec 정정 commit → plan verbatim sync → 코드 first-time commit.
+> subagent dispatch 가드: worktree/브랜치 only, 메인 무관 touch ✗, doc regen 자동 ✗, 코드 변경 ✗(read-only review), 빌드 시도 ✗(controller가 sanity).
 
 ---
 
-## 5. 환경 / 알려진 이슈 (Phase 1+2 + Stage A 누적)
+## 4. 환경 / 알려진 이슈
 
-### 5.1 빌드 환경
-- `$STM32_TOOLCHAIN` env var stale → `env -u STM32_TOOLCHAIN cmake ...` 필수
-- 툴체인: `arm-none-eabi-gcc 15.2.1` (homebrew), `cmake`, `ninja`, `openocd 0.12.0`
-- ST-LINK V3J15M7B5S1 (API v3) — Cortex-M4 r0p1 (6 HW BP 한계)
+### 4.1 빌드 환경
+- `$STM32_TOOLCHAIN` env var stale → **`env -u STM32_TOOLCHAIN cmake ...` 필수**.
+- 툴체인: `arm-none-eabi-gcc 15.2.1`(homebrew), `cmake`, `ninja`, `openocd 0.12.0`.
+- ST-LINK V3 (`/dev/cu.usbmodem*`) — Cortex-M4 r0p1 (6 HW BP 한계).
+- 빌드 syntax check: `arm-none-eabi-gcc -fsyntax-only` exit=0 + warning 0 (clangd LSP 노이즈 무시).
 
-### 5.2 검증 도구
-- 빌드 syntax check: `arm-none-eabi-gcc -fsyntax-only` exit=0 + warning 0 이 정답 (clangd LSP 노이즈 무시)
-- HW 진단: openocd 직접 명령 (`init` + `halt` + `mdw/mdh/mdb` + `resume` + `exit`)
+### 4.2 펌웨어 구조 핵심
+- HAL 핸들 단일 정의 = `src/periph.c`, extern = `include/periph.h`.
+- 페리페럴 GPIO는 그 드라이버가 직접 책임(예 `drivers/usart.c`가 PC6/PC7 AF).
+- `fw/vendor/` = ST HAL/CMSIS + WIZnet ioLibrary(핀 `220ca7a6`, `_WIZCHIP_=W5500`, 경고격리 lib) — read-only, 편집 ✗.
+- MCU 클럭 96 MHz, source of truth = `fw/src/clock.c`.
 
-### 5.3 LCD HW 상태 (Stage A 검증)
-- LCD 결선: PA9 (TX) / PA10 (RX) AF7 ✅
-- LCD HMI: samd20 시절 동일 (사용자 보고). DGUS T5L echo "OK" 정상 응답 검증됨
-- USART1 BRR=0x341 (115246 baud) ✅, CR1=0x202C ✅, CR3=0x1 (EIE) ✅
+### 4.3 시리얼 캡처 (USART6 mon, 115200) — ⚠ 함정
+- **리다이렉트 형식 필수**: `{ stty 115200 cs8 -parenb -cstopb raw -echo; exec cat; } < /dev/cu.usbserial-AB0MLYXA > /tmp/mon.log &` (`cat /dev/...` 인자형식은 포트를 9600으로 리셋 → garbage).
+- 비-UTF8 글리치: `LC_ALL=C tr -d '\000'`로 바이트 처리. 종료: `pkill -x cat`(`-f 'cat'`은 과매칭).
+- 깨끗한 부팅 mon = **물리 전원사이클**(openocd reset은 boot 버스트 안 나옴).
+- mon ↔ Modbus RTU = USART6 공유. SERIAL+addr!=0면 Modbus가 점유 → mon 게이트오프. ETH 모드는 mon 동작.
 
-### 5.4 graphify
-- **사용 중단 (2026-06-10, 사용자 결정)** — `graphify-out/` 산출물 삭제, `.gitignore` 항목·메모리 정책(`feedback_graphify_after_docs`) 제거. 재생성하지 말 것.
+### 4.4 보드 BOOT0 — 해결됨 (2026-05-26)
+- BOOT0(U2.60)→GND 연결로 평범한 `reset run` 플래시 부팅. force-jump 워크어라운드 불필요. (메모리 `project_board_boot0_workaround`)
 
-### 5.5 컨텍스트
-- Opus 4.7 (1M context) 환경에서 Stage A 단일 세션 ~36% 사용
-- 200k context 기준 50% 임계 정책은 다른 모델 세션에서만 의미
-- `/context` 정기 점검 권장
+### 4.5 회로 핵심 (V30 회로도 + DGUS 자료로 해소)
+- ATmega16 PA4=초음파 출력개시 입력, PC0=overload 출력, PC1/PC4=초음파 보드 신호 입력. 7-세그먼트 없음(DGUS 단독). `I2C_POT`=U4 외부 I2C 디지털 포텐셔미터 @0x28(EEPROM과 I2C1 공유, 진폭 제어 실체).
 
-### 5.6 핵심 질문 — 2026-05-25 회로도(`hw/schematics/USW_CTRL_V30`) + DGUS 자료로 해소
-- **ATmega16 PA4/PC0/PC1/PC4**: PA4=초음파 출력개시 신호 입력, PC0=overload 출력, PC1/PC4=초음파 보드 신호 입력 (ATmega16 측 확정). 구체 동작은 `ref/atmega16` fw 분석 후 STM32 흡수 — 미래 슬라이스. (memory `project_atmega16_absorption`)
-- **7-세그먼트**: V30 보드에 없음 — DGUS LCD 단독.
-- **`I2C_POT`**: U4 외부 I2C 디지털 포텐셔미터 @0x28 (EEPROM과 I2C1 버스 공유).
-
-### 5.7 ✅ 보드 BOOT0 이슈 — 해결됨 (2026-05-26)
-- **BOOT0(U2.60)→GND 연결로 해결.** 이제 평범한 `reset run`으로 플래시 앱 직접 부팅. HW 검증(2026-05-26): `reset halt` → **PC=0x080045c0 / MSP=0x20008000**(플래시 Reset_Handler), `reset run` → mon `[boot] … stage-b ready` / `[cfg] …` / `[t=N ms] hello uptime=N`(1초 cadence) 정상. **force-jump 워크어라운드 불필요.**
-- **이전 문제(해결됨)**: R64(BOOT0 풀다운, U2.60) 미실장 → BOOT0 floating high → 매 리셋 시 ST 부트로더 부팅(PC=0x1FFFxxxx), 앱 미실행.
-- **다른 미개조 보드 재발 시 fallback**: `openocd reset halt` → gdb `set $sp/$pc`(플래시 벡터 `*0x08000000`/`*0x08000004`) + VTOR(`0xE000ED08`=0x08000000) → `monitor resume`. (memory `project_board_boot0_workaround`)
-- **macOS 시리얼 캡처(USART6 mon 115200)**: 단일 fd 필수 — `{ stty 115200 cs8 -parenb -cstopb raw -echo; cat; } < /dev/cu.usbserial-XXXX`. (`stty -f` 후 `cat`은 baud 리셋되어 garbage)
+### 4.6 graphify
+- **사용 중단 (2026-06-10)** — 재생성 ✗.
 
 ---
 
-## 6. 빠른 명령어 cheat sheet
+## 5. 빠른 명령어 cheat sheet
 
-### 6.1 Stage A 머지 verify
+### 5.1 빌드 + 호스트 테스트
 ```bash
-cd /Users/tknoh/dev/work/gds_us_ctrl-stageA
-git log --oneline main..HEAD | wc -l    # Expected: 33
-git log -1 --format="%H %s" HEAD        # Expected: 23da1cb docs: Stage A RESUME archive ...
+cd /Users/tknoh/dev/work/gds_us_ctrl
+env -u STM32_TOOLCHAIN cmake -S fw -B fw/build -G Ninja && env -u STM32_TOOLCHAIN cmake --build fw/build
+arm-none-eabi-size fw/build/gds_us_ctrl.elf
+make -C fw/test test
 ```
 
-### 6.2 Build verify
+### 5.2 플래시 + 시리얼 mon
 ```bash
-cd fw
-env -u STM32_TOOLCHAIN cmake -B build -G Ninja
-env -u STM32_TOOLCHAIN cmake --build build
-arm-none-eabi-size build/gds_us_ctrl.elf
+openocd -f fw/openocd/stm32f410.cfg -c "program fw/build/gds_us_ctrl.elf verify reset exit"
+# mon (USART6, 115200) — §4.3 리다이렉트 형식
+{ stty 115200 cs8 -parenb -cstopb raw -echo; exec cat; } < /dev/cu.usbserial-AB0MLYXA > /tmp/mon.log &
+LC_ALL=C tr -d '\000' < /tmp/mon.log | LC_ALL=C tr -s ' ' | grep -aE '\[boot|\[eth|\[mb|\[cfg'
 ```
 
-### 6.3 Flash + HW probe
+### 5.3 Modbus 검증 (mbpoll)
 ```bash
-openocd -f fw/openocd/stm32f410.cfg \
-  -c "program fw/build/gds_us_ctrl.elf verify reset exit"
-
-# 시리얼 모니터 (USART6 = mon, 115200 8N1)
-ls /dev/cu.usbserial-* /dev/cu.usbmodem*
-screen /dev/cu.usbserial-XXXXXXXX 115200    # 종료 Ctrl-A k y
+# RTU (SERIAL/addr=1/9600/EVEN) — RS-485 마스터, AB0MLYXA, pkill -x cat 먼저
+mbpoll -m rtu -a 1 -b 9600 -P even -t 4 -r 7 -c 1 -1 /dev/cu.usbserial-AB0MLYXA      # FC03 read OUT_POWER
+mbpoll -m rtu -a 1 -b 9600 -P even -t 4 -r 7 /dev/cu.usbserial-AB0MLYXA 80           # FC06 write (clamp 50..100)
+# TCP (comm_mode=ETH_STATIC/DHCP) — 별도 소켓, cat 무관
+mbpoll -m tcp -a 1 -t 4 -r 1 -c 12 -1 <board-ip>                                     # FC03 mirror
+mbpoll -m tcp -a 1 -t 4 -r 28 <board-ip> 1                                           # START(reg 28); STATUS=reg 30, STOP=reg 29
 ```
+> 레지스터(wire→`-r`=wire+1): OUT_POWER 0x06→7 / RESET 0x19→26 / SEEK 0x1A→27 / START 0x1B→28 / STOP 0x1C→29 / STATUS 0x1D→30. mb_baud[]={2400,4800,9600,19200,38400,115200}, parity 0=EVEN/1=ODD/2=NONE. comm_mode 0=SERIAL/1=ETH_STATIC/2=ETH_DHCP.
 
-### 6.4 GDB 직접 메모리 read (Stage A 의 카운터들)
+### 5.4 RAM cfg 직독 (openocd) — comm/ether 설정 확인
 ```bash
-arm-none-eabi-nm fw/build/gds_us_ctrl.elf | grep -E ' [bd] (s_ms|s_dgus_|s_rx_|prev_lcd_tick)'
-
-openocd -f fw/openocd/stm32f410.cfg \
-  -c "init" -c "halt" \
-  -c "mdw 0x200004b0 1"     -c "echo {  s_ms (uptime ms)}" \
-  -c "mdh 0x20000392 1"     -c "echo {  usart1_rx_drop_count}" \
-  -c "mdh 0x20000390 1"     -c "echo {  usart1_rx_error_count}" \
-  -c "mdh 0x20000340 1"     -c "echo {  dgus_rx_drop_count}" \
-  -c "mdh 0x2000036e 1"     -c "echo {  dgus_tx_timeout_count}" \
-  -c "mdb 0x20000398 64"    -c "echo {  s_rx_ring 64 bytes}" \
-  -c "resume" -c "exit"
+arm-none-eabi-nm fw/build/gds_us_ctrl.elf | grep ' g_cfg'   # 주소 재확인 (build마다 변동)
+# g_cfg+0x2A = [comm_address, speed_idx, parity_idx, comm_mode, ether_ip[4]]
+openocd -f fw/openocd/stm32f410.cfg -c "init" -c "halt" -c "mdb 0x20000a86 8" -c "resume" -c "exit"
 ```
-
-(주소는 build 마다 약간 다름 — `arm-none-eabi-nm` 으로 재확인 후 사용)
 
 ---
 
-## 7. 응답 / 작업 정책
+## 6. 응답 / 작업 정책
 
-- **응답 언어**: 한국어 (코드 / commit 메시지 / 파일 경로 / 식별자는 영어). 사용자 메모리 `feedback_korean_responses`.
-- **워크플로우**: `superpowers:subagent-driven-development` (Task 별 fresh subagent + 2-stage review). spec compliance reviewer 는 substantive Task 마다, code quality reviewer 는 묶음 (Task 11 build verify 직전, RESUME §4.5 갱신 정책).
-- **drift 발견 시**: spec 정정 commit → plan verbatim sync → 코드 first-time commit (Task 8/9/10/12 패턴 미러).
-- **subagent dispatch 가드**: worktree only 작업, 메인 repo touch ✗, graphify/doc regen 자동 실행 ✗, 코드 변경 ✗ (read-only review), 빌드 시도 ✗ (controller 가 sanity 통과시킴).
+- **응답 언어**: 한국어 (코드 / commit / 파일 경로 / 식별자는 영어). 메모리 `feedback_korean_responses`.
+- **코드 수정 범위**: 요청한 부분만 (워크스페이스 규칙). `ref/`·`fw/vendor/` 편집 ✗.
+- **워크플로**: `superpowers:subagent-driven-development`(Task별 fresh subagent + 2-stage 리뷰). HW-gated Task는 분리.
+- **머지**: `--no-ff` 로컬, origin push ✗(local-authoritative main). 태그 = `hw-revA_fw-stage-<x>` 규칙.
+- **컨텍스트**: 50% 임계 일시정지 정책(메모리 `feedback_context_50pct_pause`). `/context` 정기 점검.
 
 ---
 
-## 8. 참조 문서
+## 7. 참조 문서
 
-- 본 슬라이스 상세 archive: `docs/superpowers/historical/2026-05-06-RESUME.md`
-- 이전 슬라이스 archive: `docs/superpowers/historical/2026-05-05-RESUME.md` (Phase 1+2)
-- 변경 이력: `docs/changelog.md`
-- 핀 매핑: `docs/pinmap.md` (Stage A 활성화 표기 포함)
+- 변경 이력: `docs/changelog.md` (최신 위)
+- 세션별 상태 로그(자동 로드): `docs/superpowers/RESUME.md`
+- slice-2 핸드오프: 루트 `HANDOFF.md`
+- 핀 매핑: `docs/pinmap.md`
 - 요구사항: `docs/requirements.md`
+- ATmega16 분석: `docs/superpowers/analysis/` (regulation-core-verified, samd20-m16-ipc-semantics-verified, atmega16-io-behavior 등)
 - 프로젝트 컨벤션: `CLAUDE.md` (root)
-- samd20 ref 코드: `/Users/tknoh/dev/work/gds_us_ctrl/ref/samd20/` (수정 ✗, Stage B 포팅 source)
-- atmega16 ref 코드: `/Users/tknoh/dev/work/gds_us_ctrl/ref/atmega16/` (수정 ✗)
+- ref 코드(수정 ✗): `ref/samd20/`, `ref/atmega16/`
+- 과거 RESUME archive: `docs/superpowers/historical/`
 
 ---
 
-> **본 문서 갱신 시점**: 2026-05-25 (Stage A 머지 + repo 정리 완료, Stage B 진입 대기)
-> **다음 갱신 시점**: Stage B brainstorming/spec 시작 시 (RESUME.md 새로 작성)
+> **본 문서 갱신 시점**: 2026-06-13 j (Stage C/D 완료 + slice-2 deferred HW 종결 반영)
+> **다음 갱신 시점**: 신규 스테이지 brainstorming/spec 시작 시
