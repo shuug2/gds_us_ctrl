@@ -6,17 +6,19 @@
 #pragma once
 #include <stdbool.h>
 
-/* Bring up SPI1 + W5500. For static comm_mode, applies netinfo from cfg and
- * becomes available immediately. For DHCP comm_mode, starts the DHCP client and
- * stays unavailable until app_eth_tick() acquires a lease. Returns true if the
- * chip answered and the PHY linked within the timeout. Call once at boot, after
- * app_init() (needs cfg loaded). */
+/* Bring up SPI1 + W5500 (fast chip init only — NON-BLOCKING: does not wait for
+ * the PHY link, which the W5500 establishes ~1.5 s after reset). Returns true if
+ * the chip answered; false if absent. The PHY link is then awaited and the net
+ * config (static netinfo, or DHCP start) is applied by app_eth_tick() on the
+ * link-up transition. Call once at boot, after app_init() (needs cfg loaded). */
 bool app_eth_init(void);
 
-/* Drive the DHCP client (1s DHCP_time_handler + DHCP_run). No-op unless DHCP
- * mode started a lease. Call every superloop iteration (from app_loop_iter). */
+/* Drive the non-blocking bring-up + DHCP client from the superloop: polls the
+ * PHY link until up (then applies static netinfo or starts DHCP), and for DHCP
+ * runs DHCP_time_handler (1 s) + DHCP_run. Call every superloop iteration (from
+ * app_loop_iter). No-op once a static IP is up or the chip is absent. */
 void app_eth_tick(void);
 
-/* True when ready to serve TCP: chip+link up AND IP ready (static: at init;
- * DHCP: after the lease is acquired). */
+/* True when ready to serve TCP: chip + PHY link up AND IP ready (static: when
+ * the link comes up; DHCP: after the lease is acquired). False until then. */
 bool app_eth_available(void);
