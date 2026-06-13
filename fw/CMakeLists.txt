@@ -68,6 +68,20 @@ target_include_directories(stm32_hal SYSTEM PUBLIC
 )
 target_compile_options(stm32_hal PRIVATE -Wno-unused-parameter)
 
+# vendor WIZnet ioLibrary (W5500) — warning-isolated, SYSTEM includes
+set(WIZNET ${VENDOR}/wiznet)
+add_library(wiznet STATIC
+    ${WIZNET}/Ethernet/wizchip_conf.c
+    ${WIZNET}/Ethernet/socket.c
+    ${WIZNET}/Ethernet/W5500/w5500.c
+)
+target_include_directories(wiznet SYSTEM PUBLIC
+    ${WIZNET}/Ethernet
+    ${WIZNET}/Ethernet/W5500
+)
+# 3rd-party: do not hold it to our -Wall -Wextra -Wundef -Wshadow gate
+target_compile_options(wiznet PRIVATE -w)
+
 # 어플리케이션 — Phase 1 sources
 file(GLOB APP_SOURCES src/*.c drivers/*.c)
 set(STARTUP ${VENDOR}/startup_stm32f410rbtx.s)
@@ -78,7 +92,7 @@ add_executable(${PROJECT_NAME}.elf
     ${STARTUP}
 )
 target_include_directories(${PROJECT_NAME}.elf PRIVATE include)
-target_link_libraries(${PROJECT_NAME}.elf PRIVATE stm32_hal)
+target_link_libraries(${PROJECT_NAME}.elf PRIVATE stm32_hal wiznet)
 
 target_link_options(${PROJECT_NAME}.elf PRIVATE
     -T${LDSCRIPT}
