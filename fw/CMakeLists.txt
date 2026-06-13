@@ -76,10 +76,12 @@ add_library(wiznet STATIC
     ${WIZNET}/Ethernet/wizchip_conf.c
     ${WIZNET}/Ethernet/socket.c
     ${WIZNET}/Ethernet/W5500/w5500.c
+    ${WIZNET}/Internet/DHCP/dhcp.c
 )
 target_include_directories(wiznet SYSTEM PUBLIC
     ${WIZNET}/Ethernet
     ${WIZNET}/Ethernet/W5500
+    ${WIZNET}/Internet/DHCP
 )
 # 3rd-party: do not hold it to our -Wall -Wextra -Wundef -Wshadow gate
 target_compile_options(wiznet PRIVATE -w)
