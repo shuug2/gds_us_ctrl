@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+### 2026-06-13 c — Stage C slice 1: Modbus 코어+RTU 실보드 HW E2E (mbpoll RS-485) PASS
+
+같은 보드 세션 연속. `feat/stage-c-modbus-core-rtu`(코드 완결, 최종 cpp-reviewer APPROVED) 빌드를 ST-LINK V3로 플래시(클린 빌드 0-warning) 후, Mac↔V30 RS-485(`/dev/cu.usbserial-AB0MLYXA`) + `mbpoll`로 plan §HW-gated 매트릭스 6항목 전수 검증. 코드 변경 없음(순수 HW 검증).
+
+- **전제 확인**: 부팅 시 미점유(mon 소유) 상태 — `[boot]/[cfg] freq=1 type=1 work=0 energy=567 en_e=0 en_m=0`. 패널 comm `SERIAL+addr=1+19200+NONE` 저장 → `[lcd-hook] comm speed=3 parity=2 addr=1` → `[mb] acquire usart6 speed=3 parity=2 addr=1` 후 mon 침묵(점유 전환). 매핑 검증: `mb_baud[]`={2400,4800,9600,19200,38400,115200} → speed idx3=19200; parity 0=EVEN/1=ODD/2=NONE.
+- **① 폴링(FC03)**: `mbpoll -t4 -r1 -c30` → 0x00~0x1D 전체 덤프. OUT_POWER(0x06)=55·ON_TIME(0x07)=56·ENERGY(0x08)=567·MODEL_FREQ/TYPE(0x17/18)=1/1·STATUS(0x1D)=0 — 부팅 `[cfg]`/`[lcd-hook] set_pot power=55` 값과 전건 일치(미러 충실).
+- **② 쓰기+클램프+영속(FC06)**: OUT_POWER 80 쓰기→80, 클램프 30→**50**(min)·120→**100**(max, app_modbus.c:143), openocd `reset run` 후 재폴링 80 유지 = **FRAM 커밋 입증**(RAM-only면 옛값 복귀) + 재획득 확인.
+- **③ 원격 런**: START(0x1B=1)→`STATUS bit0(US)=1`, **on-time ceiling 560ms**(`limit_on_time`=ON_TIME=56 ×10ms, app_reg.c:223-249 COMM 적용) 자동정지→STATUS=0, 재발화 없음, STOP(0x1C) 정상, ×3 재현. **ICON_RUN 점등/소등 시각 확인(사용자)**. DISP_POWER/AMP=0 = 벤치 전압주입 없음(B-SEAM deferred) → idle floor, by-design. (초기 8-연속폴 전부 STATUS=1은 측정 아티팩트 = mbpoll 오버헤드<ceiling이라 전부 창 안 — 정확 sleep로 1→0 전이 확인.)
+- **④ 점유 전환**: addr=NONE 저장→`[mb] release (mode=0 addr=0)`+mon 복구+mbpoll 타임아웃; addr=1→재획득; comm_mode=ETH 저장→`[mb] release (mode=1 addr=1)` = **comm_mode-only 해제 경로 실증**(addr≠0이어도 SERIAL 아니면 해제, §Deviations 5).
+- **⑤ 속도/패리티 매트릭스**: 9600/EVEN→`acquire speed=2 parity=0` mbpoll 8E1 폴링 OK; 115200/NONE→**reconfigure 경로**(`release`+`acquire speed=5 parity=2`, app_modbus.c:247 닫고 재오픈) mbpoll 8N1 OK. 전 재설정 거쳐 레지스터 값 보존(OUT_POWER=80 유지).
+- **⑥ work_cnt 리셋**: FC06 0 쓰기(WORK_CNTL 0x01) 수락+읽기 0. **non-zero→0 리셋 시연은 벤치 불가** — work_cnt는 deferred weld-cycle 머신(energy/multi 런 브랜치)만 증가시켜 벤치 상시 0; 디코드/리셋 분기는 호스트 테스트(`test_app_modbus_core`)가 커버.
+- 테스트 후 OUT_POWER 원래값 55로 복원. **다음 = modbus 브랜치 main 머지(merge-base 9083aa4, `diff 9083aa4..main`=∅ → 충돌 없는 깨끗한 머지) + 태그.**
+
 ### 2026-06-13 — Stage D slice 2b run-gate: 실보드 HW 재검증 PASS → main 머지 + 태그
 
 보드 연결 세션. slice 2b(터치 RUN 게이트) HW 재검증을 ST-LINK V3 + 보존 트레이스 바이너리(`fw/build-trace/`, Jun 10 빌드 = slice2b 코드 최신 이후 — 재빌드 불필요 확인) 재플래시 + USART6 mon(`/dev/cu.usbserial-AB0MLYXA`) 캡처로 수행 → **6항목 + ICON_RUN 시각 전수 PASS**.
