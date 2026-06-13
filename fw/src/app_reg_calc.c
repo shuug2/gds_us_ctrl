@@ -45,3 +45,9 @@ uint16_t reg_ramp_level(uint16_t counter)
     }
     return 1024u;   /* counter >= 401: full; caller transitions state to 0 */
 }
+
+uint8_t reg_on_time_200m(uint32_t run_elapsed_ms)
+{
+    uint32_t units = run_elapsed_ms / 200u;
+    return (units > 200u) ? 200u : (uint8_t)units;
+}

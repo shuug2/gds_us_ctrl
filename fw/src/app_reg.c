@@ -102,6 +102,11 @@ void app_reg_command(us_cmd_t cmd)
             g_reg.us_run_status = (uint8_t)US_TOUCH;
             g_reg.max_power     = 0u;
             g_reg.run_start_ms  = sys_tick_get_ms();
+            /* samd20 zeroes us_on_time_200m at the run-start edge (main.c:4306);
+             * the live compute would reach 0 on the first active publish anyway,
+             * but zeroing here closes the <=2ms window where a disp read could
+             * pair the old time value with the new run status. */
+            g_measure.us_on_time_200m = 0u;
         }
         break;
     case US_CMD_RUN_RELEASE:
@@ -156,7 +161,7 @@ static void reg_acquire_step(void)
     }
 }
 
-static void reg_publish_measure(void)
+static void reg_publish_measure(uint32_t now)
 {
     /* slice 2b run-gated: curr_power = live setpoint (0 when idle); max_power =
      * running peak during the run; last_power latched on stop (app_reg_command).
@@ -167,12 +172,23 @@ static void reg_publish_measure(void)
     if (active && (g_reg.adc_scaled_value > g_reg.max_power)) {
         g_reg.max_power = g_reg.adc_scaled_value;
     }
+    if (active) {
+        /* LV_TIME bar: live on-time in 200 ms units from the run-start stamp
+         * (samd20 main.c:5223 cadence counter equivalent). Only TOUCH runs
+         * exist this slice, so run_start_ms is always the active run's stamp;
+         * REMOTE/COMM slices must stamp their own start. When idle the field
+         * keeps the last run's final value — samd20 shows the latched
+         * last_time when stopped, and disp feeds this one field on both paths
+         * (app_lcd_disp.c:183 note). */
+        g_measure.us_on_time_200m =
+            reg_on_time_200m((uint32_t)(now - g_reg.run_start_ms));
+    }
     g_measure.max_power     = g_reg.max_power;
     g_measure.last_power    = g_reg.last_power;
     g_measure.us_run_status = g_reg.us_run_status;
 }
 
-void app_reg_tick(void)
+void app_reg_tick(uint16_t limit_on_time)
 {
     uint32_t now = sys_tick_get_ms();
 
@@ -198,18 +214,18 @@ void app_reg_tick(void)
      * the run flag on an internal countdown (g_018F, Timer1 ISR @0x0572).
      * limit_on_time = x10 ms, panel-editable (LV_MAX_ON_TIME), 0 disables. */
     if (g_reg.us_run_status == (uint8_t)US_TOUCH) {
-        /* Live-read each tick on purpose: a panel edit of LV_MAX_ON_TIME takes
-         * effect immediately, even mid-run (codebase-idiomatic live config). */
-        uint16_t lim = app_lcd_cfg()->limit_on_time;
-        if ((lim != 0u) &&
+        /* limit_on_time is injected by the caller from the live config each
+         * call (M1: no call back into app_lcd), so a panel edit of
+         * LV_MAX_ON_TIME still takes effect immediately, even mid-run. */
+        if ((limit_on_time != 0u) &&
             ((uint32_t)(now - g_reg.run_start_ms) >=
-             (uint32_t)lim * ON_TIME_UNIT_MS)) {
+             (uint32_t)limit_on_time * ON_TIME_UNIT_MS)) {
             g_reg.last_power    = g_reg.max_power;   /* same latch as release */
             g_reg.us_run_status = (uint8_t)US_IDLE;
             g_reg.swallow_start = 1u;   /* held button's release still pending */
 #ifdef REG_TRACE
             mon_printf("[reg] on-time ceiling (%u x10ms) -> stop\r\n",
-                       (unsigned)lim);
+                       (unsigned)limit_on_time);
 #endif
         }
     }
@@ -237,7 +253,10 @@ void app_reg_tick(void)
     g_reg.adc_scaled_value = sel;
     g_reg.band             = reg_output_level(sel);
 
-    reg_publish_measure();
+    /* Publish runs only on the ~2 ms gate above: a ceiling/release stop that
+     * fires earlier in this same call reaches g_measure up to ~2 ms later —
+     * bounded and invisible (disp renders each VP-group at a ~40 ms cadence). */
+    reg_publish_measure(now);
 
 #ifdef REG_TRACE
     if ((uint32_t)(now - g_reg.trace_ms) >= REG_TRACE_MS) {

@@ -83,11 +83,27 @@ static void test_reg_ramp_level(void) {
     }
 }
 
+/* LV_TIME bar source: elapsed run ms -> 200 ms units, capped at 200 (= 40 s),
+ * mirroring samd20 "every 200ms: if(us_on_time_200m < 200) us_on_time_200m++"
+ * (main.c:5223). Live computation from the run-start stamp is equivalent. */
+static void test_reg_on_time_200m(void) {
+    CHECK_EQ(reg_on_time_200m(0), 0);          /* run just started */
+    CHECK_EQ(reg_on_time_200m(199), 0);        /* below first unit */
+    CHECK_EQ(reg_on_time_200m(200), 1);        /* first unit boundary */
+    CHECK_EQ(reg_on_time_200m(399), 1);
+    CHECK_EQ(reg_on_time_200m(400), 2);
+    CHECK_EQ(reg_on_time_200m(39999), 199);    /* just under the cap */
+    CHECK_EQ(reg_on_time_200m(40000), 200);    /* cap onset (40 s) */
+    CHECK_EQ(reg_on_time_200m(100000), 200);   /* clamp above */
+    CHECK_EQ(reg_on_time_200m(0xFFFFFFFFu), 200);  /* clamp at u32 max */
+}
+
 int main(void) {
     test_reg_scale();
     test_reg_output_level();
     test_table_values();
     test_reg_ramp_level();
+    test_reg_on_time_200m();
     if (failures) { printf("%d check(s) FAILED\n", failures); return 1; }
     printf("all checks PASSED\n");
     return 0;

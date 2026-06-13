@@ -29,7 +29,8 @@ SAMD20 명령 FSM의 **RUN 게이트**를 흡수해 regulation core를 터치 RU
 
 - [ ] **보드 재연결 → HW 재검증**(▼ Resume — **합격기준이 2026-06-08과 다름**, 아래 기준만 사용).
 - [ ] 통과 → `superpowers:finishing-a-development-branch`(머지) + 태그 `hw-revA_fw-stage-d2b`.
-- [ ] (DEFERRED) SEEK/RESET 효과(RESET→SEEK 500ms 자동 체인 의미론 = 분석 문서 §5 필수)·overload(M_OVLD 극성 실측 필수)·weld-cycle·Modbus·OSC 구동(B-SEAM = 3선 active-LOW 미러 확인으로 축소)·6b cal·LCD 갭 3건(아이콘 엣지/us_on_time_200m/work_cnt)·M1 리팩터링(app_lcd↔app_reg 파라미터 주입).
+- [ ] slice 2b 머지 후 → **stacked 브랜치 `refactor/stage-d-m1-cfg-param-injection` rebase/머지**(2026-06-12, base = 본 브랜치 tip `322a779`: M1 파라미터 주입 + `us_on_time_200m` 공급, cpp-reviewer APPROVED-WITH-COMMENTS 반영 완료). 머지 시 LV_TIME 바 HW 확인(런 중 200ms 단위 fill, 정지 후 latch). ⚠ 본 브랜치/`fw/build-trace/`는 무변경 — 아래 Resume 절차 그대로 유효.
+- [ ] (DEFERRED) SEEK/RESET 효과(RESET→SEEK 500ms 자동 체인 의미론 = 분석 문서 §5 필수)·overload(M_OVLD 극성 실측 필수)·weld-cycle·Modbus·OSC 구동(B-SEAM = 3선 active-LOW 미러 확인으로 축소)·6b cal·LCD 갭 2건(아이콘 엣지/work_cnt — `us_on_time_200m`은 2026-06-12 해소).
 
 ## Failed Approaches (반복 금지)
 
