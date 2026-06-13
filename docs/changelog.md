@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### 2026-06-13 — Stage D slice 2b run-gate: 실보드 HW 재검증 PASS → main 머지 + 태그
+
+보드 연결 세션. slice 2b(터치 RUN 게이트) HW 재검증을 ST-LINK V3 + 보존 트레이스 바이너리(`fw/build-trace/`, Jun 10 빌드 = slice2b 코드 최신 이후 — 재빌드 불필요 확인) 재플래시 + USART6 mon(`/dev/cu.usbserial-AB0MLYXA`) 캡처로 수행 → **6항목 + ICON_RUN 시각 전수 PASS**.
+
+- ① 부팅 워밍업 1회: `st=1 rc 0→401`(~4s, 50/trace) `sel=0/run=0` 단방향 → `st=0`(재진입 없음).
+- ② RUN press: `[lcd] rx vp=0x1080 data=0 → us_command=0 → [reg] cmd=0 run=2` + `set_pot power=55` + **`sel=0` 고정**(ch0=0 idle floor, **램프 상승 없음** = 2026-06-10 램프 폐기 의미론 확인).
+- ③ ceiling 자동정지: `on-time ceiling (56 x10ms) -> stop`(이 보드 FRAM `limit_on_time=56`=560ms) → 이어진 held-button release `cmd=0 **run=0**` = **swallow_start 1회 소비, 재시동 없음**(V30 data=0 quirk 보정 동작 실증).
+- ④ ceiling 전 release: `us_command=3 → cmd=3 run=0`. ⑤ swallow 후 재press 정상 `run=2`. ⑥ RESET `data=1→cmd=2 run=0`/SEEK `data=2→cmd=1 run=0` no-op + ICON_RUN 점등/소등 시각 확인(사용자).
+- **main 머지**(`e9b593d`, `--no-ff` 2-parent) + 태그 `hw-revA_fw-stage-d2b`. 머지 후 main 빌드 0-warning(text 37088B ≈28.7%)·호스트 PASS. origin push ✗(local-authoritative 유지).
+- **다음** = m1-주입 머지(머지 시 LV_TIME 바 HW 확인) → Modbus HW E2E(mbpoll) → modbus 머지. 머지 체인 slice2b✅→m1→modbus.
+
 ### 2026-06-12 c — Stage C slice 1: Modbus 코어 + RTU 구현 (코드 완결, HW E2E 대기)
 
 plan(`docs/superpowers/plans/2026-06-12-stage-c-modbus-slice1-core-rtu.md`, 셀프리뷰 포함 `5463370`) → subagent-driven 구현(Task별 구현→spec리뷰→cpp-reviewer 2단 게이트, 리뷰 코멘트 전건 반영). 브랜치 **`feat/stage-c-modbus-core-rtu`**(base = stacked tip `refactor/stage-d-m1-cfg-param-injection`).

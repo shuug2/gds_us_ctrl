@@ -1,5 +1,8 @@
 # RESUME — 다음 세션
 
+> **상태 (2026-06-13, 마감 — slice 2b HW 재검증 PASS + main 머지/태그)**: **보드 연결 세션 — slice 2b run-gate 실보드 HW 재검증 완전 PASS → main 머지(`e9b593d`, `--no-ff` 2-parent) + 태그 `hw-revA_fw-stage-d2b`.** ST-LINK V3 + 보존 트레이스 바이너리(`fw/build-trace/`, Jun10 13:17 = slice2b 코드 최신 이후) 재플래시, USART6 mon(`/dev/cu.usbserial-AB0MLYXA`) 캡처로 6항목 + ICON_RUN 시각 전수 확인: ① 부팅 워밍업 `st=1 rc 0→401 ~4s sel=0/run=0` 단방향→`st=0` ② RUN press `vp=0x1080 data=0→us_command=0→cmd=0 run=2`+`set_pot power=55`+`sel=0`(ch0=0 idle floor, **램프 상승 없음**) ③ **ceiling 자동정지 `on-time ceiling (56 x10ms)→stop`**(이 보드 limit_on_time=56=560ms) + release-after-ceiling `cmd=0 **run=0**`=**swallow 1회 소비, 재시동 없음** ④ release<ceiling `cmd=3 run=0` ⑤ swallow 후 재press 정상 `run=2` ⑥ RESET `data=1→cmd=2`/SEEK `data=2→cmd=1` no-op + ICON_RUN on/off 시각 확인(사용자). 머지 후 main 빌드 0-warning(text 37088B ≈28.7%)·호스트 PASS. **다음 = ① m1-주입 브랜치(`refactor/stage-d-m1-cfg-param-injection`) 머지 — ⚠ 머지 시 LV_TIME 바 HW 확인(런 중 200ms 단위 fill, 정지 후 latch; 보드 연결돼 있으면 m1 trace 플래시→RUN hold하며 LCD LV_TIME 바 관찰) ② 그 후 본 Modbus 브랜치 HW E2E = plan §HW-gated(mbpoll 매트릭스 6항목; addr=NONE 미점유에서 트레이스) → 머지 ③ HW 없이 = Stage C slice 2(Modbus TCP/W5500) brainstorming.** 머지 체인 = **slice2b ✅ → m1(다음) → modbus**. 스택 선형(main 396ec18 위 322a779→m1 4커밋→modbus). `fw/build-trace/`는 slice2b 바이너리라 m1 검증 전 m1 trace 재빌드 필요.
+> - **이전 상태 (2026-06-12 c)**: ↓ Modbus 코드 완결(아래 블록).
+
 > **상태 (2026-06-12 c, 마감 — Stage C slice 1 구현 완료, HW E2E 대기)**: **Modbus 코어+RTU 코드 완결.** plan `docs/superpowers/plans/2026-06-12-stage-c-modbus-slice1-core-rtu.md`(`5463370`) → subagent-driven 실행(Task 2~8 = 구현→spec리뷰→cpp-reviewer 2단 게이트, 코멘트 전건 반영) → **최종 통합 cpp-reviewer = APPROVED**(CRIT/HIGH 0, Minor 3 = NOTE 주석 반영 `ef6b371`). 브랜치 **`feat/stage-c-modbus-core-rtu`**(base = m1-주입 stacked tip, 16커밋, tip `ef6b371`). 산출물: `app_modbus_core.{c,h}`(순수 코어, 호스트 TDD; 원본 버그 3건 수정 = OOB/FC05 에코/FC01 풀바이트) + `usart6_mb.{c,h}`(DMA2 S1 Ch5 no-ISR + samd20 갭 프레이밍 + TX 후 에코 flush) + `app_modbus.{c,h}`(매 tick 미러 + FC06 클램프 체인 + save_all FRAM + US_COMM 명령 + 점유 전환 매 tick 평가) + `app_reg_command(cmd,src)`/max_amp/COMM ceiling + mon 게이트. 게이트 = main 클린 0-warning(FLASH 31.1%/RAM 12.3%)·trace 구성 0-warning·호스트 ×2 PASS. **다음 = ① 보드 재연결 시 slice 2b HW 재검증(HANDOFF §Resume — 변동 없음) → 머지 체인(2b → m1-주입 → 본 브랜치) ② 본 브랜치 HW E2E = plan §HW-gated(mbpoll 매트릭스 6항목; 트레이스 검증은 addr=NONE 미점유에서) ③ HW 없이 더 갈 거면 = Stage C slice 2(Modbus TCP/W5500) brainstorming부터.** B-SEAM 랜딩 시 주의: `app_modbus.c` pot-guard NOTE(스테일 g_measure → 라이브 accessor 필요).
 > - **이전 상태 (2026-06-12 b)**: ↓ 스펙 승인(아래 블록).
 
@@ -67,16 +70,19 @@
 
 ```bash
 cd /Users/tknoh/dev/work/gds_us_ctrl
-git checkout feat/stage-c-modbus-core-rtu      # Modbus slice 1 (코드 완결, HW E2E 대기, 16커밋 tip 083f053)
+git checkout feat/stage-c-modbus-core-rtu      # Modbus slice 1 (코드 완결, HW E2E 대기, tip = RESUME 갱신)
 git log --oneline 5463370..HEAD                # 5463370(plan) 위로 코어/전송층/FSM/통합 + 리뷰 fix
-cd fw && env -u STM32_TOOLCHAIN cmake --build build   # 0-warning (FLASH 31.1%/RAM 12.3%)
-make -C test test                              # 호스트 = app_reg_calc + app_modbus_core 둘 다 PASSED
-# 다음 갈래 (세 택1, 상단 상태블록 참조):
-#  ① 보드 있으면 → slice 2b HW 재검증(HANDOFF §Resume) → 머지 체인 2b→m1→본 브랜치 → Modbus HW E2E(plan §HW-gated, mbpoll)
-#  ② HW 없이 계속 → Stage C slice 2 (Modbus TCP/W5500) brainstorming부터 (코어에 mode!=RTU 스킵 경로 이미 준비됨)
+env -u STM32_TOOLCHAIN cmake -S fw -B fw/build -G Ninja && env -u STM32_TOOLCHAIN cmake --build fw/build  # 0-warning
+make -C fw/test test                           # 호스트 = app_reg_calc + app_modbus_core 둘 다 PASSED
+# 진행 상태: slice 2b = main 머지 ✅(e9b593d, tag hw-revA_fw-stage-d2b). 머지 체인 2b✅→m1(다음)→modbus.
+# 다음 갈래 (상단 상태블록 참조):
+#  ① m1-주입 머지 → ⚠ 머지 시 LV_TIME 바 HW 확인(m1 trace 플래시→RUN hold하며 LCD LV_TIME 바 200ms fill/latch 관찰)
+#  ② 그 후 Modbus HW E2E = plan §HW-gated(mbpoll 매트릭스 6항목; addr=NONE 미점유에서 트레이스) → modbus 머지
+#  ③ HW 없이 계속 → Stage C slice 2 (Modbus TCP/W5500) brainstorming부터 (코어에 mode!=RTU 스킵 경로 준비됨)
 # plan: docs/superpowers/plans/2026-06-12-stage-c-modbus-slice1-core-rtu.md (§HW-gated = mbpoll 매트릭스)
 # spec: docs/superpowers/specs/2026-06-12-stage-c-modbus-slice1-core-rtu-design.md
-# (옛 Stage D slice 1 feat/stage-d-regulation-core = MERGED 5aea06f; 옛 pin-I/O = RETIRED)
+# HW 캡처: DEV=/dev/cu.usbserial-AB0MLYXA; { stty -f "$DEV" 115200 cs8 -parenb -cstopb raw -echo; cat; } < "$DEV" > /tmp/reg-mon.log &
+# (옛 Stage D slice 1/2a = MERGED; slice 2b = MERGED 2026-06-13)
 ```
 
 > 진단 가시화가 필요하면 `-DLCD_TRACE_RX` 트레이스 빌드(별도 `build-trace/`, CMakeLists에 한 줄 추가→빌드→원복→`build-trace/...elf` 플래시): `[lcd] rx vp=.. data=..` + `[lcd] commit cm temp=.. cfg=..` + `[lcd] boot cm=.. ip=..` 출력. 시리얼 리셋 글리치로 부팅줄 NULL 플러드가 섞이니 `tr -d '\000' < log | tr -s ' ' | grep '\['`로 정리해 읽기.
