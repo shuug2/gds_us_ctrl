@@ -1,5 +1,8 @@
 # RESUME — 다음 세션
 
+> **상태 (2026-06-13 g, 마감 — Stage C slice 2b (Modbus TCP/W5500 **DHCP**) 구현 완료(host-complete), HW E2E만 남음)**: **HW 비의존 세션 — slice 2b(DHCP) plan(`166fe78`, 5 task)을 subagent-driven으로 실행. Task 1~4 완료(구현+host 게이트+per-task 리뷰+통합 cpp-reviewer), Task 5(HW E2E)만 보드 게이트로 남음. 코드 5커밋, 브랜치 `feat/stage-c-modbus-tcp-dhcp`(base=2a tip `faf89d5`, **stack** — 2a W5500 스택 의존, 미머지). 클린 빌드 0-warning(우리 코드)·FLASH 40.58%(53188B/128KB)·RAM 16.65%·호스트 3스위트(`app_reg_calc`+`app_modbus_core`+`app_modbus_tcp_frame`) PASS(2b 새 호스트 테스트 ✗=DHCP HAL/소켓/콜백 글루). 통합 cpp-reviewer = APPROVED-WITH-COMMENTS(Crit/High 0).** 커밋: T1 `3a62233`(ioLibrary DHCP `Internet/DHCP/dhcp.{c,h}` 벤더, **핀 `220ca7a6`**, `wiznet` lib에 dhcp.c·DHCP include 추가·경고격리 유지; **controller가 dhcp.h grep해 API 확정**=`reg_dhcp_cbfunc` 3-arg(assign,update,conflict)/`DHCP_init(s,buf)`/`DHCP_run→u8`/`DHCP_FAILED=0`/`get{IP,GW,SN,DNS}fromDHCP`/`NETINFO_DHCP=2`→T2 주입) → T2 `5b84f71`+`a403326`(`app_eth` DHCP 라이프사이클, `app_eth.{c,h}`만: DHCP 분기 **non-blocking**(`s_available=false` 유지), `dhcp_ip_assign`=get*→`wizchip_setnetinfo`+**RAM-only cfg 미러**(FRAM 커밋 ✗), `dhcp_ip_conflict` **non-fatal**(samd20 `while(1)` 폐기), `app_eth_tick`=1s `DHCP_time_handler` **항상**+`DHCP_run`/`DHCP_FAILED`→re-init keep-retry(static 폴백 ✗); **static 경로 verbatim**(cfg hoist만); sock1(TCP=0)/`s_dhcp_buf[1024] _Alignas`; **spec+quality 2단 리뷰 APPROVED**, advisor 5우려 정적 benign) → T3 `08b4004`(`app.c app_loop_iter`에 `app_eth_tick()`=`app_modbus_tick()` **직전**; `app_eth_init` boot `main.c:29` 기존 배선→end-to-end) → T4 통합 cpp-reviewer + `86a3923`(정적 확인 2건: **소켓 분리** TCP0/DHCP1·**콜백 생존** across `DHCP_init` re-init[벤더 dhcp.c:1028-1063]; Minor 3=콜드스타트 즉시 틱[무해]·`s_prev_ms=now`[의도]·main.c:30 주석 ETH→ETH_STATIC/DHCP 정정). **다음 = Task 5 HW E2E**(보드+W5500+**DHCP 서버 망** 게이트, 코드 변경 기대 ✗): `comm_mode=ETH_DHCP(2)` 설정→전원사이클→mon `[eth] dhcp init — acquiring lease...`→`[eth] dhcp lease ip=a.b.c.d`(DHCP 서버 없으면 acquiring 유지+`available()`=false=**keep-retry non-fatal 입증**, RTU/mon/LCD 무영향)→`mbpoll -m tcp -a 1 ...` 매트릭스(FC03 미러/FC06 클램프+FRAM/START-560ms ceiling-STOP+ICON_RUN/**LCD 리스 IP=RAM-only**(전원사이클→재리스, FRAM ether=0)/RTU FC06 회귀 spot-check)→`finishing-a-development-branch` 머지(`--no-ff`)+태그 `hw-revA_fw-stage-c2b`(**2a 머지 후, 2a→2b 순서**). ⚠ slice 2a HW E2E(Task9)도 미완(보드 게이트, 별도 트랙 — 2a 먼저). spec/plan = `docs/superpowers/{specs,plans}/2026-06-13-stage-c-modbus-slice2b-dhcp*.md`.
+> - **이전 상태 (2026-06-13 f)**: ↓ slice 2b spec+plan 완료(구현 전) 시점.
+
 > **상태 (2026-06-13 f, 마감 — Stage C slice 2b (Modbus TCP/W5500 **DHCP**) brainstorming → spec → plan 완료, 구현 대기)**: **HW 비의존 세션 연속 — slice 2a 구현 완료(아래 e) 후 slice 2b(DHCP) 착수. brainstorming(질문 4개: 범위/획득모델/실패경로/IP영속) → spec(`5444aee`) → writing-plans(`166fe78`, 5 task) 완료. 코드 변경 ✗(설계 단계). 브랜치 `feat/stage-c-modbus-tcp-dhcp`(base = slice 2a tip `faf89d5`, **stack** — 2a의 W5500 스택 의존, 미머지).** 핵심 결정(사용자): ① 범위 = **DHCP 획득만**(핫플러그 재init + SERIAL boot-skip 이연) ② 획득 = **논블로킹 슈퍼루프**(samd20 충실; boot 비블록, 리스 전 `app_eth_available()`=false로 TCP 대기) ③ 실패 = **미획득 유지+계속 재시도**(static 폴백 폐기 — DHCP면 ether=0.0.0.0라 무의미; conflict는 non-fatal=라이브러리 decline/재요청, samd20 `while(1)` halt 폐기) ④ 획득 IP = **RAM만**(in-RAM cfg 미러로 LCD 표시), FRAM 미영속(samd20 충실). **구현 핵심 주의(plan에 박힘)**: ⓐ Task1 = `Internet/DHCP/dhcp.{c,h}` 벤더 = **2a와 같은 핀 커밋 `220ca7a6`**(`git checkout <hash>` 필수, master tip ✗) + wiznet 경고격리 lib·DHCP include 추가; Task1 후 **controller가 dhcp.h grep해 DHCP API 이름/시그니처 확정→Task2 프롬프트 주입**(2a 방식) ⓑ Task2 = **app_eth만 수정** = 2a **static 경로 verbatim 보존** + DHCP 분기/assign·conflict 콜백/`app_eth_tick` 추가; `app_eth_available()` 의미 "칩+링크+IP준비"로 확장→modbus tick 게이트 **무수정** 재사용 ⓒ Task3 = `app_eth_tick()`을 **`app.c` `app_loop_iter`**(main.c 아님)의 `app_modbus_tick()` **직전** 호출 ⓓ 1s `DHCP_time_handler` = **획득 중에도**(samd20 정정), `DHCP_FAILED`→re-init keep-retrying. DHCP sock=1(TCP=0), buf 1KB. 새 호스트 테스트 ✗(DHCP=HAL/소켓 글루). **다음 = plan Task 1부터 구현(subagent-driven = option 1, slice2a 패턴).** 호스트 게이트(빌드 0-warning + 3스위트) 후 HW E2E(Task5, **보드+W5500+DHCP 서버 망** 게이트) → 머지+태그 `hw-revA_fw-stage-c2b`(2a 머지 후, 2a→2b 순서). ⚠ **slice 2a HW E2E(Task9)도 미완**(보드 게이트) — 별도 트랙. spec `docs/superpowers/specs/2026-06-13-stage-c-modbus-slice2b-dhcp-design.md`, plan `docs/superpowers/plans/2026-06-13-stage-c-modbus-slice2b-dhcp.md`.
 > - **이전 상태 (2026-06-13 e)**: ↓ slice 2a 구현 완료(host-complete) 시점.
 
@@ -85,23 +88,20 @@
 
 ```bash
 cd /Users/tknoh/dev/work/gds_us_ctrl
-git checkout feat/stage-c-modbus-tcp-dhcp       # slice 2b: spec(5444aee) + plan(166fe78) 커밋됨, 구현 대기 (base = 2a tip faf89d5)
-env -u STM32_TOOLCHAIN cmake -S fw -B fw/build -G Ninja && env -u STM32_TOOLCHAIN cmake --build fw/build  # 0-warning(우리 코드), 2a baseline text 47204B
-make -C fw/test test                            # 호스트 3스위트 PASSED (2b는 새 호스트 테스트 추가 ✗)
-# 진행 상태: slice 2b brainstorming→spec→plan 완료. 코드 미시작. plan = 5 task (코드 T1~T3 + T4 게이트 + T5 HW).
-# === 다음 = plan Task 1부터 구현 (option 1 = subagent-driven, slice2a 패턴) ===
-#   1) superpowers:subagent-driven-development 스킬 로드 → plan 읽고 5 task 추출 → TaskCreate
-#   2) (착수 전 advisor 1회) → Task 1 implementer 디스패치 (각 Task: implementer → spec/cpp-reviewer 게이트)
-#   plan: docs/superpowers/plans/2026-06-13-stage-c-modbus-slice2b-dhcp.md
-#   spec: docs/superpowers/specs/2026-06-13-stage-c-modbus-slice2b-dhcp-design.md
-#   ⚠ Task1: 벤더 Internet/DHCP/dhcp.{c,h} = 같은 핀 커밋 220ca7a6 (git checkout <hash>, master tip ✗); 후 controller가 dhcp.h grep해 DHCP API 이름/시그니처 확정→Task2 프롬프트 주입
-#   ⚠ Task2: app_eth만 수정 — 2a static 경로 verbatim 보존 + DHCP 분기/콜백/app_eth_tick; available()=칩+링크+IP준비
-#   ⚠ Task3: app_eth_tick()을 app.c app_loop_iter의 app_modbus_tick() 직전 (main.c 아님)
-# 호스트 게이트 후 HW E2E(Task5, 보드+W5500+DHCP 서버 망 게이트) → 머지+태그 hw-revA_fw-stage-c2b (2a 머지 후)
+git checkout feat/stage-c-modbus-tcp-dhcp       # slice 2b: 코드 완료(host-complete), tip=86a3923 (base = 2a tip faf89d5, stack)
+env -u STM32_TOOLCHAIN cmake -S fw -B fw/build -G Ninja && env -u STM32_TOOLCHAIN cmake --build fw/build  # 0-warning(우리 코드), 2b text 52628B (FLASH 40.58%)
+make -C fw/test test                            # 호스트 3스위트 PASSED (2b는 새 호스트 테스트 추가 ✗ — DHCP=HAL/소켓/콜백 글루)
+# 진행 상태: slice 2b plan(166fe78, 5 task) Task 1~4 완료(코드 5커밋 3a62233/5b84f71/a403326/08b4004/86a3923, 통합 cpp-reviewer APPROVED-WITH-COMMENTS Crit/High 0). Task 5(HW E2E)만 보드 게이트.
+# === 다음 = plan Task 5 HW E2E (보드+W5500+DHCP 서버 망 게이트, 코드 변경 기대 ✗) ===
+#   plan: docs/superpowers/plans/2026-06-13-stage-c-modbus-slice2b-dhcp.md  (§Task 5 = HW-gated 매트릭스 7스텝)
+#   1) 패널/FRAM comm_mode=ETH_DHCP(2) 설정 → 전원사이클 → DHCP 서버 망(라우터/dnsmasq)에 W5500 연결
+#   2) mon: [eth] dhcp init — acquiring lease... → [eth] dhcp lease ip=a.b.c.d (서버 없으면 acquiring 유지+available()=false = keep-retry non-fatal 입증, RTU/mon/LCD 무영향)
+#   3) IP=<leased>; mbpoll -m tcp -a 1 -t 4 ... 매트릭스: FC03 미러 / FC06 클램프+FRAM / START 0x1B→560ms ceiling-STOP+ICON_RUN / LCD 리스 IP 표시=RAM-only(전원사이클→재리스, FRAM ether=0) / SERIAL 전환 RTU FC06 회귀 spot-check
+#   4) 통과 시 finishing-a-development-branch 머지(--no-ff) + 태그 hw-revA_fw-stage-c2b (2a 머지 후, 2a→2b 순서)
 # HW(보드): ST-LINK V3. 플래시 = openocd -f fw/openocd/stm32f410.cfg -c "program fw/build/gds_us_ctrl.elf verify reset exit"
 # mon: DEV=/dev/cu.usbserial-AB0MLYXA; { stty -f "$DEV" 115200 cs8 -parenb -cstopb raw -echo; cat; } < "$DEV" > /tmp/reg-mon.log &
-# ⚠ slice 2a HW E2E(Task9)도 미완(보드 게이트, plan 2026-06-13-stage-c-modbus-slice2a-tcp.md §Task9) — 2b는 2a 위 stack, 둘 다 머지는 HW 후 (2a→2b 순서)
-# (옛 Stage D + m1 = MERGED; modbus slice 1 = MERGED; slice 2a 코드 = 완료 2026-06-13 e; slice 2b 설계 = 완료 2026-06-13 f)
+# ⚠ slice 2a HW E2E(Task9)도 미완(보드 게이트, plan 2026-06-13-stage-c-modbus-slice2a-tcp.md §Task9) — 2b는 2a 위 stack, 둘 다 머지는 HW 후 (2a→2b 순서, 2a 먼저)
+# (옛 Stage D + m1 = MERGED; modbus slice 1 = MERGED; slice 2a 코드 = 완료 2026-06-13 e; slice 2b 코드 = 완료 2026-06-13 g)
 ```
 
 > 진단 가시화가 필요하면 `-DLCD_TRACE_RX` 트레이스 빌드(별도 `build-trace/`, CMakeLists에 한 줄 추가→빌드→원복→`build-trace/...elf` 플래시): `[lcd] rx vp=.. data=..` + `[lcd] commit cm temp=.. cfg=..` + `[lcd] boot cm=.. ip=..` 출력. 시리얼 리셋 글리치로 부팅줄 NULL 플러드가 섞이니 `tr -d '\000' < log | tr -s ' ' | grep '\['`로 정리해 읽기.

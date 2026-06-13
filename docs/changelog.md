@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### 2026-06-13 g — Stage C slice 2b (Modbus TCP/W5500 DHCP): 구현 완료(host-complete), HW E2E 대기
+
+HW 비의존 세션. plan(`166fe78`, 5 task)을 subagent-driven으로 실행 — Task 1~4 완료(구현+host 게이트+per-task 리뷰+통합 리뷰), Task 5(HW E2E)만 보드 게이트로 미실행. 코드 5커밋. 브랜치 `feat/stage-c-modbus-tcp-dhcp`(base = 2a tip `faf89d5`, **stack** — 2a W5500 스택 의존, 미머지). 클린 빌드 0-warning(우리 코드)·**FLASH 40.58%(53188B/128KB)·RAM 16.65%**·호스트 3스위트(`app_reg_calc`+`app_modbus_core`+`app_modbus_tcp_frame`) 전수 PASS(2b 새 호스트 테스트 ✗ — DHCP=HAL/소켓/콜백 글루). 통합 cpp-reviewer = APPROVED-WITH-COMMENTS(Crit/High 0).
+
+- **T1 `3a62233`**: ioLibrary DHCP `Internet/DHCP/dhcp.{c,h}` 벤더(**2a와 같은 핀 커밋 `220ca7a6`**, master tip ✗) + `wiznet` lib에 `dhcp.c`·`Internet/DHCP` include 추가(경고격리 `-w`·SYSTEM 유지). dhcp includes = `socket.h`(이미 벤더)+`stdio.h`만(추가 벤더 불필요). **controller가 `dhcp.h` grep해 API 확정→T2 프롬프트 주입**(load-bearing): `reg_dhcp_cbfunc`=3-arg(assign,update,conflict), `DHCP_init(uint8_t s,uint8_t*buf)`, `DHCP_run→u8`, `DHCP_FAILED=0`, `get{IP,GW,SN,DNS}fromDHCP(u8*)`, `NETINFO_DHCP=2`(wizchip_conf W5500 클래식 struct). dhcp.c는 우리 코드서 미참조→`--gc-sections` 드롭(격리 빌드 green이 목표).
+- **T2 `5b84f71`(+`a403326` 정렬 minor)**: `app_eth` DHCP 라이프사이클(`app_eth.{c,h}`만 수정) — DHCP 분기(`DHCP_init`+`reg_dhcp_cbfunc`, `s_dhcp_active=true`, `return true`지만 **`s_available=false` 유지=논블로킹 boot**), `dhcp_ip_assign`(get*fromDHCP→`wizchip_setnetinfo`+**RAM-only cfg 미러**(`app_lcd_cfg()` write, FRAM 커밋 ✗)+`s_available=true`), `dhcp_ip_conflict`(**non-fatal**, samd20 `while(1)` 폐기), `app_eth_tick`(1s `sys_tick_get_ms` 게이트 `DHCP_time_handler` **항상**+`DHCP_run`; `DHCP_FAILED`→re-`DHCP_init` keep-retry, **static 폴백 ✗**). **static 경로 verbatim 보존**(`const cfg` 선언 branch 위로 hoist만). sock1(TCP=sock0), `s_dhcp_buf[1024] _Alignas(uint32_t)`(리뷰 minor — RIP_MSG* 캐스트). **spec+quality 2단 리뷰 APPROVED**(advisor 5개 우려 전부 정적 분석 benign 해소).
+- **T3 `08b4004`**: `app.c app_loop_iter`에 `app_eth_tick()` 배선 — `app_modbus_tick()` **직전**(이번 iter 리스 획득이 게이트(`comm_mode!=SERIAL && app_eth_available()`) 읽기 전 available 플립). `app_eth_init()`은 boot(`main.c:29`, 2a) 이미 배선 → 라이프사이클 end-to-end 연결. ELF text 48120→52628(+4.5KB=app_eth_tick+DHCP lib 도달).
+- **T4 통합 cpp-reviewer = APPROVED-WITH-COMMENTS**: 정적 확인 2건 = ① **소켓 분리**(`MB_TCP_SOCK=0`/`SOCK_DHCP=1`, 충돌 없음) ② **콜백 생존**(벤더 `dhcp.c:1028-1063` 확인 — `DHCP_init` 재호출이 콜백 포인터 미손상 → keep-retry 안전). Minor 3 = ① 콜드스타트 1회 즉시 `DHCP_time_handler`(무해, 무변경) ② `s_prev_ms=now` stretch-safe(의도, 무변경) ③ `main.c:30` 주석 `comm_mode==ETH`→`ETH_STATIC/ETH_DHCP` 정정(`86a3923`로 반영, 2b가 stale 만든 주석).
+- **다음 = Task 5 HW E2E**(보드+W5500+DHCP 서버 망 게이트, 코드 변경 기대 ✗): `comm_mode=ETH_DHCP(2)` 설정→전원사이클→mon `[eth] dhcp init — acquiring lease...`→`[eth] dhcp lease ip=a.b.c.d` 확인(DHCP 서버 없으면 acquiring 유지+`available()`=false=**keep-retry non-fatal 입증**, RTU/mon/LCD 무영향)→`mbpoll -m tcp -a 1 ...` 매트릭스(FC03 미러/FC06 클램프+FRAM/START-560ms ceiling-STOP+ICON_RUN/**LCD 리스 IP 표시=RAM-only**(전원사이클→재리스, FRAM ether=0)/RTU FC06 회귀 spot-check). 통과 시 `finishing-a-development-branch` 머지(`--no-ff`)+태그 `hw-revA_fw-stage-c2b`(**2a 머지 후, 2a→2b 순서**).
+
 ### 2026-06-13 f — Stage C slice 2b (Modbus TCP/W5500 DHCP): brainstorming → spec → plan
 
 HW 비의존 세션 연속(slice 2a 구현 완료 후). slice 2b(DHCP) 착수 — 설계 단계만(코드 변경 ✗). 브랜치 `feat/stage-c-modbus-tcp-dhcp`(base = slice 2a tip `faf89d5`, stack — 2a의 W5500 스택 의존, 미머지).
