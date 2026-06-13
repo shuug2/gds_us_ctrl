@@ -1,18 +1,27 @@
 /* fw/src/app_eth.c — see app_eth.h. ioLibrary callback wiring mirrors samd20
- * ethernet.c, retargeted to STM32 SPI1 (spi1.c) + W5500 chip. */
+ * ethernet.c, retargeted to STM32 SPI1 (spi1.c) + W5500 chip. Static IP from
+ * cfg, or DHCP-acquired (comm_mode==ETH_DHCP) via the ioLibrary DHCP client
+ * driven from app_eth_tick(). */
 #include "app_eth.h"
 #include "spi1.h"
-#include "app_lcd.h"        /* app_lcd_cfg() -> ether_ip/nm/gw */
+#include "app_lcd.h"        /* app_lcd_cfg() -> comm_mode, ether_ip/nm/gw */
 #include "app_config.h"
 #include "mon.h"
+#include "sys_tick.h"       /* sys_tick_get_ms() — 1s DHCP cadence */
 #include "stm32f4xx_hal.h"  /* HAL_Delay */
 #include "wizchip_conf.h"
 #include "socket.h"
+#include "dhcp.h"
+
+#define COMM_ETH_DHCP  2u   /* cfg->comm_mode: 0=SERIAL 1=ETH_STATIC 2=ETH_DHCP */
+#define SOCK_DHCP      1u   /* UDP socket for DHCP (TCP server uses socket 0) */
 
 /* Faithful to samd20 ethernet.c default MAC (per-unit MAC = future, spec §8). */
 static const uint8_t kEthMac[6] = { 0x00, 0x08, 0xdc, 0x78, 0x91, 0x71 };
 
-static bool s_available = false;
+static bool    s_available   = false;
+static bool    s_dhcp_active  = false;   /* DHCP_init done → drive in app_eth_tick */
+static uint8_t s_dhcp_buf[1024];         /* ioLibrary DHCP RX buffer (min 548) */
 
 bool app_eth_available(void) { return s_available; }
 
@@ -20,9 +29,46 @@ bool app_eth_available(void) { return s_available; }
 static void cs_sel(void)   { spi1_cs_low();  }
 static void cs_desel(void) { spi1_cs_high(); }
 
-bool app_eth_init(void)
+/* DHCP IP-assign + IP-update callback (same handler for both). Pull the leased
+ * address from the client, apply it to the W5500, mirror it into the live cfg
+ * for LCD display (RAM only — never committed to FRAM), and mark available. */
+static void dhcp_ip_assign(void)
+{
+    wiz_NetInfo ni = {0};
+    for (int i = 0; i < 6; i++) { ni.mac[i] = kEthMac[i]; }
+    getIPfromDHCP(ni.ip);
+    getGWfromDHCP(ni.gw);
+    getSNfromDHCP(ni.sn);
+    getDNSfromDHCP(ni.dns);
+    ni.dhcp = NETINFO_DHCP;
+    wizchip_setnetinfo(&ni);
+
+    /* mirror into the live config so the LCD shows the leased IP (RAM only). */
+    app_config_t *cfg = app_lcd_cfg();
+    for (int i = 0; i < 4; i++) {
+        cfg->ether_ip[i] = ni.ip[i];
+        cfg->ether_nm[i] = ni.sn[i];
+        cfg->ether_gw[i] = ni.gw[i];
+    }
+
+    s_available = true;
+    mon_printf("[eth] dhcp lease ip=%u.%u.%u.%u\r\n",
+               (unsigned)ni.ip[0], (unsigned)ni.ip[1],
+               (unsigned)ni.ip[2], (unsigned)ni.ip[3]);
+}
+
+/* DHCP IP-conflict callback. NON-FATAL (samd20's while(1) halt is dropped):
+ * drop availability and let the library DECLINE + re-request. */
+static void dhcp_ip_conflict(void)
 {
     s_available = false;
+    mon_printf("[eth] dhcp ip conflict — re-requesting\r\n");
+}
+
+bool app_eth_init(void)
+{
+    s_available   = false;
+    s_dhcp_active  = false;
     spi1_init();
 
     /* Register the ioLibrary SPI / CS callbacks.
@@ -34,8 +80,7 @@ bool app_eth_init(void)
 
     spi1_eth_reset();
 
-    /* socket buffer sizes: 2KB each, socket 0 only used. wizchip_init returns
-     * -1 if the requested sizes don't fit. */
+    /* socket buffer sizes: 2KB each. wizchip_init returns -1 if they don't fit. */
     uint8_t txsize[8] = { 2, 2, 2, 2, 2, 2, 2, 2 };
     uint8_t rxsize[8] = { 2, 2, 2, 2, 2, 2, 2, 2 };
     if (wizchip_init(txsize, rxsize) != 0) {
@@ -56,8 +101,19 @@ bool app_eth_init(void)
         return false;
     }
 
-    /* static netinfo from cfg(FRAM). */
     const app_config_t *cfg = app_lcd_cfg();
+
+    if (cfg->comm_mode == COMM_ETH_DHCP) {
+        /* DHCP: start the client; the lease is acquired in app_eth_tick() and
+         * applied by dhcp_ip_assign(). Stay unavailable until then. */
+        DHCP_init(SOCK_DHCP, s_dhcp_buf);
+        reg_dhcp_cbfunc(dhcp_ip_assign, dhcp_ip_assign, dhcp_ip_conflict);
+        s_dhcp_active = true;
+        mon_printf("[eth] dhcp init — acquiring lease...\r\n");
+        return true;   /* chip+link up; s_available stays false until lease */
+    }
+
+    /* static netinfo from cfg(FRAM). */
     wiz_NetInfo ni = {0};
     for (int i = 0; i < 6; i++) { ni.mac[i] = kEthMac[i]; }
     for (int i = 0; i < 4; i++) {
@@ -74,4 +130,31 @@ bool app_eth_init(void)
                (unsigned)ni.ip[2], (unsigned)ni.ip[3]);
     s_available = true;
     return true;
+}
+
+/* Drive the DHCP client (no-op unless comm_mode==ETH_DHCP started a lease).
+ * Call every superloop iteration. DHCP_time_handler must tick at 1s during
+ * acquisition AND lease (else DISCOVER never retransmits — spec §3.2). On
+ * DHCP_FAILED we re-init to keep retrying (no static fallback — spec §3.3). */
+void app_eth_tick(void)
+{
+    if (!s_dhcp_active) {
+        return;
+    }
+
+    static uint32_t s_prev_ms = 0u;
+    uint32_t now = sys_tick_get_ms();
+    if ((uint32_t)(now - s_prev_ms) >= 1000u) {
+        s_prev_ms = now;
+        DHCP_time_handler();
+    }
+
+    switch (DHCP_run()) {       /* assign/conflict callbacks fire from here */
+        case DHCP_FAILED:
+            s_available = false;
+            DHCP_init(SOCK_DHCP, s_dhcp_buf);   /* keep retrying — no fallback */
+            break;
+        default:
+            break;              /* ASSIGN/CHANGED/LEASED handled in callbacks */
+    }
 }
