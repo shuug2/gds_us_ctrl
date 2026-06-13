@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+### 2026-06-13 h — Stage C slice 2b HW E2E PASS (static+DHCP+retry) + 비블로킹 PHY 리팩터
+
+보드 연결 세션(ST-LINK V3, W5500 실장 + DHCP 서버 망, mon `/dev/cu.usbserial-AB0MLYXA`@115200). slice 2b(+2a static) 실보드 HW E2E. **실 버그 1건 발견·수정**(slice 2a app_eth PHY 폴링 타임아웃) → 비블로킹 FSM 리팩터. 코드 2커밋(`635e9ec`+`62c1cc1`), 브랜치 tip `62c1cc1`(미머지). 빌드 0-warning·FLASH 40.65%(53288B/128KB)·RAM 16.66%·호스트 3스위트 PASS.
+
+- **버그 발견 (HW)**: `comm_mode=ETH_STATIC`로 부팅 시 `[eth] no PHY link — unavailable` — **링크 LED는 켜져 있는데** 펌웨어가 못 잡음. 진단 빌드(타임아웃 5s+폴마다 로그)로 측정 → `rc=0` 내내 정상, **링크가 reset 후 t=1490ms에 업**. 원인 = `app_eth_init`의 PHY 폴링이 **1s(100×10ms) 1회**뿐이라 ~0.5s 일찍 포기(W5500 PHY는 NRST 후 ~1.5s 오토네고). static·DHCP 둘 다 영향(폴이 comm_mode 분기 앞). **이 폴링은 slice 2a 코드의 버그.**
+- **수정 `635e9ec` (비블로킹 FSM 리팩터, advisor 설계검토)**: `app_eth`를 상태머신(`ETH_DOWN`/`ETH_LINKWAIT`/`ETH_STATIC_UP`/`ETH_DHCP_RUN`)으로. `app_eth_init`=빠른 칩 init만(블로킹 폴 제거, 즉시 리턴). `app_eth_tick`=`LINKWAIT`에서 100ms마다 `CW_GET_PHYLINK` 폴 → 링크 업 시 `eth_apply_on_link`(static netinfo 또는 MAC선설정+DHCP 시작). 브링업 **무조건**(SERIAL 포함, advisor: SERIAL→런타임 ETH_STATIC 무재부팅 동작 보존; mon은 SERIAL서 게이트오프라 무해). 링크 드롭 후 재획득=핫플러그(deferred). MAC-before-DHCP 유지. `stm32f4xx_hal.h`/`HAL_Delay` 제거.
+- **HW E2E 전수 PASS**:
+  - **비블로킹 부팅**: `[eth] chip up — waiting for PHY link...` 후 슈퍼루프 진행, 링크 업 시 `[eth] up`.
+  - **재시도 복구(핵심)**: 케이블 빼고 부팅→`LINKWAIT` 유지(`up` 없음, 보드 정상)→케이블 꽂기→**무재부팅** `[eth] up ip=192.168.1.128`. tick 링크 재시도 복구 입증(단순 타임아웃 연장으론 불가능한 검증).
+  - **static**: `[eth] up 192.168.1.128`, ping 0% loss, FC03 미러(`[7]=55 OUT_POWER/[8]=56 limit_on_time/[9]=567 energy`), FC06 클램프(80→80/30→**50**/120→**100**/55 복원) — 공유 apply-path over TCP.
+  - **DHCP(2b 본 목표)**: `[eth] dhcp init`→`[eth] dhcp lease ip=192.168.1.70`, ping 0%, FC03 미러 동일, **LCD에 리스 IP 표시(RAM-only 미러)**. 리스+ARP 성공 = **MAC-before-DHCP 수정으로 올바른 MAC(00:08:dc:78:91:71) 바인딩** 입증.
+- **리뷰 `62c1cc1`**: 리팩터 통합 cpp-reviewer = APPROVED-WITH-COMMENTS(Crit/High 0; FSM 상호배타·wrap-safe 타이머·MAC순서·s_available 일관성 정적 확인). 지적 3건 전부 반영 = ① `app_eth.h` 배너 정정(링크 미업 시 false 리턴→LINKWAIT 유지) ② `<stdint.h>` 직접 include(HAL 헤더 제거로 transitive 의존 제거) ③ DHCP_FAILED re-init 시 `s_dhcp_ms` 리셋(케이던스 명확화).
+- **deferred(사용자 결정 "핵심으로 충분")**: ICON_RUN 육안(START→560ms ceiling→STOP over TCP), RTU FC06 회귀 spot-check(RS-485), RAM-only 재리스 증명(static 복귀→.128 표시).
+- **⚠ 머지 영향(다음 세션 결정 필요)**: 비블로킹 리팩터로 2b의 `app_eth`가 2a와 **더 이상 byte-identical 아님**(static 경로가 FSM 안으로 이동). slice 2a 원본 app_eth(블로킹 1s 폴)는 **이 버그를 그대로 가짐 + HW 미검증**. static 경로는 2b(리팩터) 빌드에서 검증됨. 머지 순서 2a→2b 유지하려면 **2a가 이 리팩터를 상속**해야 하거나, **2a/2b split을 합쳐** 2b의 app_eth를 통째로 가져가야 함. 결정 보류.
+
 ### 2026-06-13 g — Stage C slice 2b (Modbus TCP/W5500 DHCP): 구현 완료(host-complete), HW E2E 대기
 
 HW 비의존 세션. plan(`166fe78`, 5 task)을 subagent-driven으로 실행 — Task 1~4 완료(구현+host 게이트+per-task 리뷰+통합 리뷰+advisor 검증), Task 5(HW E2E)만 보드 게이트로 미실행. 코드 6커밋. 브랜치 `feat/stage-c-modbus-tcp-dhcp`(base = 2a tip `faf89d5`, **stack** — 2a W5500 스택 의존, 미머지). 클린 빌드 0-warning(우리 코드)·**FLASH 40.62%(53240B/128KB)·RAM 16.65%**·호스트 3스위트(`app_reg_calc`+`app_modbus_core`+`app_modbus_tcp_frame`) 전수 PASS(2b 새 호스트 테스트 ✗ — DHCP=HAL/소켓/콜백 글루). 통합 cpp-reviewer = APPROVED-WITH-COMMENTS(Crit/High 0).
