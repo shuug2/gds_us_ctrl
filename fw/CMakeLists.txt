@@ -54,6 +54,8 @@ set(HAL_SOURCES
     ${VENDOR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c.c
     # Stage D — regulation ADC:
     ${VENDOR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_adc.c
+    # Stage C slice 2a — W5500 SPI:
+    ${VENDOR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_spi.c
 )
 
 add_library(stm32_hal STATIC
@@ -68,6 +70,22 @@ target_include_directories(stm32_hal SYSTEM PUBLIC
 )
 target_compile_options(stm32_hal PRIVATE -Wno-unused-parameter)
 
+# vendor WIZnet ioLibrary (W5500) — warning-isolated, SYSTEM includes
+set(WIZNET ${VENDOR}/wiznet)
+add_library(wiznet STATIC
+    ${WIZNET}/Ethernet/wizchip_conf.c
+    ${WIZNET}/Ethernet/socket.c
+    ${WIZNET}/Ethernet/W5500/w5500.c
+    ${WIZNET}/Internet/DHCP/dhcp.c
+)
+target_include_directories(wiznet SYSTEM PUBLIC
+    ${WIZNET}/Ethernet
+    ${WIZNET}/Ethernet/W5500
+    ${WIZNET}/Internet/DHCP
+)
+# 3rd-party: do not hold it to our -Wall -Wextra -Wundef -Wshadow gate
+target_compile_options(wiznet PRIVATE -w)
+
 # 어플리케이션 — Phase 1 sources
 file(GLOB APP_SOURCES src/*.c drivers/*.c)
 set(STARTUP ${VENDOR}/startup_stm32f410rbtx.s)
@@ -78,7 +96,7 @@ add_executable(${PROJECT_NAME}.elf
     ${STARTUP}
 )
 target_include_directories(${PROJECT_NAME}.elf PRIVATE include)
-target_link_libraries(${PROJECT_NAME}.elf PRIVATE stm32_hal)
+target_link_libraries(${PROJECT_NAME}.elf PRIVATE stm32_hal wiznet)
 
 target_link_options(${PROJECT_NAME}.elf PRIVATE
     -T${LDSCRIPT}

@@ -2,6 +2,68 @@
 
 ## [Unreleased]
 
+### 2026-06-13 h — Stage C slice 2b HW E2E PASS (static+DHCP+retry) + 비블로킹 PHY 리팩터
+
+보드 연결 세션(ST-LINK V3, W5500 실장 + DHCP 서버 망, mon `/dev/cu.usbserial-AB0MLYXA`@115200). slice 2b(+2a static) 실보드 HW E2E. **실 버그 1건 발견·수정**(slice 2a app_eth PHY 폴링 타임아웃) → 비블로킹 FSM 리팩터. 코드 2커밋(`635e9ec`+`62c1cc1`), 브랜치 tip `62c1cc1`(미머지). 빌드 0-warning·FLASH 40.65%(53288B/128KB)·RAM 16.66%·호스트 3스위트 PASS.
+
+- **버그 발견 (HW)**: `comm_mode=ETH_STATIC`로 부팅 시 `[eth] no PHY link — unavailable` — **링크 LED는 켜져 있는데** 펌웨어가 못 잡음. 진단 빌드(타임아웃 5s+폴마다 로그)로 측정 → `rc=0` 내내 정상, **링크가 reset 후 t=1490ms에 업**. 원인 = `app_eth_init`의 PHY 폴링이 **1s(100×10ms) 1회**뿐이라 ~0.5s 일찍 포기(W5500 PHY는 NRST 후 ~1.5s 오토네고). static·DHCP 둘 다 영향(폴이 comm_mode 분기 앞). **이 폴링은 slice 2a 코드의 버그.**
+- **수정 `635e9ec` (비블로킹 FSM 리팩터, advisor 설계검토)**: `app_eth`를 상태머신(`ETH_DOWN`/`ETH_LINKWAIT`/`ETH_STATIC_UP`/`ETH_DHCP_RUN`)으로. `app_eth_init`=빠른 칩 init만(블로킹 폴 제거, 즉시 리턴). `app_eth_tick`=`LINKWAIT`에서 100ms마다 `CW_GET_PHYLINK` 폴 → 링크 업 시 `eth_apply_on_link`(static netinfo 또는 MAC선설정+DHCP 시작). 브링업 **무조건**(SERIAL 포함, advisor: SERIAL→런타임 ETH_STATIC 무재부팅 동작 보존; mon은 SERIAL서 게이트오프라 무해). 링크 드롭 후 재획득=핫플러그(deferred). MAC-before-DHCP 유지. `stm32f4xx_hal.h`/`HAL_Delay` 제거.
+- **HW E2E 전수 PASS**:
+  - **비블로킹 부팅**: `[eth] chip up — waiting for PHY link...` 후 슈퍼루프 진행, 링크 업 시 `[eth] up`.
+  - **재시도 복구(핵심)**: 케이블 빼고 부팅→`LINKWAIT` 유지(`up` 없음, 보드 정상)→케이블 꽂기→**무재부팅** `[eth] up ip=192.168.1.128`. tick 링크 재시도 복구 입증(단순 타임아웃 연장으론 불가능한 검증).
+  - **static**: `[eth] up 192.168.1.128`, ping 0% loss, FC03 미러(`[7]=55 OUT_POWER/[8]=56 limit_on_time/[9]=567 energy`), FC06 클램프(80→80/30→**50**/120→**100**/55 복원) — 공유 apply-path over TCP.
+  - **DHCP(2b 본 목표)**: `[eth] dhcp init`→`[eth] dhcp lease ip=192.168.1.70`, ping 0%, FC03 미러 동일, **LCD에 리스 IP 표시(RAM-only 미러)**. 리스+ARP 성공 = **MAC-before-DHCP 수정으로 올바른 MAC(00:08:dc:78:91:71) 바인딩** 입증.
+- **리뷰 `62c1cc1`**: 리팩터 통합 cpp-reviewer = APPROVED-WITH-COMMENTS(Crit/High 0; FSM 상호배타·wrap-safe 타이머·MAC순서·s_available 일관성 정적 확인). 지적 3건 전부 반영 = ① `app_eth.h` 배너 정정(링크 미업 시 false 리턴→LINKWAIT 유지) ② `<stdint.h>` 직접 include(HAL 헤더 제거로 transitive 의존 제거) ③ DHCP_FAILED re-init 시 `s_dhcp_ms` 리셋(케이던스 명확화).
+- **deferred(사용자 결정 "핵심으로 충분")**: ICON_RUN 육안(START→560ms ceiling→STOP over TCP), RTU FC06 회귀 spot-check(RS-485), RAM-only 재리스 증명(static 복귀→.128 표시).
+- **재플래시 확인**: tip `62c1cc1` 빌드(text 52728)를 보드에 재플래시 + HW 재확인(`[eth] dhcp lease ip=192.168.1.70` + ping OK) = "tip 바이너리가 보드에서 검증됨" 보장(리팩터 검증은 `635e9ec`에서, 리뷰 fix 델타는 inert지만 기록 정확성 위해 재확인).
+- **⚠ 머지 영향(다음 세션 결정 필요, 사용자 콜)**: 비블로킹 리팩터로 2b의 `app_eth`가 2a와 **더 이상 byte-identical 아님**(static 경로가 FSM 안으로 이동). slice 2a 원본 app_eth(블로킹 1s 폴)는 **confirmed HW 버그 + HW 미검증**(static은 2b 리팩터 빌드에서만 검증됨). **권장(기본) = 2a/2b split 합쳐 2b 통째 머지**(2b가 2a 전부 포함+검증, 2a static은 strict subset). **⚠ pre-refactor 2a에 `hw-revA_fw-stage-c2a` 태그 금지(known-broken).** Option A(2a가 리팩터 cherry-pick→재검증)는 가능하나 busywork.
+
+### 2026-06-13 g — Stage C slice 2b (Modbus TCP/W5500 DHCP): 구현 완료(host-complete), HW E2E 대기
+
+HW 비의존 세션. plan(`166fe78`, 5 task)을 subagent-driven으로 실행 — Task 1~4 완료(구현+host 게이트+per-task 리뷰+통합 리뷰+advisor 검증), Task 5(HW E2E)만 보드 게이트로 미실행. 코드 6커밋. 브랜치 `feat/stage-c-modbus-tcp-dhcp`(base = 2a tip `faf89d5`, **stack** — 2a W5500 스택 의존, 미머지). 클린 빌드 0-warning(우리 코드)·**FLASH 40.62%(53240B/128KB)·RAM 16.65%**·호스트 3스위트(`app_reg_calc`+`app_modbus_core`+`app_modbus_tcp_frame`) 전수 PASS(2b 새 호스트 테스트 ✗ — DHCP=HAL/소켓/콜백 글루). 통합 cpp-reviewer = APPROVED-WITH-COMMENTS(Crit/High 0).
+
+- **T1 `3a62233`**: ioLibrary DHCP `Internet/DHCP/dhcp.{c,h}` 벤더(**2a와 같은 핀 커밋 `220ca7a6`**, master tip ✗) + `wiznet` lib에 `dhcp.c`·`Internet/DHCP` include 추가(경고격리 `-w`·SYSTEM 유지). dhcp includes = `socket.h`(이미 벤더)+`stdio.h`만(추가 벤더 불필요). **controller가 `dhcp.h` grep해 API 확정→T2 프롬프트 주입**(load-bearing): `reg_dhcp_cbfunc`=3-arg(assign,update,conflict), `DHCP_init(uint8_t s,uint8_t*buf)`, `DHCP_run→u8`, `DHCP_FAILED=0`, `get{IP,GW,SN,DNS}fromDHCP(u8*)`, `NETINFO_DHCP=2`(wizchip_conf W5500 클래식 struct). dhcp.c는 우리 코드서 미참조→`--gc-sections` 드롭(격리 빌드 green이 목표).
+- **T2 `5b84f71`(+`a403326` 정렬 minor)**: `app_eth` DHCP 라이프사이클(`app_eth.{c,h}`만 수정) — DHCP 분기(`DHCP_init`+`reg_dhcp_cbfunc`, `s_dhcp_active=true`, `return true`지만 **`s_available=false` 유지=논블로킹 boot**), `dhcp_ip_assign`(get*fromDHCP→`wizchip_setnetinfo`+**RAM-only cfg 미러**(`app_lcd_cfg()` write, FRAM 커밋 ✗)+`s_available=true`), `dhcp_ip_conflict`(**non-fatal**, samd20 `while(1)` 폐기), `app_eth_tick`(1s `sys_tick_get_ms` 게이트 `DHCP_time_handler` **항상**+`DHCP_run`; `DHCP_FAILED`→re-`DHCP_init` keep-retry, **static 폴백 ✗**). **static 경로 verbatim 보존**(`const cfg` 선언 branch 위로 hoist만). sock1(TCP=sock0), `s_dhcp_buf[1024] _Alignas(uint32_t)`(리뷰 minor — RIP_MSG* 캐스트). **spec+quality 2단 리뷰 APPROVED**(advisor 5개 우려 전부 정적 분석 benign 해소).
+- **T3 `08b4004`**: `app.c app_loop_iter`에 `app_eth_tick()` 배선 — `app_modbus_tick()` **직전**(이번 iter 리스 획득이 게이트(`comm_mode!=SERIAL && app_eth_available()`) 읽기 전 available 플립). `app_eth_init()`은 boot(`main.c:29`, 2a) 이미 배선 → 라이프사이클 end-to-end 연결. ELF text 48120→52628(+4.5KB=app_eth_tick+DHCP lib 도달).
+- **T4 통합 cpp-reviewer = APPROVED-WITH-COMMENTS**: 정적 확인 2건 = ① **소켓 분리**(`MB_TCP_SOCK=0`/`SOCK_DHCP=1`, 충돌 없음) ② **콜백 생존**(벤더 `dhcp.c:1028-1063` 확인 — `DHCP_init` 재호출이 콜백 포인터 미손상 → keep-retry 안전). Minor 3 = ① 콜드스타트 1회 즉시 `DHCP_time_handler`(무해, 무변경) ② `s_prev_ms=now` stretch-safe(의도, 무변경) ③ `main.c:30` 주석 `comm_mode==ETH`→`ETH_STATIC/ETH_DHCP` 정정(`86a3923`로 반영, 2b가 stale 만든 주석).
+- **완료 후 advisor 검증 → 실버그 1건 수정 `b7ce6b0`**(spec 7요건 미포함·호스트 미커버라 spec/quality/통합 리뷰 3건 모두 누락): DHCP 분기가 `DHCP_init` **전에 칩 MAC(SHAR) 미설정**. 벤더 `DHCP_init`(dhcp.c:1030)이 `getSHAR(DHCP_CHADDR)` 읽고 all-zero(post-reset)면 temp `00:08:dc:00:00:00` 대체("set SHAR before call" 주석) → DISCOVER/REQUEST가 `kEthMac`(…78:91:71) 아닌 temp MAC으로 나가고, 리스 후 MAC이 바뀌어 갱신 CHADDR stale → MAC-aware 망에서 간헐 실패 + samd20 불충실. samd20 = network-init `wizchip_setnetinfo`→`setSHAR`로 선설정(ref/samd20/wizchip_conf.c:855, dhcp.c:897 동일 getSHAR 패턴). **수정 = DHCP 분기에서 `DHCP_init` 직전 `wizchip_setnetinfo(&dni)`(MAC만, IP/SN/GW=0; DHCP_init이 SIPR/GAR 어차피 0클리어)로 `kEthMac` SHAR 선설정.** re-init/lease idempotent. 0-warning·host PASS, text 52628→52680.
+- **다음 = Task 5 HW E2E**(보드+W5500+DHCP 서버 망 게이트, 코드 변경 기대 ✗): `comm_mode=ETH_DHCP(2)` 설정→전원사이클→mon `[eth] dhcp init — acquiring lease...`→`[eth] dhcp lease ip=a.b.c.d` 확인(DHCP 서버 없으면 acquiring 유지+`available()`=false=**keep-retry non-fatal 입증**, RTU/mon/LCD 무영향)→`mbpoll -m tcp -a 1 ...` 매트릭스(FC03 미러/FC06 클램프+FRAM/START-560ms ceiling-STOP+ICON_RUN/**LCD 리스 IP 표시=RAM-only**(전원사이클→재리스, FRAM ether=0)/RTU FC06 회귀 spot-check). 통과 시 `finishing-a-development-branch` 머지(`--no-ff`)+태그 `hw-revA_fw-stage-c2b`(**2a 머지 후, 2a→2b 순서**).
+
+### 2026-06-13 f — Stage C slice 2b (Modbus TCP/W5500 DHCP): brainstorming → spec → plan
+
+HW 비의존 세션 연속(slice 2a 구현 완료 후). slice 2b(DHCP) 착수 — 설계 단계만(코드 변경 ✗). 브랜치 `feat/stage-c-modbus-tcp-dhcp`(base = slice 2a tip `faf89d5`, stack — 2a의 W5500 스택 의존, 미머지).
+
+- **brainstorming**(질문 4개): ① 범위 = **DHCP 획득만**(핫플러그 재init + SERIAL boot-skip 이연) ② 획득 = **논블로킹 슈퍼루프**(samd20 충실; boot 비블록, 리스 전 `app_eth_available()`=false로 TCP 대기) ③ 실패 = **미획득 유지+계속 재시도**(static 폴백 폐기 — DHCP면 ether=0.0.0.0; conflict는 non-fatal 라이브러리 decline/재요청, samd20 `while(1)` halt 폐기) ④ 획득 IP = **RAM만**(in-RAM cfg 미러로 LCD 표시), FRAM 미영속(samd20 충실).
+- **컨텍스트 탐색**(Explore): samd20 `main.c`/`W5500/dhcp.c` DHCP 흐름(`DHCP_init`/`reg_dhcp_cbfunc`/`DHCP_run`/1s `DHCP_time_handler`/getIP·GW·SN·DNSfromDHCP), ioLibrary `Internet/DHCP/dhcp.{c,h}`만 추가 벤더(deps=이미 벤더된 socket.h), 2a가 comm_mode==2를 NETINFO_STATIC로 잘못 처리, LCD COMM_ETH_DHCP=2 선택/토글·DISP_EN_DHCP 존재, FRAM comm_mode@44/ether@45~56 영속(DHCP면 0), `sys_tick_get_ms()`(1kHz) 위 1s 게이트, `app_loop_iter`=app.c:64.
+- **spec** `5444aee` (`docs/superpowers/specs/2026-06-13-stage-c-modbus-slice2b-dhcp-design.md`): 2a 위 DHCP 라이프사이클만 추가(`app_eth` 수정 + 신규 `app_eth_tick()`), 코어/프레이밍/transport/spi1 무변경. `app_eth_available()` 의미 "칩+링크+IP준비"로 확장 → modbus tick 게이트 무수정 재사용. §3.2 정정(획득 중에도 1s 틱), §3.3 conflict halt·static 폴백 폐기.
+- **plan** `166fe78` (`docs/superpowers/plans/2026-06-13-stage-c-modbus-slice2b-dhcp.md`, 5 task): T1 벤더 `Internet/DHCP/dhcp.{c,h}`(같은 핀 커밋 `220ca7a6`, 경고격리 lib) → T2 app_eth DHCP 라이프사이클(static 경로 verbatim 보존 + DHCP 분기/콜백/`app_eth_tick`) → T3 `app.c` 슈퍼루프 배선(`app_modbus_tick` 직전) → T4 빌드/host 게이트+cpp-reviewer → T5 HW E2E(보드+W5500+DHCP 서버 망 게이트). 새 호스트 테스트 ✗.
+- **다음 = plan Task 1부터 구현**(subagent-driven = option 1, slice2a 패턴). 호스트 게이트 후 HW E2E → 머지+태그 `hw-revA_fw-stage-c2b`(2a 머지 후).
+
+### 2026-06-13 e — Stage C slice 2a (Modbus TCP/W5500 static): 구현 완료(host-complete), HW E2E 대기
+
+HW 비의존 세션. plan(`79526fb`, 9 task)을 subagent-driven으로 실행(Task 1~8 = 구현, 각 Task 구현→리뷰 게이트, Task 9 = 보드 게이트로 미실행). 코드 7커밋. 브랜치 `feat/stage-c-modbus-tcp-static`(base = `8ec57ec`, slice 1 머지 후 docs 커밋). 클린 빌드 0-warning(우리 코드), **FLASH 36.43%(47748B/128KB)·RAM 13.23%**, 호스트 3개 스위트(`app_reg_calc`+`app_modbus_core`+신규 `app_modbus_tcp_frame`) 전수 PASS.
+
+- **T1 `478b50e`**: WIZnet ioLibrary upstream 벤더(핀 커밋 `220ca7a6`, 6파일 `Ethernet/{wizchip_conf,socket}.{c,h}`+`W5500/w5500.{c,h}`). 경고격리 별도 STATIC lib(`-w`, SYSTEM include). **현 master 기본 `_WIZCHIP_=W6300`→`W5500`로 1줄 수정**(딱 이것만) → `wiz_NetInfo`가 클래식 `{mac,ip,sn,gw,dns,dhcp}`+`reg_wizchip_spi_cbfunc` 2-arg 형. controller가 벤더 헤더에서 전 API 이름/시그니처 확정해 후속 Task 프롬프트에 주입.
+- **T2 `c512bf3`**: `spi1.{c,h}` — SPI1 마스터 Mode0 12MHz, PA5/6/7(AF5)/PA4(소프트 CS, idle-HIGH)/PC5(NRST)/PC4(INT 폴링). HAL SPI 모듈 enable + 소스 추가. 리뷰 Minor 반영: `HAL_SPI_Init` 반환 체크+`Error_Handler`(형제 드라이버 컨벤션).
+- **T3 `3b01d0b`**: 순수 MBAP 프레이밍 `app_modbus_tcp_frame.{c,h}` — TDD(RED→GREEN). MBAP strip+검증, `mb_core_decode(MB_MODE_TCP)`, trailing CRC 2B 절단, unit 에코, 빅엔디안 length. 호스트 테스트(FC03=11B/FC06=12B/reject 3종). 리뷰 Minor 반영: `n<4` 방어 가드 + unit≠device_addr **unit-echo 테스트** 추가.
+- **T4 `90e72e4`**: `apply_writes`(static)→`app_modbus_apply_writes`(public) + `app_modbus_core()` accessor. **순수 linkage 변경, 로직 무변경**(clamp/FRAM/mirror 본문 무수정 — controller diff 검증). RTU(tag `hw-revA_fw-stage-c1`)와 TCP가 동일 `g_mb`+동일 apply 공유.
+- **T5 `d310527`**: `app_eth.{c,h}` — W5500 non-fatal 브링업(콜백 등록→reset→`wizchip_init`→PHY 폴링 ~1s 타임아웃→cfg static netinfo). **byte 콜백 `spi1_rb/wb`는 CS 미토글**(ioLibrary가 프레임 전체를 CS 콜백으로 감쌈). MAC 하드코딩. `%u` `(unsigned)` 캐스트. cpp-reviewer APPROVED.
+- **T6 `dcc0c6a`**: `app_modbus_tcp.{c,h}` — 소켓 FSM(port 502, sock0) + recv→frame→공유 apply→send, 1-frame-per-recv 가정. 리뷰 Minor 반영: send-first 재정렬(RTU와 동일 순서) + 주석 정정.
+- **T7 `3eb516f`**: 통합 — `main.c` boot `app_eth_init()` 1회; `app_modbus_tick()` RTU/ETH 분기. **RTU 분기 기능 동일(무회귀, controller diff 검증)**, ETH 분기가 `comm_mode!=SERIAL && app_eth_available()` 게이트 + `g_tcp_active` 래치 1회 재시드 + **mirror gap 수정**(ETH에서도 `mirror_live()` 호출). 리뷰 Minor 반영: rising-edge `mb_core_init` 직후 baseline `mirror_live()`(zeroed-holding 읽기 창 제거, apply_config 획득 패턴과 대칭).
+- **T8 통합 cpp-reviewer = APPROVED-WITH-COMMENTS**(Critical/High/Medium 0). Minor 3건 = 전부 비차단/2a 의도: ① recv/send 반환 무시(RTU+samd20 동일, self-healing) ② app_eth_init boot-only/재init 없음(=slice 2b) ③ unit-echo 오버라이트 가독성(테스트로 가드됨). 조치 불필요.
+- **다음 = Task 9 HW E2E**(보드 게이트): `comm_mode=ETH_STATIC`+static IP 설정→`mbpoll -m tcp -a 1 ...`로 slice-1 매트릭스 미러(링크/FC03 미러/FC06 클램프+FRAM/START-ceiling-STOP+ICON_RUN/점유 serial↔eth 전환/RTU FC06 회귀 spot-check). 통과 시 머지+태그 `hw-revA_fw-stage-c2a`.
+
+### 2026-06-13 d — Stage C slice 2a (Modbus TCP/W5500 static): brainstorming → spec → plan
+
+HW 비의존 세션. slice 1 머지 후 slice 2(Modbus TCP) 착수 — 설계 단계만(코드 변경 ✗). 브랜치 `feat/stage-c-modbus-tcp-static`(base = main `e351cad`).
+
+- **brainstorming**(질문 4개): ① 범위 = **slice 2a = static IP만**(W5500 벤더스택+SPI1+TCP 서버), DHCP=slice 2b ② 프레이밍 = **표준 Modbus TCP**(MBAP 에코+CRC 제거) — samd20 비표준 raw 응답 quirk 폐기; 코어 무수정 ③ 드라이버 = **공식 WIZnet ioLibrary upstream** 벤더 ④ 활성화 = boot 1회 non-fatal init + `comm_mode==ETH`일 때만 TCP(RTU 점유 거울=택일).
+- **컨텍스트 탐색 확정**: 코어 `MB_MODE_TCP` 스킵경로 준비됨(addr+CRC 생략, 응답엔 항상 CRC 부착) → TCP 글루에서 trailing CRC 2B 절단+MBAP 래핑+unit 에코. W5500 핀 pinmap §SPI1: PA4(소프트 CS)/PA5/6/7(AF5)/PC5(NRST)/PC4(INT). `cfg`에 `comm_mode`+`ether_ip/nm/gw[4]` 영속 확인. samd20 포팅 소스 = WIZnet ioLibrary + `process_tcp.c`/`ethernet.c`.
+- **spec** `65c7d25` (`docs/superpowers/specs/2026-06-13-stage-c-modbus-slice2a-tcp-design.md`): 모듈(벤더 wiznet / spi1 / app_modbus_tcp_frame[순수] / app_eth / app_modbus_tcp / app_modbus 통합), 표준 프레이밍 데이터흐름, 점유/게이팅, 테스트, §8 미해소 6건.
+- **advisor 검토**(설계 승인, 프레이밍 산술 검증 FC03 len=5/FC06 len=6) → plan에 5건 반영: ⓐ apply-path 추출은 HW 검증된 민감 코드(동작보존) ⓑ 벤더 ioLibrary=Task1(버전핀+API확인, 현 master 기본 `_WIZCHIP_=W6300`→W5500 설정 필수) ⓒ 순수 프레이밍 함수 명시 분리(host test) ⓓ 1-frame-per-recv 가정 문서화 ⓔ MBAP length 빅엔디안.
+- **plan** `79526fb` (`docs/superpowers/plans/2026-06-13-stage-c-modbus-slice2a-tcp.md`, 9 task): T1 벤더 ioLibrary(경고격리 CMake lib, downstream 게이트) → T2 SPI1 드라이버 → T3 순수 MBAP 프레이밍(TDD host test) → T4 apply-path 노출(동작보존) → T5 W5500 non-fatal 브링업 → T6 소켓 FSM 전송층(port 502) → T7 슈퍼루프 통합(ETH 게이팅 + **mirror gap 수정**: 기존 tick이 ETH면 조기 return해 mirror_live 미호출) → T8 빌드/host 게이트+cpp-reviewer → T9 HW E2E(mbpoll -m tcp, 보드 게이트).
+- **다음 = plan Task 1부터 구현**. 호스트 게이트 후 HW E2E → 머지+태그 `hw-revA_fw-stage-c2a`.
+
 ### 2026-06-13 c — Stage C slice 1: Modbus 코어+RTU 실보드 HW E2E (mbpoll RS-485) PASS
 
 같은 보드 세션 연속. `feat/stage-c-modbus-core-rtu`(코드 완결, 최종 cpp-reviewer APPROVED) 빌드를 ST-LINK V3로 플래시(클린 빌드 0-warning) 후, Mac↔V30 RS-485(`/dev/cu.usbserial-AB0MLYXA`) + `mbpoll`로 plan §HW-gated 매트릭스 6항목 전수 검증. 코드 변경 없음(순수 HW 검증).

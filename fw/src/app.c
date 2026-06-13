@@ -9,6 +9,7 @@
 #include "app_lcd.h"
 #include "app_reg.h"
 #include "app_modbus.h"
+#include "app_eth.h"
 
 void app_init(void)
 {
@@ -80,7 +81,11 @@ void app_loop_iter(void)
      * must not reach back into app_lcd); per-iter read = live panel edits. */
     app_reg_tick(app_lcd_cfg()->limit_on_time);
 
-    /* 4. Modbus slave — occupancy re-eval + one RTU frame per iter (spec §2).
+    /* 4. Ethernet/DHCP — drive the W5500 DHCP client (no-op unless DHCP mode).
+     * Before Modbus so a lease acquired this iter flips app_eth_available(). */
+    app_eth_tick();
+
+    /* 5. Modbus slave — occupancy re-eval + one RTU/TCP frame per iter (spec §2).
      * After app_reg_tick so the mirror sees this iter's freshest measure. */
     app_modbus_tick();
 }

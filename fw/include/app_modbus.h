@@ -6,6 +6,7 @@
 #pragma once
 #include <stdbool.h>
 #include <stdint.h>
+#include "app_modbus_core.h"
 
 /* Boot: evaluate the occupancy rule from the loaded config and acquire USART6
  * if Modbus owns it. Call after app_init() — needs app_config_load done. */
@@ -18,3 +19,14 @@ void app_modbus_tick(void);
 
 /* True while Modbus owns USART6 (mon output suppressed). */
 bool app_modbus_owns_usart6(void);
+
+/* Shared Modbus core instance (register tables). RTU (this file) and TCP
+ * (app_modbus_tcp.c) decode into the SAME core so register semantics are
+ * single-sourced. */
+mb_core_t *app_modbus_core(void);
+
+/* The samd20 update_holding_reg(1) write-apply pass: clamp the one changed
+ * config field, persist to FRAM, dispatch commands. Called by whichever
+ * transport processed an FC06 (RTU inline; TCP via this accessor). Operates
+ * on the shared core from app_modbus_core(). */
+void app_modbus_apply_writes(void);
