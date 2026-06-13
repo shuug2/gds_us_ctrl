@@ -67,13 +67,16 @@
 
 ```bash
 cd /Users/tknoh/dev/work/gds_us_ctrl
-git checkout feat/stage-d-regulation-core     # Stage D slice 1 구현 브랜치 (main 미머지, tip = adc1 L1/L2 fix)
-git log --oneline -7                           # d9c4801(spec) → 751639c(calc) → a134f7b(adc1) → d20ffe4(app_reg) → b64c205(wire) → dfecd3e(board) → d2942ad(adc1 fix)
-cd fw && env -u STM32_TOOLCHAIN cmake --build build   # 0-warning (FLASH 28.39%/RAM 10.55%)
-make -C test test                              # 호스트 순수함수 테스트 = all checks PASSED
-# 다음 작업 = Task 6 HW 검증 (▼ STEP 1) → 통과 시 머지/PR + 태그.
-# plan: docs/superpowers/plans/2026-05-31-stage-d-slice1-regulation-core.md (Task 6)
-# (옛 pin-I/O spec·br019 feat/stage-d-osc-pin-io = RETIRED)
+git checkout feat/stage-c-modbus-core-rtu      # Modbus slice 1 (코드 완결, HW E2E 대기, 16커밋 tip 083f053)
+git log --oneline 5463370..HEAD                # 5463370(plan) 위로 코어/전송층/FSM/통합 + 리뷰 fix
+cd fw && env -u STM32_TOOLCHAIN cmake --build build   # 0-warning (FLASH 31.1%/RAM 12.3%)
+make -C test test                              # 호스트 = app_reg_calc + app_modbus_core 둘 다 PASSED
+# 다음 갈래 (세 택1, 상단 상태블록 참조):
+#  ① 보드 있으면 → slice 2b HW 재검증(HANDOFF §Resume) → 머지 체인 2b→m1→본 브랜치 → Modbus HW E2E(plan §HW-gated, mbpoll)
+#  ② HW 없이 계속 → Stage C slice 2 (Modbus TCP/W5500) brainstorming부터 (코어에 mode!=RTU 스킵 경로 이미 준비됨)
+# plan: docs/superpowers/plans/2026-06-12-stage-c-modbus-slice1-core-rtu.md (§HW-gated = mbpoll 매트릭스)
+# spec: docs/superpowers/specs/2026-06-12-stage-c-modbus-slice1-core-rtu-design.md
+# (옛 Stage D slice 1 feat/stage-d-regulation-core = MERGED 5aea06f; 옛 pin-I/O = RETIRED)
 ```
 
 > 진단 가시화가 필요하면 `-DLCD_TRACE_RX` 트레이스 빌드(별도 `build-trace/`, CMakeLists에 한 줄 추가→빌드→원복→`build-trace/...elf` 플래시): `[lcd] rx vp=.. data=..` + `[lcd] commit cm temp=.. cfg=..` + `[lcd] boot cm=.. ip=..` 출력. 시리얼 리셋 글리치로 부팅줄 NULL 플러드가 섞이니 `tr -d '\000' < log | tr -s ' ' | grep '\['`로 정리해 읽기.
