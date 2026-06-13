@@ -1,8 +1,8 @@
 /* fw/include/app_eth.h — W5500 bring-up over SPI1 (spec §4.3 / slice 2b DHCP).
  * Static IP from cfg(FRAM) or DHCP-acquired (comm_mode==ETH_DHCP); MAC =
- * hardcoded constant. Non-fatal: if the chip is absent or the link never comes
- * up, app_eth_init() returns false and the TCP path stays off — RTU / mon / LCD
- * are unaffected. */
+ * hardcoded constant. Non-fatal: if the chip is absent app_eth_init() returns
+ * false; if the PHY link never comes up the bring-up FSM stays in LINKWAIT and
+ * app_eth_available() remains false — RTU / mon / LCD are unaffected either way. */
 #pragma once
 #include <stdbool.h>
 

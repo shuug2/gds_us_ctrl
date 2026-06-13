@@ -10,6 +10,7 @@
  * SERIAL-mode boot is never delayed. Link-DROP recovery (hot-plug) is out of
  * scope (spec §1.1, deferred). */
 #include "app_eth.h"
+#include <stdint.h>        /* uint8_t/uint32_t/int8_t (no longer via HAL header) */
 #include "spi1.h"
 #include "app_lcd.h"        /* app_lcd_cfg() -> comm_mode, ether_ip/nm/gw */
 #include "app_config.h"
@@ -193,6 +194,7 @@ void app_eth_tick(void)
         case DHCP_FAILED:
             s_available = false;
             DHCP_init(SOCK_DHCP, s_dhcp_buf);   /* keep retrying — no fallback */
+            s_dhcp_ms = now;                    /* restart the 1s cadence cleanly */
             break;
         default:
             break;              /* ASSIGN/CHANGED/LEASED handled in callbacks */
