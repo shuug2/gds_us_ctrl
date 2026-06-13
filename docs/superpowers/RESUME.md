@@ -1,6 +1,6 @@
 # RESUME — 다음 세션
 
-> **상태 (2026-06-13 c, 마감 — Stage C Modbus slice 1 HW E2E PASS → main 머지 + 태그)**: **보드 연결 세션 — Modbus 코어+RTU 실보드 HW E2E(mbpoll RS-485 마스터) plan §HW-gated 매트릭스 6항목 전수 PASS → main 머지(`--no-ff`, merge-base `9083aa4` / `diff 9083aa4..main`=∅ 이라 충돌 없는 깨끗한 머지로 modbus spec `ef359c5`+plan `5463370`+코드+stage-d HW-PASS docs 합류) + 태그 `hw-revA_fw-stage-c1`.** 코드 변경 ✗(순수 HW 검증). 검증 요지(상세 changelog 2026-06-13 c): ① FC03 폴링 0x00~0x1D 덤프 = 부팅 `[cfg]`/`set_pot` 값 전건 일치(미러 충실, STATUS=0) ② FC06 OUT_POWER 80→80·클램프 30→50/120→100·openocd reset 후 80 유지(FRAM 입증) ③ START→STATUS bit0=1·560ms ceiling(limit_on_time=56) 자동정지·STOP·×3 재현·**ICON_RUN 시각 확인(사용자)**·DISP_POWER=0(전압주입 없음 by-design) ④ 점유 전환 addr=NONE→`[mb] release(mode=0)`+mon복구+mbpoll타임아웃, addr=1→재획득, comm_mode=ETH→`[mb] release(mode=1)`=comm_mode-only 해제 실증 ⑤ 9600/EVEN(speed=2 parity=0, 8E1)·115200/NONE(reconfigure release+acquire speed=5 parity=2, 8N1) 폴링 OK·레지스터 보존 ⑥ work_cnt FC06 0 쓰기 수락(non-zero→0 시연은 weld-cycle deferred로 벤치 불가, 호스트 테스트 커버). 테스트 후 OUT_POWER 55 복원. **머지 체인 완료 = slice2b ✅ → m1 ✅ → modbus ✅.** **다음 = ① Stage C slice 2(Modbus TCP/W5500) brainstorming(코어에 mode!=RTU 스킵 경로 준비됨) ② 또는 HW-gated deferred(SEEK/RESET 효과·overload·weld-cycle·B-SEAM OSC 구동·6b cal).** B-SEAM 랜딩 시: `app_modbus.c` pot-guard NOTE(스테일 g_measure→라이브 accessor).
+> **상태 (2026-06-13 c, 마감 — Stage C Modbus slice 1 HW E2E PASS → main 머지 + 태그)**: **보드 연결 세션 — Modbus 코어+RTU 실보드 HW E2E(mbpoll RS-485 마스터) plan §HW-gated 매트릭스 6항목 전수 PASS → main 머지(`e351cad`, `--no-ff` 2-parent, merge-base `9083aa4` / `diff 9083aa4..main`=∅ 이라 충돌 없는 깨끗한 머지로 modbus spec `ef359c5`+plan `5463370`+코드+stage-d HW-PASS docs 합류) + 태그 `hw-revA_fw-stage-c1`. 머지 후 main 클린 빌드 0-warning(text 40296B ≈30.7%)·호스트 ×2 PASS.** 코드 변경 ✗(순수 HW 검증). 검증 요지(상세 changelog 2026-06-13 c): ① FC03 폴링 0x00~0x1D 덤프 = 부팅 `[cfg]`/`set_pot` 값 전건 일치(미러 충실, STATUS=0) ② FC06 OUT_POWER 80→80·클램프 30→50/120→100·openocd reset 후 80 유지(FRAM 입증) ③ START→STATUS bit0=1·560ms ceiling(limit_on_time=56) 자동정지·STOP·×3 재현·**ICON_RUN 시각 확인(사용자)**·DISP_POWER=0(전압주입 없음 by-design) ④ 점유 전환 addr=NONE→`[mb] release(mode=0)`+mon복구+mbpoll타임아웃, addr=1→재획득, comm_mode=ETH→`[mb] release(mode=1)`=comm_mode-only 해제 실증 ⑤ 9600/EVEN(speed=2 parity=0, 8E1)·115200/NONE(reconfigure release+acquire speed=5 parity=2, 8N1) 폴링 OK·레지스터 보존 ⑥ work_cnt FC06 0 쓰기 수락(non-zero→0 시연은 weld-cycle deferred로 벤치 불가, 호스트 테스트 커버). 테스트 후 OUT_POWER 55 복원. **머지 체인 완료 = slice2b ✅ → m1 ✅ → modbus ✅.** **다음 = ① Stage C slice 2(Modbus TCP/W5500) brainstorming(코어에 mode!=RTU 스킵 경로 준비됨) ② 또는 HW-gated deferred(SEEK/RESET 효과·overload·weld-cycle·B-SEAM OSC 구동·6b cal).** B-SEAM 랜딩 시: `app_modbus.c` pot-guard NOTE(스테일 g_measure→라이브 accessor).
 > - **이전 상태 (2026-06-13 b)**: ↓ slice 2b + m1 머지, modbus E2E 남은 시점 기록.
 
 > **상태 (2026-06-13 b, 마감 — slice 2b + m1 둘 다 HW 검증·main 머지, modbus E2E만 남음)**: **보드 연결 세션 진행 — slice 2b run-gate HW 재검증 PASS→머지(`e9b593d`, 태그 `hw-revA_fw-stage-d2b`), 이어 m1-주입 LV_TIME HW 확인 PASS→머지(`83e4e9c`).** m1 검증 = 일회용 트레이스(`t200=us_on_time_200m`, 100ms 간격)로 런 중 `t200` 0→1→2 200ms 케이던스 + ceiling 정지 후 `run=0 t200=2` latch + 재press `t200=0` 리셋 수치 확인 + LV_TIME 바 fill/latch/reset 시각 확인(사용자); 트레이스 수정은 폐기하고 리뷰 코드 그대로 머지. ⚠ m1 머지는 **9083aa4(m1 작업)까지만** — modbus 설계문서(ef359c5 spec/5463370 plan)는 m1 브랜치에 얹혀 있어 처음 브랜치-tip 머지가 그걸 끌고 와서 되돌리고(`reset --hard e9b593d`) 9083aa4로 재머지함(modbus docs는 modbus 머지 때 합류). 머지 후 main 0-warning·호스트 PASS. **머지 체인 = slice2b ✅ → m1 ✅ → modbus(다음, E2E 후)**. **다음 = ① 본 Modbus 브랜치 HW E2E = plan §HW-gated(mbpoll RS-485 마스터로 매트릭스 6항목; 트레이스 검증은 addr=NONE 미점유에서) → 통과 시 modbus 머지(+태그 검토) ② HW 없이 = Stage C slice 2(Modbus TCP/W5500) brainstorming.** modbus 브랜치 base = 5463370(= m1 위 modbus docs 3커밋 + 코드), main에 m1까지 들어가 있어 modbus 머지는 ef359c5~ + 코드 가져옴(깨끗). B-SEAM 랜딩 시: `app_modbus.c` pot-guard NOTE(스테일 g_measure→라이브 accessor).
@@ -76,21 +76,18 @@
 
 ```bash
 cd /Users/tknoh/dev/work/gds_us_ctrl
-git checkout feat/stage-c-modbus-core-rtu      # Modbus slice 1 (코드 완결, HW E2E 대기, tip = RESUME 갱신)
-git log --oneline 5463370..HEAD                # 5463370(plan) 위로 코어/전송층/FSM/통합 + 리뷰 fix
-env -u STM32_TOOLCHAIN cmake -S fw -B fw/build -G Ninja && env -u STM32_TOOLCHAIN cmake --build fw/build  # 0-warning
+git checkout main                              # modbus slice 1 = MERGED (e351cad, tag hw-revA_fw-stage-c1)
+env -u STM32_TOOLCHAIN cmake -S fw -B fw/build -G Ninja && env -u STM32_TOOLCHAIN cmake --build fw/build  # 0-warning (text ~40.3KB ≈30.7%)
 make -C fw/test test                           # 호스트 = app_reg_calc + app_modbus_core 둘 다 PASSED
-# 진행 상태: slice 2b ✅(e9b593d, tag hw-revA_fw-stage-d2b) + m1 ✅(83e4e9c) 둘 다 HW 검증·main 머지. 남은 것 = modbus.
+# 진행 상태: 머지 체인 완료 — slice 2b ✅(e9b593d) + m1 ✅(83e4e9c) + modbus ✅(e351cad, tag hw-revA_fw-stage-c1). 전부 HW 검증·main 머지.
 # 다음 갈래 (상단 상태블록 참조):
-#  ① Modbus HW E2E = plan §HW-gated(mbpoll RS-485 마스터 매트릭스 6항목; addr=NONE 미점유에서 트레이스) → 통과 시 modbus 머지
-#     - 패널서 comm: SERIAL+addr=1+19200+NONE 저장 → mon에 [mb] acquire 후 mon 침묵 확인 → mbpoll로 폴링/쓰기/START·STOP/점유전환
-#     - mbpoll 없으면: brew install mbpoll. RS-485 어댑터 필요.
-#  ② HW 없이 계속 → Stage C slice 2 (Modbus TCP/W5500) brainstorming부터 (코어에 mode!=RTU 스킵 경로 준비됨)
-# plan: docs/superpowers/plans/2026-06-12-stage-c-modbus-slice1-core-rtu.md (§HW-gated = mbpoll 매트릭스)
-# spec: docs/superpowers/specs/2026-06-12-stage-c-modbus-slice1-core-rtu-design.md
-# HW: ST-LINK V3 연결됨. 플래시 = openocd -f fw/openocd/stm32f410.cfg -c "program fw/build/...elf verify reset exit"
+#  ① Stage C slice 2 (Modbus TCP/W5500) brainstorming부터 (코어에 mode!=RTU 스킵 경로 준비됨; W5500 SPI1) — HW 없이 시작 가능
+#  ② HW-gated deferred: SEEK/RESET 효과·overload·weld-cycle·B-SEAM OSC 구동·6b cal (전압 가변/실 초음파 필요)
+# modbus 참조: plan docs/superpowers/plans/2026-06-12-stage-c-modbus-slice1-core-rtu.md, spec .../specs/2026-06-12-...-design.md
+# HW(보드 연결 시): ST-LINK V3. 플래시 = openocd -f fw/openocd/stm32f410.cfg -c "program fw/build/...elf verify reset exit"
 # mon 캡처: DEV=/dev/cu.usbserial-AB0MLYXA; { stty -f "$DEV" 115200 cs8 -parenb -cstopb raw -echo; cat; } < "$DEV" > /tmp/reg-mon.log &
-# (옛 Stage D slice 1/2a = MERGED; slice 2b + m1 = MERGED 2026-06-13)
+# Modbus E2E 재현(보드+RS-485): mbpoll -a 1 -b <baud> -P <none|even> -t 4 -r <ref> -c <n> -1 $DEV  (mb_baud idx 2=9600/3=19200/5=115200; parity 0=EVEN/1=ODD/2=NONE)
+# (옛 Stage D slice 1/2a/2b + m1 = MERGED; modbus slice 1 = MERGED 2026-06-13 c)
 ```
 
 > 진단 가시화가 필요하면 `-DLCD_TRACE_RX` 트레이스 빌드(별도 `build-trace/`, CMakeLists에 한 줄 추가→빌드→원복→`build-trace/...elf` 플래시): `[lcd] rx vp=.. data=..` + `[lcd] commit cm temp=.. cfg=..` + `[lcd] boot cm=.. ip=..` 출력. 시리얼 리셋 글리치로 부팅줄 NULL 플러드가 섞이니 `tr -d '\000' < log | tr -s ' ' | grep '\['`로 정리해 읽기.
