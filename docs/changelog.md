@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### 2026-06-13 f — Stage C slice 2b (Modbus TCP/W5500 DHCP): brainstorming → spec → plan
+
+HW 비의존 세션 연속(slice 2a 구현 완료 후). slice 2b(DHCP) 착수 — 설계 단계만(코드 변경 ✗). 브랜치 `feat/stage-c-modbus-tcp-dhcp`(base = slice 2a tip `faf89d5`, stack — 2a의 W5500 스택 의존, 미머지).
+
+- **brainstorming**(질문 4개): ① 범위 = **DHCP 획득만**(핫플러그 재init + SERIAL boot-skip 이연) ② 획득 = **논블로킹 슈퍼루프**(samd20 충실; boot 비블록, 리스 전 `app_eth_available()`=false로 TCP 대기) ③ 실패 = **미획득 유지+계속 재시도**(static 폴백 폐기 — DHCP면 ether=0.0.0.0; conflict는 non-fatal 라이브러리 decline/재요청, samd20 `while(1)` halt 폐기) ④ 획득 IP = **RAM만**(in-RAM cfg 미러로 LCD 표시), FRAM 미영속(samd20 충실).
+- **컨텍스트 탐색**(Explore): samd20 `main.c`/`W5500/dhcp.c` DHCP 흐름(`DHCP_init`/`reg_dhcp_cbfunc`/`DHCP_run`/1s `DHCP_time_handler`/getIP·GW·SN·DNSfromDHCP), ioLibrary `Internet/DHCP/dhcp.{c,h}`만 추가 벤더(deps=이미 벤더된 socket.h), 2a가 comm_mode==2를 NETINFO_STATIC로 잘못 처리, LCD COMM_ETH_DHCP=2 선택/토글·DISP_EN_DHCP 존재, FRAM comm_mode@44/ether@45~56 영속(DHCP면 0), `sys_tick_get_ms()`(1kHz) 위 1s 게이트, `app_loop_iter`=app.c:64.
+- **spec** `5444aee` (`docs/superpowers/specs/2026-06-13-stage-c-modbus-slice2b-dhcp-design.md`): 2a 위 DHCP 라이프사이클만 추가(`app_eth` 수정 + 신규 `app_eth_tick()`), 코어/프레이밍/transport/spi1 무변경. `app_eth_available()` 의미 "칩+링크+IP준비"로 확장 → modbus tick 게이트 무수정 재사용. §3.2 정정(획득 중에도 1s 틱), §3.3 conflict halt·static 폴백 폐기.
+- **plan** `166fe78` (`docs/superpowers/plans/2026-06-13-stage-c-modbus-slice2b-dhcp.md`, 5 task): T1 벤더 `Internet/DHCP/dhcp.{c,h}`(같은 핀 커밋 `220ca7a6`, 경고격리 lib) → T2 app_eth DHCP 라이프사이클(static 경로 verbatim 보존 + DHCP 분기/콜백/`app_eth_tick`) → T3 `app.c` 슈퍼루프 배선(`app_modbus_tick` 직전) → T4 빌드/host 게이트+cpp-reviewer → T5 HW E2E(보드+W5500+DHCP 서버 망 게이트). 새 호스트 테스트 ✗.
+- **다음 = plan Task 1부터 구현**(subagent-driven = option 1, slice2a 패턴). 호스트 게이트 후 HW E2E → 머지+태그 `hw-revA_fw-stage-c2b`(2a 머지 후).
+
 ### 2026-06-13 e — Stage C slice 2a (Modbus TCP/W5500 static): 구현 완료(host-complete), HW E2E 대기
 
 HW 비의존 세션. plan(`79526fb`, 9 task)을 subagent-driven으로 실행(Task 1~8 = 구현, 각 Task 구현→리뷰 게이트, Task 9 = 보드 게이트로 미실행). 코드 7커밋. 브랜치 `feat/stage-c-modbus-tcp-static`(base = `8ec57ec`, slice 1 머지 후 docs 커밋). 클린 빌드 0-warning(우리 코드), **FLASH 36.43%(47748B/128KB)·RAM 13.23%**, 호스트 3개 스위트(`app_reg_calc`+`app_modbus_core`+신규 `app_modbus_tcp_frame`) 전수 PASS.
