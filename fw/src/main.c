@@ -26,8 +26,10 @@ int main(void) {
     app_init();        /* sys_tick start, mon banner */
     app_reg_init();    /* Stage D: ADC1 + regulation state (needs sys_tick up) */
     app_modbus_init(); /* Stage C: USART6 occupancy decision (needs cfg loaded by app_init) */
-    app_eth_init();    /* Stage C slice 2a: W5500 bring-up (non-fatal). TCP
-                        * server runs from app_modbus_tick() when comm_mode==ETH. */
+    app_eth_init();    /* Stage C slice 2a/2b: W5500 bring-up (non-fatal). TCP
+                        * server runs from app_modbus_tick() when comm_mode is
+                        * ETH_STATIC or ETH_DHCP; slice 2b drives the DHCP client
+                        * from app_eth_tick() in the superloop. */
 
     while (1) {
         app_loop_iter();
