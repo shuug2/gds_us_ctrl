@@ -33,11 +33,17 @@ void app_lcd_hook_set_pot(uint8_t output_power)
 void app_lcd_hook_us_command(us_cmd_t cmd)
 {
     mon_printf("[lcd-hook] us_command=%u\r\n", (unsigned)cmd);
-    app_reg_command(cmd);   /* slice 2b: route into the regulation run FSM */
+    app_reg_command(cmd, (uint8_t)US_TOUCH);   /* panel keys = touch source */
 }
 
 void app_lcd_hook_comm_reconfigure(uint8_t speed_idx, uint8_t parity_idx, uint8_t address)
 {
+    /* Intentionally log-only: app_modbus_tick() re-evaluates the occupancy
+     * rule + line params against live cfg every superloop iter (samd20
+     * main-loop gate equivalent), so the close/reinit happens within one iter
+     * of DATA_SAVE — including the comm_mode-only change this hook never sees.
+     * Keeping the body passive avoids an app_lcd <-> app_modbus include cycle
+     * (M1 discipline). NB: suppressed while Modbus owns USART6 (mon gate). */
     mon_printf("[lcd-hook] comm speed=%u parity=%u addr=%u\r\n",
                (unsigned)speed_idx, (unsigned)parity_idx, (unsigned)address);
 }

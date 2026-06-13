@@ -2,6 +2,51 @@
 
 ## [Unreleased]
 
+### 2026-06-13 c — Stage C slice 1: Modbus 코어+RTU 실보드 HW E2E (mbpoll RS-485) PASS
+
+같은 보드 세션 연속. `feat/stage-c-modbus-core-rtu`(코드 완결, 최종 cpp-reviewer APPROVED) 빌드를 ST-LINK V3로 플래시(클린 빌드 0-warning) 후, Mac↔V30 RS-485(`/dev/cu.usbserial-AB0MLYXA`) + `mbpoll`로 plan §HW-gated 매트릭스 6항목 전수 검증. 코드 변경 없음(순수 HW 검증).
+
+- **전제 확인**: 부팅 시 미점유(mon 소유) 상태 — `[boot]/[cfg] freq=1 type=1 work=0 energy=567 en_e=0 en_m=0`. 패널 comm `SERIAL+addr=1+19200+NONE` 저장 → `[lcd-hook] comm speed=3 parity=2 addr=1` → `[mb] acquire usart6 speed=3 parity=2 addr=1` 후 mon 침묵(점유 전환). 매핑 검증: `mb_baud[]`={2400,4800,9600,19200,38400,115200} → speed idx3=19200; parity 0=EVEN/1=ODD/2=NONE.
+- **① 폴링(FC03)**: `mbpoll -t4 -r1 -c30` → 0x00~0x1D 전체 덤프. OUT_POWER(0x06)=55·ON_TIME(0x07)=56·ENERGY(0x08)=567·MODEL_FREQ/TYPE(0x17/18)=1/1·STATUS(0x1D)=0 — 부팅 `[cfg]`/`[lcd-hook] set_pot power=55` 값과 전건 일치(미러 충실).
+- **② 쓰기+클램프+영속(FC06)**: OUT_POWER 80 쓰기→80, 클램프 30→**50**(min)·120→**100**(max, app_modbus.c:143), openocd `reset run` 후 재폴링 80 유지 = **FRAM 커밋 입증**(RAM-only면 옛값 복귀) + 재획득 확인.
+- **③ 원격 런**: START(0x1B=1)→`STATUS bit0(US)=1`, **on-time ceiling 560ms**(`limit_on_time`=ON_TIME=56 ×10ms, app_reg.c:223-249 COMM 적용) 자동정지→STATUS=0, 재발화 없음, STOP(0x1C) 정상, ×3 재현. **ICON_RUN 점등/소등 시각 확인(사용자)**. DISP_POWER/AMP=0 = 벤치 전압주입 없음(B-SEAM deferred) → idle floor, by-design. (초기 8-연속폴 전부 STATUS=1은 측정 아티팩트 = mbpoll 오버헤드<ceiling이라 전부 창 안 — 정확 sleep로 1→0 전이 확인.)
+- **④ 점유 전환**: addr=NONE 저장→`[mb] release (mode=0 addr=0)`+mon 복구+mbpoll 타임아웃; addr=1→재획득; comm_mode=ETH 저장→`[mb] release (mode=1 addr=1)` = **comm_mode-only 해제 경로 실증**(addr≠0이어도 SERIAL 아니면 해제, §Deviations 5).
+- **⑤ 속도/패리티 매트릭스**: 9600/EVEN→`acquire speed=2 parity=0` mbpoll 8E1 폴링 OK; 115200/NONE→**reconfigure 경로**(`release`+`acquire speed=5 parity=2`, app_modbus.c:247 닫고 재오픈) mbpoll 8N1 OK. 전 재설정 거쳐 레지스터 값 보존(OUT_POWER=80 유지).
+- **⑥ work_cnt 리셋**: FC06 0 쓰기(WORK_CNTL 0x01) 수락+읽기 0. **non-zero→0 리셋 시연은 벤치 불가** — work_cnt는 deferred weld-cycle 머신(energy/multi 런 브랜치)만 증가시켜 벤치 상시 0; 디코드/리셋 분기는 호스트 테스트(`test_app_modbus_core`)가 커버.
+- 테스트 후 OUT_POWER 원래값 55로 복원. **다음 = modbus 브랜치 main 머지(merge-base 9083aa4, `diff 9083aa4..main`=∅ → 충돌 없는 깨끗한 머지) + 태그.**
+
+### 2026-06-13 — Stage D slice 2b run-gate: 실보드 HW 재검증 PASS → main 머지 + 태그
+
+보드 연결 세션. slice 2b(터치 RUN 게이트) HW 재검증을 ST-LINK V3 + 보존 트레이스 바이너리(`fw/build-trace/`, Jun 10 빌드 = slice2b 코드 최신 이후 — 재빌드 불필요 확인) 재플래시 + USART6 mon(`/dev/cu.usbserial-AB0MLYXA`) 캡처로 수행 → **6항목 + ICON_RUN 시각 전수 PASS**.
+
+- ① 부팅 워밍업 1회: `st=1 rc 0→401`(~4s, 50/trace) `sel=0/run=0` 단방향 → `st=0`(재진입 없음).
+- ② RUN press: `[lcd] rx vp=0x1080 data=0 → us_command=0 → [reg] cmd=0 run=2` + `set_pot power=55` + **`sel=0` 고정**(ch0=0 idle floor, **램프 상승 없음** = 2026-06-10 램프 폐기 의미론 확인).
+- ③ ceiling 자동정지: `on-time ceiling (56 x10ms) -> stop`(이 보드 FRAM `limit_on_time=56`=560ms) → 이어진 held-button release `cmd=0 **run=0**` = **swallow_start 1회 소비, 재시동 없음**(V30 data=0 quirk 보정 동작 실증).
+- ④ ceiling 전 release: `us_command=3 → cmd=3 run=0`. ⑤ swallow 후 재press 정상 `run=2`. ⑥ RESET `data=1→cmd=2 run=0`/SEEK `data=2→cmd=1 run=0` no-op + ICON_RUN 점등/소등 시각 확인(사용자).
+- **main 머지**(`e9b593d`, `--no-ff` 2-parent) + 태그 `hw-revA_fw-stage-d2b`. 머지 후 main 빌드 0-warning(text 37088B ≈28.7%)·호스트 PASS. origin push ✗(local-authoritative 유지).
+
+### 2026-06-13 b — M1 파라미터 주입 + us_on_time_200m: LV_TIME 바 HW 확인 PASS → main 머지
+
+같은 보드 세션 연속. m1-주입 브랜치(`refactor/stage-d-m1-cfg-param-injection`)의 LV_TIME 바 동작을 일회용 트레이스로 검증 후 main 머지(`83e4e9c`, `--no-ff`).
+
+- **검증**: 일회용 트레이스(REG_TRACE 출력에 `t200=us_on_time_200m` 추가 + 간격 100ms — 검증 후 폐기, 리뷰 코드 무변경 머지) → 런 중 `t200` 0→1→2 **200ms 케이던스** + ceiling(56×10ms=560ms) 정지 후 `run=0 t200=2` **latch** + 재press `t200=0` **리셋** 수치 확인. LV_TIME 바 fill/latch/reset 시각 확인(사용자). reg_on_time_200m 순수함수는 기존 호스트 테스트로 검증됨.
+- **머지 범위 주의**: m1 브랜치 tip은 `5463370`(modbus plan)이었음 — modbus 설계문서(spec `ef359c5`/session-close `f56f17d`/plan `5463370`)가 m1 브랜치 위에 얹혀 있었기 때문(설계 단계를 m1 위에서 진행 후 modbus 코드 브랜치를 분기). 첫 브랜치-tip 머지가 modbus 문서까지 끌고 와서 **되돌리고(`reset --hard e9b593d`) m1 작업 마지막 커밋 `9083aa4`로 재머지**. modbus 설계문서는 modbus 브랜치 머지 때 코드와 함께 합류 예정.
+- 머지 후 main 0-warning·호스트 PASS. **다음** = Modbus HW E2E(mbpoll RS-485) → modbus 머지. 머지 체인 slice2b✅→m1✅→modbus.
+
+### 2026-06-12 c — Stage C slice 1: Modbus 코어 + RTU 구현 (코드 완결, HW E2E 대기)
+
+plan(`docs/superpowers/plans/2026-06-12-stage-c-modbus-slice1-core-rtu.md`, 셀프리뷰 포함 `5463370`) → subagent-driven 구현(Task별 구현→spec리뷰→cpp-reviewer 2단 게이트, 리뷰 코멘트 전건 반영). 브랜치 **`feat/stage-c-modbus-core-rtu`**(base = stacked tip `refactor/stage-d-m1-cfg-param-injection`).
+
+- **`ea7258f`/`8226091`/`ce0a6e8` 순수 코어 `app_modbus_core.{c,h}`** (+리뷰 fix `6688fd1`/`ed94472`/`32ef033`): samd20 modbus.c 충실 포팅 — CRC16(swap 컨벤션 문서화), FC 01/02/03/04/05/06, holdingReg/coils[50], RTU 주소+CRC 필터/TCP 스킵(slice 2 대비), 미지원 FC·범위 밖 = 무응답. HAL-free, 호스트 TDD 전수(`fw/test/test_app_modbus_core.c`, CRC 표준벡터+fence-post+TCP 분기). **포팅 수정 3건**(승인 편차): 요청 범위검사(원본 = OOB read + **무경계 임의 write**), FC05 에코(원본 0x02/9B 복붙버그), FC01/02 count%8==0 마지막 바이트 미충전.
+- **`107d04f` mon 게이트 + `76ed82a` 전송층 `usart6_mb.{c,h}`** (+리뷰 fix `de1e077` double-open 가드): DMA2 S1 Ch5 circular free-running RX(no-ISR, usart1 선례) + **samd20 max_break_cnt 갭 프레이밍**(250µs표→ms 그리드: 14/7/4/2ms; 스펙의 IDLE-line 인터럽트 대신 — 의미론 동일, plan §Deviations 1) + blocking TX(길이 비례 timeout) + **TX 후 RX flush**(auto-DE 에코가 자기 FC06 응답을 요청으로 재해석하는 루프 차단, §Deviations 7). 패리티 = 9-bit word length 처리.
+- **`a60f2d1` run FSM 소스 확장** (+주석 정정 `918d524`): `app_reg_command(cmd, src)`(US_TOUCH/US_COMM), 소스일치 정지(samd20 충실), `swallow_start`는 TOUCH 전용, on-time ceiling을 COMM 런에도(원본충실; REMOTE ceiling은 REMOTE 슬라이스), max_amp/last_amp 추적(DISP_AMP 미러용, `lcd_measure_t` 확장).
+- **`349bd91` 통합층 `app_modbus.{c,h}`** (+주석 `1564131`): 매 tick 라이브 미러(samd20 대비 신선도↑·클램프 정규화, §Deviations 6), FC06 1-change else-if 체인(samd20 클램프 verbatim + EN_* LCD 에코 + work_cnt 리셋) + **`app_config_save_all` 전체맵 FRAM 커밋**(원본 DELAY3→ADDR_TRIGGER2/TRIGGER2→ADDR_DELAY2 복붙버그 구조적 해소), 명령 4종 consume-and-clear→US_COMM 라우팅(START 수락 시 set_pot 스텁), **USART6 점유 전환 = 매 tick cfg 평가**(samd20 메인루프 게이트 등가; comm hook은 로그 전용 유지 = app_lcd↔app_modbus 순환 차단, §Deviations 5). 슈퍼루프 step 4 + 부팅 `app_modbus_init()` 배선.
+- 게이트: main 클린 재빌드 **0-warning**(FLASH 40780B 31.1%/RAM 12.3%), 트레이스 구성(REG_TRACE+LCD_TRACE_RX) 0-warning, 호스트 테스트 ×2 PASS. **HW E2E(mbpoll 매트릭스 6항목) = 보드 연결 후**(plan §HW-gated; 트레이스 검증은 Modbus 미점유 상태에서 — addr=NONE).
+
+### 2026-06-12 b — Stage C slice 1 (Modbus 코어+RTU) 스펙 승인 — plan은 새 세션
+
+Modbus 작업 개시(사용자 요청 "RTU/TCP 코드 선행"). brainstorming(슬라이스/점유 전환/기능 범위/접근 3택) → 스펙 작성·셀프리뷰·**사용자 승인**(`ef359c5`, `docs/superpowers/specs/2026-06-12-stage-c-modbus-slice1-core-rtu-design.md`). slice 1 = 순수 코어(`app_modbus_core`, 호스트테스트) + USART6 RTU(DMA+IDLE, `usart6_mb`) + 통합(`app_modbus`: 레지스터 미러/FRAM 커밋/US_COMM 명령/mon 점유 전환); TCP(W5500) = slice 2. 셀프리뷰 정정 3건 = DISP_POWER/AMP max/last 미러(amp 추적 추가), MODEL_* read-only, 드라이버/FSM 시그니처 확정. V30 회로 추적 = RS-485 방향 자동(U13 트랜시버 + U16, FW DE 제어 불필요). **다음 = 새 세션에서 writing-plans → 구현**(컨텍스트 50% 규칙 분할).
+
 ### 2026-06-12 — HW 비의존 후속 2건: M1 파라미터 주입 리팩터링 + us_on_time_200m 공급 (stacked 브랜치)
 
 보드 부재 중 진행 가능한 deferred 항목 2건을 **stacked 브랜치 `refactor/stage-d-m1-cfg-param-injection`**(base = slice 2b tip `322a779`)에서 처리. slice 2b 브랜치와 `fw/build-trace/`(재플래시용 바이너리)는 무변경 보존 — HW 재검증 절차(HANDOFF §Resume)는 그대로 유효.

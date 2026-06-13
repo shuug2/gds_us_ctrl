@@ -48,7 +48,9 @@ typedef struct {
     uint8_t  us_run_status;          /* slice 2b: US_IDLE/REMOTE/TOUCH/COMM (FSM owns) */
     uint16_t max_power;              /* running peak of sel during the active run */
     uint16_t last_power;             /* peak latched on stop (us_off, samd20 4180) */
-    uint32_t run_start_ms;           /* TOUCH run start (on-time ceiling base) */
+    uint16_t max_amp;                /* running peak of curr_amp during the run */
+    uint16_t last_amp;               /* amp latched on stop (samd20 last_amp) */
+    uint32_t run_start_ms;           /* TOUCH/COMM run start (on-time ceiling base) */
     uint8_t  swallow_start;          /* 1 = next START is the orphaned release of a
                                       * timeout-stopped run (V30 data=0 quirk) */
 
@@ -78,29 +80,30 @@ void app_reg_init(void)
     g_reg.main_state = 1u;
 }
 
-void app_reg_command(us_cmd_t cmd)
+void app_reg_command(us_cmd_t cmd, uint8_t src)
 {
     switch (cmd) {
     case US_CMD_START:
-        /* Touch RUN press. M16-faithful: commands are ignored during the boot
-         * warm-up (Timer1 ISR skips the PINA dispatcher app_0x06d2 while
-         * g_main_state!=0, disasm @0x041E); after warm-up RUN is an immediate
-         * level-follow gate — the M16 never re-runs the ramp on M_START (the
-         * original output amplitude came from the SAMD20-owned I2C_POT, not a
-         * soft-start). == US_IDLE guard: a repeat press can't restart an
-         * active run; REMOTE/COMM arbitration = later slices. */
+        /* M16-faithful: commands are ignored during the boot warm-up (Timer1
+         * ISR skips the PINA dispatcher app_0x06d2 while g_main_state!=0,
+         * disasm @0x041E); after warm-up RUN is an immediate level-follow
+         * gate (no per-START ramp). == US_IDLE strict guard for BOTH sources
+         * (intentional deviation from samd20's comm !=US_REMOTE takeover,
+         * approved spec §4 — REMOTE arbitration is a later slice). */
         if ((g_reg.main_state == 0u) &&
             (g_reg.us_run_status == (uint8_t)US_IDLE)) {
-            if (g_reg.swallow_start != 0u) {
+            if ((src == (uint8_t)US_TOUCH) && (g_reg.swallow_start != 0u)) {
                 /* V30 RUN button sends data=0 on BOTH edges: after an on-time
                  * ceiling stop, the still-held button's release arrives mapped
                  * as START (input layer sees IDLE). Consume it once instead of
-                 * restarting the run. */
+                 * restarting the run. Touch-only: a COMM START is a register
+                 * write with no release back-mapping (spec §4). */
                 g_reg.swallow_start = 0u;
                 break;
             }
-            g_reg.us_run_status = (uint8_t)US_TOUCH;
+            g_reg.us_run_status = src;   /* US_TOUCH or US_COMM */
             g_reg.max_power     = 0u;
+            g_reg.max_amp       = 0u;    /* samd20 comm START zeroes max_amp too */
             g_reg.run_start_ms  = sys_tick_get_ms();
             /* samd20 zeroes us_on_time_200m at the run-start edge (main.c:4306);
              * the live compute would reach 0 on the first active publish anyway,
@@ -110,28 +113,33 @@ void app_reg_command(us_cmd_t cmd)
         }
         break;
     case US_CMD_RUN_RELEASE:
-        /* Touch RUN release: only a touch-started run stops here (samd20
-         * main.c:3699 / us_off main.c:4180). Latch last_power = running peak. */
-        if (g_reg.us_run_status == (uint8_t)US_TOUCH) {
+        /* Source-matched stop only (samd20 main.c:3699/4180 touch, 4405 comm):
+         * a COMM STOP cannot kill a touch run and vice versa. Latch the
+         * power/amp peaks for the stopped-display mirror. */
+        if (g_reg.us_run_status == src) {
             g_reg.last_power    = g_reg.max_power;
+            g_reg.last_amp      = g_reg.max_amp;
             g_reg.us_run_status = (uint8_t)US_IDLE;
-        } else if (g_reg.swallow_start != 0u) {
-            /* Any RUN_RELEASE arriving while IDLE after a ceiling stop resyncs
-             * the press/release pairing so the next genuine press is not eaten:
-             * legacy data=4 release, or SYS_PIC_NOW re-init (panel reset means
-             * the physical release will never arrive). */
+        } else if ((src == (uint8_t)US_TOUCH) && (g_reg.swallow_start != 0u)) {
+            /* Any touch RUN_RELEASE arriving while IDLE after a ceiling stop
+             * resyncs the press/release pairing so the next genuine press is
+             * not eaten: legacy data=4 release, or SYS_PIC_NOW re-init (panel
+             * reset means the physical release will never arrive). */
             g_reg.swallow_start = 0u;
         }
         break;
     case US_CMD_SEEK:
     case US_CMD_RESET:
     default:
-        /* Regulation effect deferred (spec §9): the input layer already does the
-         * RESET icon/page restore; SEEK/RESET drive is B-SEAM. */
+        /* Regulation effect deferred (spec §9): the input layer already does
+         * the RESET icon/page restore; SEEK/RESET drive is B-SEAM. NB samd20
+         * comm RESET marks src US_TOUCH (main.c:4353 quirk) and clears the
+         * error display — both inert until the error machine slice. */
         break;
     }
 #ifdef REG_TRACE
-    mon_printf("[reg] cmd=%u run=%u\r\n", (unsigned)cmd, (unsigned)g_reg.us_run_status);
+    mon_printf("[reg] cmd=%u src=%u run=%u\r\n", (unsigned)cmd, (unsigned)src,
+               (unsigned)g_reg.us_run_status);
 #endif
 }
 
@@ -168,15 +176,18 @@ static void reg_publish_measure(uint32_t now)
      * cycle/freq/energy stay 0 (weld-cycle deferred). */
     uint8_t active = (uint8_t)(g_reg.us_run_status != (uint8_t)US_IDLE);
     g_measure.curr_amp   = g_reg.ch0_avg;
+    if (active && (g_reg.ch0_avg > g_reg.max_amp)) {
+        g_reg.max_amp = g_reg.ch0_avg;   /* amp peak — same pattern as max_power */
+    }
     g_measure.curr_power = active ? g_reg.adc_scaled_value : 0u;
     if (active && (g_reg.adc_scaled_value > g_reg.max_power)) {
         g_reg.max_power = g_reg.adc_scaled_value;
     }
     if (active) {
         /* LV_TIME bar: live on-time in 200 ms units from the run-start stamp
-         * (samd20 main.c:5223 cadence counter equivalent). Only TOUCH runs
-         * exist this slice, so run_start_ms is always the active run's stamp;
-         * REMOTE/COMM slices must stamp their own start. When idle the field
+         * (samd20 main.c:5223 cadence counter equivalent). TOUCH and COMM runs
+         * both stamp run_start_ms at their START edge (app_reg_command); a
+         * future REMOTE slice must stamp its own start. When idle the field
          * keeps the last run's final value — samd20 shows the latched
          * last_time when stopped, and disp feeds this one field on both paths
          * (app_lcd_disp.c:183 note). */
@@ -185,6 +196,8 @@ static void reg_publish_measure(uint32_t now)
     }
     g_measure.max_power     = g_reg.max_power;
     g_measure.last_power    = g_reg.last_power;
+    g_measure.max_amp  = g_reg.max_amp;
+    g_measure.last_amp = g_reg.last_amp;
     g_measure.us_run_status = g_reg.us_run_status;
 }
 
@@ -207,26 +220,36 @@ void app_reg_tick(uint16_t limit_on_time)
         }
     }
 
-    /* TOUCH run on-time ceiling. STM32 safety addition, NOT samd20-faithful for
-     * touch runs (samd20 applies limit_on_time only to REMOTE/COMM in SYS_HAND,
-     * main.c:5296-5302) — added because the V30 RUN button's data=0 quirk can
-     * lose the release edge (infinite run); the M16 itself also force-cleared
-     * the run flag on an internal countdown (g_018F, Timer1 ISR @0x0572).
-     * limit_on_time = x10 ms, panel-editable (LV_MAX_ON_TIME), 0 disables. */
-    if (g_reg.us_run_status == (uint8_t)US_TOUCH) {
-        /* limit_on_time is injected by the caller from the live config each
-         * call (M1: no call back into app_lcd), so a panel edit of
-         * LV_MAX_ON_TIME still takes effect immediately, even mid-run. */
-        if ((limit_on_time != 0u) &&
-            ((uint32_t)(now - g_reg.run_start_ms) >=
-             (uint32_t)limit_on_time * ON_TIME_UNIT_MS)) {
-            g_reg.last_power    = g_reg.max_power;   /* same latch as release */
-            g_reg.us_run_status = (uint8_t)US_IDLE;
-            g_reg.swallow_start = 1u;   /* held button's release still pending */
+    /* Run on-time ceiling (limit_on_time x10 ms, 0 = off, panel-editable).
+     * COMM runs: samd20-faithful (main.c:5296 applies it to COMM/REMOTE in
+     * SYS_HAND; 2026-06-10 analysis doc authority — REMOTE ceiling lands with
+     * the REMOTE slice, NOT covered here). TOUCH runs: intentional
+     * STM32 safety addition — the V30 RUN button's data=0 quirk can lose the
+     * release edge (infinite run); the M16 itself also force-cleared the run
+     * flag on an internal countdown (g_018F, Timer1 ISR @0x0572).
+     * samd20's multi_ctrl/energy_ctrl run branches (main.c:5234..) belong to
+     * the weld-cycle machine — deferred, spec §8. */
+    {
+        uint8_t rs = g_reg.us_run_status;
+        if ((rs == (uint8_t)US_TOUCH) || (rs == (uint8_t)US_COMM)) {
+            /* limit_on_time is injected by the caller from the live config
+             * each call (M1: no call back into app_lcd), so a panel edit of
+             * LV_MAX_ON_TIME still takes effect immediately, even mid-run. */
+            if ((limit_on_time != 0u) &&
+                ((uint32_t)(now - g_reg.run_start_ms) >=
+                 (uint32_t)limit_on_time * ON_TIME_UNIT_MS)) {
+                g_reg.last_power    = g_reg.max_power;   /* same latch as release */
+                g_reg.last_amp      = g_reg.max_amp;
+                g_reg.us_run_status = (uint8_t)US_IDLE;
+                if (rs == (uint8_t)US_TOUCH) {
+                    /* held button's release still pending — touch-only quirk */
+                    g_reg.swallow_start = 1u;
+                }
 #ifdef REG_TRACE
-            mon_printf("[reg] on-time ceiling (%u x10ms) -> stop\r\n",
-                       (unsigned)limit_on_time);
+                mon_printf("[reg] on-time ceiling (%u x10ms) -> stop\r\n",
+                           (unsigned)limit_on_time);
 #endif
+            }
         }
     }
 

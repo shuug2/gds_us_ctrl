@@ -1,4 +1,5 @@
 /* fw/drivers/mon_usart6.c */
+#include <stdbool.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
@@ -9,7 +10,14 @@
 
 void mon_init(void) { /* huart6는 usart6_init이 이미 초기화 */ }
 
+static bool s_mon_enabled = true;
+
+void mon_set_enabled(bool on) { s_mon_enabled = on; }
+
 void mon_write(const uint8_t *buf, size_t len) {
+    if (!s_mon_enabled) {
+        return;   /* Modbus owns USART6 — keep the RS-485 bus clean */
+    }
     HAL_UART_Transmit(&huart6, (uint8_t *)buf, len, MON_TX_TIMEOUT_MS);
 }
 
