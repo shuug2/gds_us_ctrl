@@ -35,6 +35,11 @@ bool app_modbus_owns_usart6(void)
     return g_applied.owned != 0u;
 }
 
+mb_core_t *app_modbus_core(void)
+{
+    return &g_mb;
+}
+
 /* samd20 update_holding_reg(0): live values -> holding mirror. Runs every
  * owned tick (plan Deviations 6: fresher reads than samd20's post-message
  * refresh + immediately normalizes clamped writes). */
@@ -81,7 +86,7 @@ static void mirror_live(void)
 /* samd20 update_holding_reg(1): one else-if chain per message — commands
  * first (consume-and-clear), then the single config field that differs
  * (clamped, persisted). Chain order preserved verbatim. */
-static void apply_writes(void)
+void app_modbus_apply_writes(void)
 {
     app_config_t *cfg = app_lcd_cfg();
     uint16_t v;
@@ -296,7 +301,7 @@ void app_modbus_tick(void)
             usart6_mb_send(resp, n);
         }
         if (fc == 0x06u) {
-            apply_writes();          /* samd20: update_holding_reg(1) on FC06 */
+            app_modbus_apply_writes(); /* samd20: update_holding_reg(1) on FC06 */
         }
     }
 
