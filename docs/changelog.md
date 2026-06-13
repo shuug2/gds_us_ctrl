@@ -2,6 +2,45 @@
 
 ## [Unreleased]
 
+### 2026-06-10 — slice 2b 통합 cpp-reviewer 리뷰 APPROVED (b78cbbf + 27d45c3)
+
+V30 RUN quirk fix `b78cbbf` + 금일 의미론 수정 `27d45c3` 통합 cpp-reviewer 리뷰 = **APPROVED**(CRITICAL/HIGH 0건). 코너 케이스 전수 검증: data=0 START/RELEASE 매핑(더블 프레스·release 유실·ceiling 후 orphaned release·`swallow_start` 누출/오흡수·SYS_PIC_NOW 상호작용), 워밍업 단발성(`main_state=1` 쓰기 = init 1곳, 오버플로 안전), ceiling 산술(×10ms 단위·0=off·uint32 래핑-안전), ADC 누산 오버플로 무, ISR 비접근(슈퍼루프 단일스레드 무race). 스펙 편차 4건 = 전부 2026-06-10 분석 문서가 승인(스펙 부분 대체 관계 확인).
+
+- **비차단 4건 처분**: M2(same-burst stale `us_run_status` 의도 주석)·L1(`app_reg_tick`의 `app_lcd_cfg()` 라이브 읽기 헤더 주석) = 주석 추가 커밋 `c10b0aa`(코드 무변경, main 28.67%/trace 29.00% 0-warning, 호스트 PASS). M1(app_lcd↔app_reg 순환 의존 → 후속 슬라이스에서 파라미터 주입 리팩터링 권고)·L2(`reg_ramp_level` 레퍼런스 API 잔류 = 의도적 보존) = deferred.
+- **남은 것** = HW 재검증(보드 재연결 시: 부팅 ~4s 워밍업 1회 → RUN press 즉시 `cmd=0 run=2`+`sel=scale(ch0_avg)`·ICON_RUN·램프 없음·500ms ceiling 자동정지·release swallow 1회) → finishing(머지) + 태그 `hw-revA_fw-stage-d2b`.
+
+### 2026-06-10 — IPC 의미론 교차검증 → 램프 원본충실 회귀 + on-time ceiling + ADC 페이스 복원
+
+samd20 소스 × M16 디스어셈블리 교차 검증으로 두-MCU IPC 런타임 의미론 확정(산출물 `docs/superpowers/analysis/2026-06-10-samd20-m16-ipc-semantics-verified.md`). 비판적 검토에서 발견 4건 → 사용자 결정(①은 원본충실 회귀, 나머지는 권고대로) 반영. `app_reg.c`/`app_reg.h`/`app_reg_calc.c`(주석만) 수정, 빌드 0-warning(main+trace), 호스트 PASS.
+
+- **램프 의미론 정정(원본충실 회귀)**: M16 램프는 per-START 소프트스타트가 아니라 **부팅 1회 워밍업**(0x0195 nonzero 쓰기는 @0x1B8A 뿐, 재진입 불가; 램프 중 OSC 플래그 0 + 명령 디스패처 스킵 @0x041E; 진폭은 samd20 I2C_POT 소관). → boot 1회 ~4s 워밍업(명령 무시·sel=0) 후 **START 즉시 구동**. slice 2a per-START 램프 폐기, `reg_ramp_level()`은 출력 경로에서 제거(검증 레퍼런스로 보존, 호스트 테스트 유지). 기존 "M16 ramp is edge-driven on M_START" 주석은 디스어셈블리와 모순으로 폐기.
+- **TOUCH run on-time ceiling(의도적 안전 추가, 원본 비충실 명기)**: 원본 `limit_on_time`은 REMOTE/COMM+SYS_HAND 전용(`main.c:5296`, 터치 런 무제한). V30 RUN 버튼 data=0 quirk(release 유실→무한구동) 대비로 US_TOUCH 런에 `limit_on_time×10ms`(기본 500ms, 패널 편집, 0=off) ceiling 적용. ceiling 정지 후 잔여 release가 START로 매핑되는 역전은 `swallow_start` 1회 소비로 보정(data=4 release는 RUN_RELEASE-while-IDLE에서 해소).
+- **ADC 획득 페이스 복원**: 2ms/1채널 교대(ch0_avg 40ms·ch1_avg 400ms = 원본 8.3/42ms 대비 5~10×低) → **1ms 양채널**(ch0_avg 10ms·ch1_avg 50ms).
+- **deferred 명문화**: RESET→SEEK 500ms 자동 체인(+SEEK 500ms 자동해제, `main.c:5388-5408`) = SEEK/RESET 구현 시 필수 의미론. **B-SEAM 가설 축소**: OSC 구동 = 명령 3선 active-LOW 레벨 미러 유력(룩업/램프는 미연결 7-seg 표시 전용이었을 공산) → 벤치 측정을 "3선 미러 확인"으로 축소. M16 PA7/PC1/PC4는 samd20 대응 없음(IPC 아님). M_OVLD 극성은 이중부정 혼동 위험 — 포팅 시 실측 필수.
+- **HW 재검증 절차 변경**: RUN 검증 기대치가 "램프 0→401"에서 **"부팅 워밍업 1회(~4s) 후 RUN 즉시 sel=scale(ch0_avg)·release 정지·500ms ceiling"**으로 바뀜.
+- **LCD 포팅 전수 감사(후속) = 합격**(분석 문서 §6b): samd20 parse_lcd_comm 34 VP·표시 TX·init/SYS_PIC_NOW 복구 전부 1:1 대응 + V30 적응 4건/의도적 편차 문서화 확인, 코드 무변경. **미문서 갭 3건 deferred 기록**: ① ICON_RESET/SEEK/ERROR_RESET 점등 엣지(RESET→SEEK 체인 구현 시 포함) ② `us_on_time_200m` 미공급(LV_TIME 바 런 중 0 — app_reg 저비용 후속 후보) ③ `LV_WORK_CNT` 증가(용접 사이클 deferred 소속). set_pot(I2C_POT)은 진폭 제어 실체로 격상 — 실출력 = B-SEAM 3선 미러 + I2C_POT(F2) 두 축.
+
+### 2026-06-08 — Stage D slice 2b HW 검증 일부 PASS + V30 RUN 버튼 에셋 quirk fix (RUN 재검증 대기)
+
+실보드 HW 검증 세션(ST-LINK 플래시 + SWD g_measure read + USART6 mon, REG_TRACE+LCD_TRACE_RX 빌드). **부팅 IDLE·RESET/SEEK 라우팅 PASS, RUN은 V30 에셋 quirk로 막혀 펌웨어 fix 적용, RUN 재검증은 보드 재연결 후(세션 중 USB 분리).**
+
+- **✅ 부팅 IDLE**: `[reg] run=0 st=0 rc=0 sel=0 band=21`, auto-ramp 없음(SWD `us_run_status=0` 불변) = slice 2a auto-run 폐기 확인.
+- **✅ 명령 라우팅**: RESET → `[lcd-hook] us_command=2` `[reg] cmd=2 run=0`; SEEK → `us_command=1` `cmd=1 run=0`. hook→`app_reg_command` HW 확인, RESET/SEEK no-op(spec §9) 정상.
+- **원인규명(systematic-debugging)**: RUN press 무반응. `[lcd-hook]` 미발화 트레이스 → upstream 격리 → `LCD_TRACE_RX` 빌드로 수신 프레임 관측 = **V30 RUN 버튼이 `KEY_MULTI(0x1080)` 키값 0을 press·release 양 edge 반환**(RESET=1/SEEK=2는 정상, data=0은 RUN 고유). `handle_key_multi`(samd20 포팅)는 data=3/4만 처리 → RUN 명령 미발화. **LCD 스테이지 버그A(SETUP_MODEL data=0)와 동일 = V30 DGUS 에셋 root, slice 2b 코드 무관.** 에셋 점검: `hw/lcd/dgus/13TouchFile.bin`은 컴파일 출력, 편집 DWIN 프로젝트 repo 부재.
+- **fix `b78cbbf`** (사용자 결정 = Option B 펌웨어 적응, `app_lcd_input.c` 한 파일, FSM/enum/app_reg 무변경, spec §4.4): `handle_key_multi` `data16==0` 분기 추가 → `app_lcd_measure()->us_run_status`로 START(IDLE)/RUN_RELEASE(running) 매핑. down/up data=0 쌍이 hold-to-run 재구성, self-syncing(edge 누락→다음 press가 정지로 복구). set_pot은 START에서만. 빌드 0-warning(FLASH 28.96% trace), 호스트 PASS.
+- **다음**: 보드 재연결 → 재플래시(`fw/build-trace/` 준비됨) → RUN press→`cmd=0 run=2`+램프+ICON_RUN→release→정지+latch→re-arm 재검증 + fix `b78cbbf` cpp-reviewer → finishing + 태그 `hw-revA_fw-stage-d2b`. (A 에셋 정상화 = DWIN 툴 가용 시 후속.)
+
+### 2026-06-08 — Stage D slice 2b (RUN 명령 게이트) 코드 완료 — HW 검증 대기
+
+slice 2a 머지 후 slice 2b 착수. brainstorming→spec→plan(`writing-plans`)→subagent-driven 구현(Task별 fresh subagent + 2-stage 리뷰). 브랜치 **`feat/stage-d-slice2b-run-gate`**(main 미머지). **터치 RUN start/stop 게이트만**(SEEK/RESET regulation 효과·overload·weld-cycle·Modbus·OSC 구동·blink = DEFERRED). 빌드 0-warning(FLASH 28.64%/RAM 10.60%), 호스트 테스트 `all checks PASSED`(순수함수 무회귀; 신규 순수함수 없음), 전체 cpp-reviewer **APPROVED**(HW 검증 대기). **남은 것 = Task 3 실보드 HW 검증 → 최종 머지/태그.**
+
+- **사실 출처(소스 직독)**: 터치 RUN = **momentary hold-to-run, model_type 무관**(samd20 `main.c:3676` press→`us_run_status=US_TOUCH`/`sig_run_status=ON`, `3699` release→IDLE/OFF). Modbus=latched(`H_REG_START/STOP`=US_COMM, Stage C). `us_off`(`4180`)가 **`last_=max_` latch**.
+- **`decfc28` run FSM + taxonomy + 라우팅**: `app_reg_command(us_cmd_t)` 신설(`app_lcd_hook_us_command`에서 라우팅). **부팅 IDLE**(slice 2a auto-run 폐기). START는 **`== US_IDLE` 엣지만** re-arm(advisor catch: `!= US_REMOTE`면 패널 auto-repeat가 램프 재시작→401 미도달; M16은 `M_START` 엣지구동). RUN_RELEASE는 `== US_TOUCH`만 정지(last_power=max_power latch). enum `{US_IDLE,US_RUNNING}`→`{US_IDLE=0,US_REMOTE=1,US_TOUCH=2,US_COMM=3}`(US_RUNNING 제거). sel MUX에 IDLE→0; ramp 증가 게이트에 활성 조건. 활성 lookup 경로 = slice-1 verbatim.
+- **`ed2093f` ICON_RUN 엣지 렌더**: `app_lcd_disp_step`이 `us_run_status` running-ness 엣지(`prev_run_on`)에 ICON_RUN 1회 write(4ms 스팸 방지). app_reg DGUS-free 유지(계층 분리).
+- **`4264bab` SYS_PIC_NOW mid-run 리셋 → 정지**(cpp-reviewer catch, spec §4.3): 패널 자체 리셋(`SYS_PIC_NOW`=0, page-0 splash, 진짜 리셋만)이 `init_mode`로 ICON_RUN을 클리어하나 held-RUN release 미도착 → `us_run_status` US_TOUCH 고착(무한구동)+아이콘 거짓표시. 재init 시 `US_CMD_RUN_RELEASE` 발행(UI 상실→액추에이터 정지, Option A) → FSM IDLE이 무한구동+아이콘 동시 해소. disp 코드 무변경.
+- **리뷰**: Task별 spec+cpp-reviewer APPROVED + 전체 통합 cpp-reviewer APPROVED(엔드투엔드 superloop 순서 무race·slice-1 무회귀·enum 마이그레이션·max/last 라이프사이클·부팅 clean·SYS_PIC_NOW 순서). 비차단 노트 2건: ① IDLE에서 `curr_amp` 무조건 발행→출력 바 = idle ADC 노이즈 플로어 HW 확인(plan Task 3 item 6, 범위 밖=B-SEAM) ② FSM 전환 호스트 미테스트(HW 게이트로 의도, spec §8.1).
+- **다음**: Task 3 HW(보드 연결 시) — 부팅 IDLE / RUN hold→`rc` 0→401→`st=0` + ICON_RUN 점등 + VAR_POWER 추종 / release→소등+latch / re-arm / 무회귀. 절차 = `HANDOFF.md` §Resume / plan Task 3. SEEK/RESET·overload·OSC·6b = 여전히 DEFERRED.
+
 ### 2026-06-08 — Stage D slice 2a HW 검증(Task 4) PASS + 바/아이콘 합격기준 정정
 
 브랜치 **`feat/stage-d-slice2-softstart`** 실보드 HW 검증(STLINK V3 + USART6 mon, REG_TRACE 빌드, 전압 주입 불필요). **compute(상태머신 + soft-start 램프) = PASS.** 펌웨어 코드 변경 없음(기검증 3커밋 그대로).

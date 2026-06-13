@@ -86,7 +86,8 @@ static uint8_t setup1_page_for_mode(uint8_t sys_mode)
     return LCD_SETUP_STD1;                              /* 10 (SYS_STD) */
 }
 
-/* KEY_MULTI (0x1080): 1=RESET / 2=SEEK / 3=RUN(press) / 4=RUN(release).
+/* KEY_MULTI (0x1080): 1=RESET / 2=SEEK / 3=RUN(press) / 4=RUN(release); the V30
+ * DGUS asset additionally returns 0=RUN on both edges (mapped by run state — §4.4).
  * Raise the ultrasonic command hook only (Stage D owns the us/sig/energy FSM).
  * RUN press also writes the DAC. RESET in an OVLD/OUTERR error clears those bits,
  * blanks the icons, and restores the run page (samd20 main.c:3633-3706). */
@@ -117,6 +118,23 @@ static void handle_key_multi(uint16_t data16)
     } else if (data16 == 4) {                           /* RUN (release) */
         app_lcd_hook_us_command(US_CMD_RUN_RELEASE);
         /* Stage D owns us/measure state; input only raises the command. */
+    } else if (data16 == 0) {                           /* RUN (V30 panel: key value 0 on both edges) */
+        /* The V30 DGUS asset returns KEY_MULTI=0 on BOTH press and release for the
+         * RUN button (RESET=1/SEEK=2 are correct; data=0 is unique to RUN, HW-traced
+         * 2026-06-08). Map to START vs RUN_RELEASE by the live run state so the
+         * down/up data=0 pair reconstructs hold-to-run; self-syncing (a dropped edge
+         * is corrected by the next press). The legacy data=3/4 branches above stay
+         * for forward-compat if the asset is later fixed to send them. See spec §4.4.
+         * Note: us_run_status is published by app_reg_tick, so back-to-back data=0
+         * frames drained in the same loop iteration both read the stale (pre-tick)
+         * status; app_reg_command's US_IDLE guard rejects the double-START and the
+         * release becomes a dropped edge (self-syncing per spec §4.4). */
+        if (app_lcd_measure()->us_run_status == US_IDLE) {
+            app_lcd_hook_us_command(US_CMD_START);
+            app_lcd_hook_set_pot(cfg->output_power);    /* DAC on run start (stub, F2) */
+        } else {
+            app_lcd_hook_us_command(US_CMD_RUN_RELEASE);
+        }
     }
 }
 
@@ -839,6 +857,12 @@ void app_lcd_input_dispatch(const dgus_frame_t *f)
     case SYS_PIC_NOW:
         if (data16 == 0 && state->boot_complete &&
             (uint32_t)(sys_tick_get_ms() - state->last_set_page_ms) >= 200u) {
+            /* Panel self-reset mid-run: the held RUN press is lost and no
+             * RUN_RELEASE will arrive, so stop the run (UI lost -> stop the
+             * actuator). This also re-syncs ICON_RUN: us_run_status -> IDLE
+             * makes the next disp_step see a real edge after init_mode clears
+             * the icon (spec §4.3). Harmless when already idle. */
+            app_lcd_hook_us_command(US_CMD_RUN_RELEASE);
             app_lcd_var_init();
             app_lcd_send_model_str(cfg->model_freq, cfg->model_type);
             app_lcd_init_mode(cfg);

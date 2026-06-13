@@ -33,6 +33,7 @@ void app_lcd_hook_set_pot(uint8_t output_power)
 void app_lcd_hook_us_command(us_cmd_t cmd)
 {
     mon_printf("[lcd-hook] us_command=%u\r\n", (unsigned)cmd);
+    app_reg_command(cmd);   /* slice 2b: route into the regulation run FSM */
 }
 
 void app_lcd_hook_comm_reconfigure(uint8_t speed_idx, uint8_t parity_idx, uint8_t address)
