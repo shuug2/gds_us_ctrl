@@ -54,6 +54,8 @@ set(HAL_SOURCES
     ${VENDOR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c.c
     # Stage D — regulation ADC:
     ${VENDOR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_adc.c
+    # Stage C slice 2a — W5500 SPI:
+    ${VENDOR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_spi.c
 )
 
 add_library(stm32_hal STATIC
