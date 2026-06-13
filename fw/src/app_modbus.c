@@ -11,6 +11,8 @@
 #include <string.h>
 #include "app_modbus.h"
 #include "app_modbus_core.h"
+#include "app_eth.h"
+#include "app_modbus_tcp.h"
 #include "usart6_mb.h"
 #include "app_lcd.h"      /* app_lcd_cfg/app_lcd_measure/hooks/us enum */
 #include "app_reg.h"
@@ -29,6 +31,7 @@ static struct {
     uint8_t parity_idx;
     uint8_t addr;
 } g_applied;
+static uint8_t g_tcp_active;   /* rising-edge baseline guard for ETH mode */
 
 bool app_modbus_owns_usart6(void)
 {
@@ -287,23 +290,43 @@ void app_modbus_init(void)
 void app_modbus_tick(void)
 {
     apply_config();
-    if (g_applied.owned == 0u) {
+    const app_config_t *cfg = app_lcd_cfg();
+
+    if (g_applied.owned != 0u) {
+        /* RTU owns USART6 (comm_mode==SERIAL && addr!=0). Behavior-identical
+         * to the hardware-verified slice-1 path. */
+        g_tcp_active = 0u;
+        uint8_t frame[MB_FRAME_MAX];
+        uint8_t len = usart6_mb_rx_frame(frame, sizeof frame);
+        if (len != 0u) {
+            uint8_t resp[MB_RESP_MAX];
+            uint8_t fc = 0u;
+            uint8_t n  = mb_core_decode(&g_mb, frame, len, MB_MODE_RTU, resp, &fc);
+            if (n != 0u) {
+                usart6_mb_send(resp, n);
+            }
+            if (fc == 0x06u) {
+                app_modbus_apply_writes(); /* samd20: update_holding_reg(1) on FC06 */
+            }
+        }
+        mirror_live();
         return;
     }
 
-    uint8_t frame[MB_FRAME_MAX];
-    uint8_t len = usart6_mb_rx_frame(frame, sizeof frame);
-    if (len != 0u) {
-        uint8_t resp[MB_RESP_MAX];
-        uint8_t fc = 0u;
-        uint8_t n  = mb_core_decode(&g_mb, frame, len, MB_MODE_RTU, resp, &fc);
-        if (n != 0u) {
-            usart6_mb_send(resp, n);
+    /* Not RTU. Run the TCP server when in an ETH mode and the W5500 is up.
+     * This also closes a gap: the old early-return when !owned meant
+     * mirror_live() never ran in ETH mode, so FC03 reads would go stale. */
+    if ((cfg->comm_mode != MB_COMM_MODE_SERIAL) && app_eth_available()) {
+        if (g_tcp_active == 0u) {
+            mb_core_init(&g_mb, cfg->comm_address);  /* seed addr + zero tables */
+            mirror_live();   /* baseline before first poll (matches apply_config
+                              * RTU-acquisition): avoids a zeroed-holding[] read
+                              * window on a SERIAL->ETH switch with a held socket */
+            g_tcp_active = 1u;
         }
-        if (fc == 0x06u) {
-            app_modbus_apply_writes(); /* samd20: update_holding_reg(1) on FC06 */
-        }
+        app_modbus_tcp_poll();   /* decode(MB_MODE_TCP) + apply on FC06 + respond */
+        mirror_live();           /* keep holding[] fresh for reads (closes the gap) */
+    } else {
+        g_tcp_active = 0u;
     }
-
-    mirror_live();
 }
