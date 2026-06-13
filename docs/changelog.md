@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### 2026-06-13 i — Stage C slice 2 (Modbus TCP static+DHCP) main 머지 + 태그
+
+Option B(2a/2b 합쳐 2b 통째)로 main 머지. `finishing-a-development-branch` 절차(게이트 검증→환경 감지→머지→태그→브랜치 삭제).
+
+- **머지** `fa93dcd`(`--no-ff` 2-parent `8ec57ec`+`e3e10d7`) — 선형 후손(main..HEAD=26, HEAD..main=0)이라 깨끗. 2b가 2a(`faf89d5`) 전부 포함 → static+DHCP 모두 합류.
+- **태그** `hw-revA_fw-stage-c2b`(merge commit). **⚠ pre-refactor 2a에 `c2a` 태그 안 함** — 2a 원본 app_eth는 confirmed 1s-폴 PHY 버그 보유(`c2b`가 static+DHCP 전부 커버).
+- feature 브랜치 2개 삭제(`git branch -d` = main에 완전 포함): `feat/stage-c-modbus-tcp-dhcp`, `feat/stage-c-modbus-tcp-static`.
+- 머지 후 클린 재빌드 0-warning(text 52728B/FLASH 40.65%/RAM 16.66%)·호스트 3스위트 PASS. tip `62c1cc1` 빌드 보드 재플래시 HW 재확인(dhcp lease .70).
+- 핸드오프 `HANDOFF.md`(루트) slice 2용 재작성(시리얼 캡처 함정 + 측정 교훈 + ETH E2E 재현 절차). **Stage C(Modbus 흡수) = slice 1(RTU) + slice 2(TCP static+DHCP) 전부 main 완료.**
+- **다음**: ① slice 2 deferred HW(ICON_RUN 육안/RTU FC06 회귀/RAM-only 재리스) ② HW-gated deferred(SEEK/RESET·overload·weld-cycle·B-SEAM·6b) ③ 신규 스테이지.
+
 ### 2026-06-13 h — Stage C slice 2b HW E2E PASS (static+DHCP+retry) + 비블로킹 PHY 리팩터
 
 보드 연결 세션(ST-LINK V3, W5500 실장 + DHCP 서버 망, mon `/dev/cu.usbserial-AB0MLYXA`@115200). slice 2b(+2a static) 실보드 HW E2E. **실 버그 1건 발견·수정**(slice 2a app_eth PHY 폴링 타임아웃) → 비블로킹 FSM 리팩터. 코드 2커밋(`635e9ec`+`62c1cc1`), 브랜치 tip `62c1cc1`(미머지). 빌드 0-warning·FLASH 40.65%(53288B/128KB)·RAM 16.66%·호스트 3스위트 PASS.
