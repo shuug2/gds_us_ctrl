@@ -105,6 +105,18 @@ bool app_eth_init(void)
     const app_config_t *cfg = app_lcd_cfg();
 
     if (cfg->comm_mode == COMM_ETH_DHCP) {
+        /* Put our MAC on the chip (SHAR) BEFORE DHCP_init: the ioLibrary client
+         * reads SHAR for the DISCOVER/REQUEST CHADDR and, if it is all-zero
+         * (post-reset), substitutes a temporary 00:08:dc:00:00:00 — the lease
+         * would bind to the wrong MAC and renewals would carry a stale CHADDR.
+         * samd20 set this via network-init's wizchip_setnetinfo. (IP/SN/GW are
+         * left zero here; DHCP_init zeroes SIPR/GAR anyway, and the lease fills
+         * them via dhcp_ip_assign.) */
+        wiz_NetInfo dni = {0};
+        for (int i = 0; i < 6; i++) { dni.mac[i] = kEthMac[i]; }
+        dni.dhcp = NETINFO_DHCP;
+        wizchip_setnetinfo(&dni);
+
         /* DHCP: start the client; the lease is acquired in app_eth_tick() and
          * applied by dhcp_ip_assign(). Stay unavailable until then. */
         DHCP_init(SOCK_DHCP, s_dhcp_buf);
