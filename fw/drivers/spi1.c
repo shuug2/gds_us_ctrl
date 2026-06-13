@@ -32,6 +32,9 @@ uint8_t spi1_xfer_byte(uint8_t tx)
     return rx;
 }
 
+uint8_t spi1_rb(void)      { return spi1_xfer_byte(0xFFu); }
+void    spi1_wb(uint8_t b) { (void)spi1_xfer_byte(b); }
+
 void spi1_burst_read(uint8_t *buf, uint16_t len)
 {
     /* W5500 burst read: clock out 0xFF, capture MISO. */

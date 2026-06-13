@@ -13,3 +13,5 @@ void    spi1_burst_write(uint8_t *buf, uint16_t len);
 void    spi1_cs_low(void);               /* assert CS (PA4 low) */
 void    spi1_cs_high(void);              /* deassert CS (PA4 high) */
 void    spi1_eth_reset(void);            /* PC5 NRST pulse (W5500 reset timing) */
+uint8_t spi1_rb(void);                   /* ioLibrary read byte: clock 0xFF, return MISO */
+void    spi1_wb(uint8_t b);              /* ioLibrary write byte */
