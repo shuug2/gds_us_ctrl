@@ -15,7 +15,8 @@
   - **DHCP(2b 본 목표)**: `[eth] dhcp init`→`[eth] dhcp lease ip=192.168.1.70`, ping 0%, FC03 미러 동일, **LCD에 리스 IP 표시(RAM-only 미러)**. 리스+ARP 성공 = **MAC-before-DHCP 수정으로 올바른 MAC(00:08:dc:78:91:71) 바인딩** 입증.
 - **리뷰 `62c1cc1`**: 리팩터 통합 cpp-reviewer = APPROVED-WITH-COMMENTS(Crit/High 0; FSM 상호배타·wrap-safe 타이머·MAC순서·s_available 일관성 정적 확인). 지적 3건 전부 반영 = ① `app_eth.h` 배너 정정(링크 미업 시 false 리턴→LINKWAIT 유지) ② `<stdint.h>` 직접 include(HAL 헤더 제거로 transitive 의존 제거) ③ DHCP_FAILED re-init 시 `s_dhcp_ms` 리셋(케이던스 명확화).
 - **deferred(사용자 결정 "핵심으로 충분")**: ICON_RUN 육안(START→560ms ceiling→STOP over TCP), RTU FC06 회귀 spot-check(RS-485), RAM-only 재리스 증명(static 복귀→.128 표시).
-- **⚠ 머지 영향(다음 세션 결정 필요)**: 비블로킹 리팩터로 2b의 `app_eth`가 2a와 **더 이상 byte-identical 아님**(static 경로가 FSM 안으로 이동). slice 2a 원본 app_eth(블로킹 1s 폴)는 **이 버그를 그대로 가짐 + HW 미검증**. static 경로는 2b(리팩터) 빌드에서 검증됨. 머지 순서 2a→2b 유지하려면 **2a가 이 리팩터를 상속**해야 하거나, **2a/2b split을 합쳐** 2b의 app_eth를 통째로 가져가야 함. 결정 보류.
+- **재플래시 확인**: tip `62c1cc1` 빌드(text 52728)를 보드에 재플래시 + HW 재확인(`[eth] dhcp lease ip=192.168.1.70` + ping OK) = "tip 바이너리가 보드에서 검증됨" 보장(리팩터 검증은 `635e9ec`에서, 리뷰 fix 델타는 inert지만 기록 정확성 위해 재확인).
+- **⚠ 머지 영향(다음 세션 결정 필요, 사용자 콜)**: 비블로킹 리팩터로 2b의 `app_eth`가 2a와 **더 이상 byte-identical 아님**(static 경로가 FSM 안으로 이동). slice 2a 원본 app_eth(블로킹 1s 폴)는 **confirmed HW 버그 + HW 미검증**(static은 2b 리팩터 빌드에서만 검증됨). **권장(기본) = 2a/2b split 합쳐 2b 통째 머지**(2b가 2a 전부 포함+검증, 2a static은 strict subset). **⚠ pre-refactor 2a에 `hw-revA_fw-stage-c2a` 태그 금지(known-broken).** Option A(2a가 리팩터 cherry-pick→재검증)는 가능하나 busywork.
 
 ### 2026-06-13 g — Stage C slice 2b (Modbus TCP/W5500 DHCP): 구현 완료(host-complete), HW E2E 대기
 
