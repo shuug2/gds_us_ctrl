@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+### 2026-06-13 e — Stage C slice 2a (Modbus TCP/W5500 static): 구현 완료(host-complete), HW E2E 대기
+
+HW 비의존 세션. plan(`79526fb`, 9 task)을 subagent-driven으로 실행(Task 1~8 = 구현, 각 Task 구현→리뷰 게이트, Task 9 = 보드 게이트로 미실행). 코드 7커밋. 브랜치 `feat/stage-c-modbus-tcp-static`(base = `8ec57ec`, slice 1 머지 후 docs 커밋). 클린 빌드 0-warning(우리 코드), **FLASH 36.43%(47748B/128KB)·RAM 13.23%**, 호스트 3개 스위트(`app_reg_calc`+`app_modbus_core`+신규 `app_modbus_tcp_frame`) 전수 PASS.
+
+- **T1 `478b50e`**: WIZnet ioLibrary upstream 벤더(핀 커밋 `220ca7a6`, 6파일 `Ethernet/{wizchip_conf,socket}.{c,h}`+`W5500/w5500.{c,h}`). 경고격리 별도 STATIC lib(`-w`, SYSTEM include). **현 master 기본 `_WIZCHIP_=W6300`→`W5500`로 1줄 수정**(딱 이것만) → `wiz_NetInfo`가 클래식 `{mac,ip,sn,gw,dns,dhcp}`+`reg_wizchip_spi_cbfunc` 2-arg 형. controller가 벤더 헤더에서 전 API 이름/시그니처 확정해 후속 Task 프롬프트에 주입.
+- **T2 `c512bf3`**: `spi1.{c,h}` — SPI1 마스터 Mode0 12MHz, PA5/6/7(AF5)/PA4(소프트 CS, idle-HIGH)/PC5(NRST)/PC4(INT 폴링). HAL SPI 모듈 enable + 소스 추가. 리뷰 Minor 반영: `HAL_SPI_Init` 반환 체크+`Error_Handler`(형제 드라이버 컨벤션).
+- **T3 `3b01d0b`**: 순수 MBAP 프레이밍 `app_modbus_tcp_frame.{c,h}` — TDD(RED→GREEN). MBAP strip+검증, `mb_core_decode(MB_MODE_TCP)`, trailing CRC 2B 절단, unit 에코, 빅엔디안 length. 호스트 테스트(FC03=11B/FC06=12B/reject 3종). 리뷰 Minor 반영: `n<4` 방어 가드 + unit≠device_addr **unit-echo 테스트** 추가.
+- **T4 `90e72e4`**: `apply_writes`(static)→`app_modbus_apply_writes`(public) + `app_modbus_core()` accessor. **순수 linkage 변경, 로직 무변경**(clamp/FRAM/mirror 본문 무수정 — controller diff 검증). RTU(tag `hw-revA_fw-stage-c1`)와 TCP가 동일 `g_mb`+동일 apply 공유.
+- **T5 `d310527`**: `app_eth.{c,h}` — W5500 non-fatal 브링업(콜백 등록→reset→`wizchip_init`→PHY 폴링 ~1s 타임아웃→cfg static netinfo). **byte 콜백 `spi1_rb/wb`는 CS 미토글**(ioLibrary가 프레임 전체를 CS 콜백으로 감쌈). MAC 하드코딩. `%u` `(unsigned)` 캐스트. cpp-reviewer APPROVED.
+- **T6 `dcc0c6a`**: `app_modbus_tcp.{c,h}` — 소켓 FSM(port 502, sock0) + recv→frame→공유 apply→send, 1-frame-per-recv 가정. 리뷰 Minor 반영: send-first 재정렬(RTU와 동일 순서) + 주석 정정.
+- **T7 `3eb516f`**: 통합 — `main.c` boot `app_eth_init()` 1회; `app_modbus_tick()` RTU/ETH 분기. **RTU 분기 기능 동일(무회귀, controller diff 검증)**, ETH 분기가 `comm_mode!=SERIAL && app_eth_available()` 게이트 + `g_tcp_active` 래치 1회 재시드 + **mirror gap 수정**(ETH에서도 `mirror_live()` 호출). 리뷰 Minor 반영: rising-edge `mb_core_init` 직후 baseline `mirror_live()`(zeroed-holding 읽기 창 제거, apply_config 획득 패턴과 대칭).
+- **T8 통합 cpp-reviewer = APPROVED-WITH-COMMENTS**(Critical/High/Medium 0). Minor 3건 = 전부 비차단/2a 의도: ① recv/send 반환 무시(RTU+samd20 동일, self-healing) ② app_eth_init boot-only/재init 없음(=slice 2b) ③ unit-echo 오버라이트 가독성(테스트로 가드됨). 조치 불필요.
+- **다음 = Task 9 HW E2E**(보드 게이트): `comm_mode=ETH_STATIC`+static IP 설정→`mbpoll -m tcp -a 1 ...`로 slice-1 매트릭스 미러(링크/FC03 미러/FC06 클램프+FRAM/START-ceiling-STOP+ICON_RUN/점유 serial↔eth 전환/RTU FC06 회귀 spot-check). 통과 시 머지+태그 `hw-revA_fw-stage-c2a`.
+
 ### 2026-06-13 d — Stage C slice 2a (Modbus TCP/W5500 static): brainstorming → spec → plan
 
 HW 비의존 세션. slice 1 머지 후 slice 2(Modbus TCP) 착수 — 설계 단계만(코드 변경 ✗). 브랜치 `feat/stage-c-modbus-tcp-static`(base = main `e351cad`).

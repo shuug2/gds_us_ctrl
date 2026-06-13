@@ -1,5 +1,8 @@
 # RESUME — 다음 세션
 
+> **상태 (2026-06-13 e, 마감 — Stage C slice 2a (Modbus TCP/W5500 static) 구현 완료(host-complete), HW E2E만 남음)**: **HW 비의존 세션 — plan(`79526fb`, 9 task)을 subagent-driven으로 실행. Task 1~8 완료(구현+호스트 게이트+통합 리뷰), Task 9(HW E2E)만 보드 게이트로 남음. 코드 7커밋, 브랜치 `feat/stage-c-modbus-tcp-static`(base `8ec57ec`, 미머지). 클린 빌드 0-warning(우리 코드)·FLASH 36.43%(47748B/128KB)·RAM 13.23%·호스트 3스위트(app_reg_calc+app_modbus_core+신규 app_modbus_tcp_frame) PASS. 통합 cpp-reviewer = APPROVED-WITH-COMMENTS(Crit/High/Med 0).** 커밋: T1 `478b50e`(WIZnet ioLibrary 벤더, 핀 `220ca7a6`, `_WIZCHIP_=W5500`, 경고격리 lib) → T2 `c512bf3`(spi1 마스터+W5500 CS/RST GPIO) → T3 `3b01d0b`(순수 MBAP 프레이밍 `app_modbus_tcp_frame`, TDD host test) → T4 `90e72e4`(apply-path/core 노출 = **로직 무변경 linkage**, diff 검증) → T5 `d310527`(`app_eth` non-fatal 브링업, byte 콜백 CS 미토글) → T6 `dcc0c6a`(`app_modbus_tcp` 소켓 FSM port 502) → T7 `3eb516f`(통합: boot `app_eth_init` + `app_modbus_tick` RTU/ETH 분기, **RTU 무회귀 diff 검증** + ETH mirror gap 수정 + rising-edge baseline mirror). 리뷰 Minor는 임팩트 있는 것 전부 즉시 반영(T2 Error_Handler, T3 n<4 가드+unit-echo 테스트, T6 send-first, T7 baseline mirror); T8 통합 Minor 3건(recv/send 반환·boot-only init·unit-echo 가독성)은 비차단/2a 의도로 조치 불필요. **다음 = Task 9 HW E2E(보드 게이트, 코드 변경 기대 ✗)**: 패널/FRAM `comm_mode=ETH_STATIC(1)`+static IP/NM/GW(예 192.168.0.15/255.255.255.0/192.168.0.1) 설정→전원사이클→mon `[eth] up ip=…`(미실장/링크OFF면 `[eth] no PHY link/unavailable`=non-fatal 입증) 확인 후 `mbpoll -m tcp -a 1 -t 4 ...`로 slice-1 매트릭스 미러(① 링크/listen ② FC03 0x00~0x1D 미러 ③ FC06 OUT_POWER 클램프+FRAM ④ START 0x1B→560ms ceiling 정지+ICON_RUN+STOP ⑤ 점유 serial↔eth 전환 ⑥ work_cnt ⑦ **RTU FC06 회귀 spot-check**=advisor #1 가드). 통과 시 `finishing-a-development-branch`로 머지(`--no-ff`)+태그 `hw-revA_fw-stage-c2a`. plan `docs/superpowers/plans/2026-06-13-stage-c-modbus-slice2a-tcp.md`(Task 9 §HW-gated), spec `…/specs/2026-06-13-stage-c-modbus-slice2a-tcp-design.md`. W5500 핀: PA4(소프트 CS)/PA5/6/7(AF5)/PC5(NRST)/PC4(INT 폴링).
+> - **이전 상태 (2026-06-13 d)**: ↓ slice 2a spec+plan 완료 시점.
+
 > **상태 (2026-06-13 d, 마감 — Stage C slice 2a (Modbus TCP/W5500 static) brainstorming → spec → plan 완료, 구현 대기)**: **HW 비의존 세션 — slice 2 착수. brainstorming(질문 4개: 범위/프레이밍/드라이버/활성화) → spec(`65c7d25`) → writing-plans(`79526fb`, 9 task) 완료. 코드 변경 ✗(설계 단계). 브랜치 `feat/stage-c-modbus-tcp-static`(base = main `e351cad`, slice 1 머지 완료).** 핵심 결정(사용자): ① 범위 = **slice 2a = static IP만**(W5500 벤더스택+SPI1+TCP 서버), **DHCP는 2b로 분리** ② 프레이밍 = **표준 Modbus TCP**(MBAP 에코+CRC 제거) — samd20 비표준 raw 응답 quirk **폐기**; 코어 **무수정**(slice1 검증 보존), TCP 글루에서 코어 응답 trailing CRC 2B 절단+MBAP 래핑+unit 에코 ③ 드라이버 = **공식 WIZnet ioLibrary upstream** 벤더(경고격리 별도 CMake lib) ④ 활성화 = **boot 1회 non-fatal init**(W5500 미실장/링크OFF→eth_available=false 후 계속) + `comm_mode==ETH`일 때만 TCP 서버(RTU 점유의 거울=택일). static IP/NM/GW = cfg(FRAM, 이미 영속), MAC = 하드코딩 상수. **구현 핵심 주의(advisor 검토 반영, plan에 박힘)**: ⓐ **ioLibrary 현 master 기본 `_WIZCHIP_=W6300`** — Task1에서 `W5500`로 설정해야 `wiz_NetInfo`가 클래식 `{mac,ip,sn,gw,dns,dhcp}` ⓑ Task4 apply-path 노출 = **동작보존 순수 이동**(RTU는 tag `hw-revA_fw-stage-c1` HW 검증된 민감 코드 — 로직 무변경, Task9에서 RTU FC06 spot-check) ⓒ **ETH 모드 mirror gap**: 기존 `app_modbus_tick`이 ETH면 owned=0으로 조기 return→`mirror_live()` 미호출 → Task7에서 TCP 분기가 mirror 호출(수정됨) ⓓ MBAP length 빅엔디안 + 1-frame-per-recv 가정 명시. W5500 핀: PA4(소프트 CS)/PA5/6/7(AF5)/PC5(NRST)/PC4(INT 폴링). **다음 = plan Task 1부터 구현**(subagent-driven 권장 — slice1 패턴; Task1 벤더 ioLibrary가 downstream 게이트). 호스트 게이트 후 HW E2E(`mbpoll -m tcp`, Task9 보드 게이트) → 머지+태그 `hw-revA_fw-stage-c2a`. spec `docs/superpowers/specs/2026-06-13-stage-c-modbus-slice2a-tcp-design.md`, plan `docs/superpowers/plans/2026-06-13-stage-c-modbus-slice2a-tcp.md`.
 > - **이전 상태 (2026-06-13 c)**: ↓ slice 1 HW E2E PASS + 머지 시점.
 
@@ -79,21 +82,22 @@
 
 ```bash
 cd /Users/tknoh/dev/work/gds_us_ctrl
-git checkout feat/stage-c-modbus-tcp-static     # slice 2a: spec(65c7d25) + plan(79526fb) 커밋됨, 구현 대기
-env -u STM32_TOOLCHAIN cmake -S fw -B fw/build -G Ninja && env -u STM32_TOOLCHAIN cmake --build fw/build  # 0-warning (text ~40.3KB ≈30.7%, 구현 전 baseline)
-make -C fw/test test                            # 호스트 = app_reg_calc + app_modbus_core 둘 다 PASSED (slice2a로 _tcp_frame 추가 예정)
-# 진행 상태: slice 2a brainstorming→spec→plan 완료. 코드 미시작. plan = 9 task.
-# 다음 = plan Task 1부터 구현 (subagent-driven 권장 — slice1 패턴). Task1 = 벤더 WIZnet ioLibrary(downstream 게이트).
-#   plan: docs/superpowers/plans/2026-06-13-stage-c-modbus-slice2a-tcp.md
+git checkout feat/stage-c-modbus-tcp-static     # slice 2a: 코드 7커밋(478b50e..3eb516f), Task1~8 완료, 미머지
+env -u STM32_TOOLCHAIN cmake -S fw -B fw/build -G Ninja && env -u STM32_TOOLCHAIN cmake --build fw/build  # 0-warning(우리 코드) text 47204B FLASH 36.43%/RAM 13.23%
+make -C fw/test test                            # 호스트 3스위트 = app_reg_calc + app_modbus_core + app_modbus_tcp_frame 전수 PASSED
+# 진행 상태: slice 2a Task 1~8 구현 완료(host-complete, 통합 cpp-reviewer APPROVED-WITH-COMMENTS). 남은 것 = Task 9 HW E2E(보드 게이트)만.
+# 다음 = Task 9 HW E2E (보드+W5500 연결 시, 코드 변경 기대 ✗):
+#   1) 패널/FRAM에서 comm_mode=ETH_STATIC(1) + static IP/NM/GW 설정(예 192.168.0.15 / 255.255.255.0 / 192.168.0.1) → 전원사이클
+#   2) mon에 [eth] up ip=192.168.0.15 확인 (W5500 미실장/링크OFF면 [eth] no PHY link/unavailable = non-fatal 입증)
+#   3) IP=192.168.0.15; ping $IP; mbpoll -m tcp -a 1 -t 4 -r <ref> -c <n> -1 $IP 로 slice-1 매트릭스 미러:
+#      링크/listen · FC03 0x00~0x1D 미러 · FC06 OUT_POWER 클램프+FRAM영속 · START(0x1B=1)→560ms ceiling+ICON_RUN+STOP(0x1C=1) · 점유 serial↔eth 전환 · work_cnt · RTU FC06 회귀 spot-check
+#   4) 통과 시 finishing-a-development-branch → 머지(--no-ff) + 태그 hw-revA_fw-stage-c2a, post-merge 0-warning+host PASS
+#   plan: docs/superpowers/plans/2026-06-13-stage-c-modbus-slice2a-tcp.md (Task 9 §HW-gated 상세)
 #   spec: docs/superpowers/specs/2026-06-13-stage-c-modbus-slice2a-tcp-design.md
-#   ⚠ Task1: ioLibrary 현 master 기본 _WIZCHIP_=W6300 → W5500로 설정 필수
-#   ⚠ Task4: apply-path 노출 = 동작보존 순수 이동(RTU HW 검증된 민감 코드)
-#   ⚠ Task7: ETH 모드 mirror gap 수정 포함
-# 호스트 게이트 후 HW E2E(Task9, 보드 게이트) = mbpoll -m tcp -a 1 -t 4 -r <ref> -c <n> -1 <ip> → 머지+태그 hw-revA_fw-stage-c2a
-# HW(보드 연결 시): ST-LINK V3. 플래시 = openocd -f fw/openocd/stm32f410.cfg -c "program fw/build/...elf verify reset exit"
+# HW(보드 연결 시): ST-LINK V3. 플래시 = openocd -f fw/openocd/stm32f410.cfg -c "program fw/build/gds_us_ctrl.elf verify reset exit"
 # mon 캡처: DEV=/dev/cu.usbserial-AB0MLYXA; { stty -f "$DEV" 115200 cs8 -parenb -cstopb raw -echo; cat; } < "$DEV" > /tmp/reg-mon.log &
-# 다른 갈래: HW-gated deferred(SEEK/RESET·overload·weld-cycle·B-SEAM·6b cal). slice 2b = DHCP.
-# (옛 Stage D slice 1/2a/2b + m1 = MERGED; modbus slice 1 = MERGED 2026-06-13 c; slice 2a = 설계 완료 2026-06-13 d)
+# 다른 갈래: HW-gated deferred(SEEK/RESET·overload·weld-cycle·B-SEAM·6b cal). slice 2b = DHCP + W5500 재init.
+# (옛 Stage D slice 1/2a/2b + m1 = MERGED; modbus slice 1 = MERGED 2026-06-13 c; slice 2a 코드 = 완료 2026-06-13 e, HW E2E 대기)
 ```
 
 > 진단 가시화가 필요하면 `-DLCD_TRACE_RX` 트레이스 빌드(별도 `build-trace/`, CMakeLists에 한 줄 추가→빌드→원복→`build-trace/...elf` 플래시): `[lcd] rx vp=.. data=..` + `[lcd] commit cm temp=.. cfg=..` + `[lcd] boot cm=.. ip=..` 출력. 시리얼 리셋 글리치로 부팅줄 NULL 플러드가 섞이니 `tr -d '\000' < log | tr -s ' ' | grep '\['`로 정리해 읽기.
