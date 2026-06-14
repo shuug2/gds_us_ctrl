@@ -1,6 +1,6 @@
 # Stage Weld-Cycle — Slice 1: Core FSM (DELAY mode) Design
 
-> **요약**: samd20의 공압 프레스 용접 사이클 FSM(`RUN_READY→CYL1→WELD→HOLD→CYL2→work_cnt++`)을 STM32F410으로 포팅하는 첫 슬라이스. **DELAY 모드 전용**(시간 기반, 위치센서 불필요), `energy_ctrl`/`multi_ctrl` off 경로만. 신규 모듈 2개로 분리: **`app_weld_fsm.c`(HAL-free 순수 FSM 코어, host-test)** + **`app_weld.c`(글루)**. WELD 단계는 신규 소스 **`US_CYCLE`**로 기존 `app_reg` 초음파 게이트를 구동(진폭 hook·peak 래치·STATUS bit0 재사용), WELD 길이는 weld 타이머(`limit_delay_time2`)가 지배(on-time ceiling 아님). 물리 IO(SOL_DN 솔레노이드·OSC 초음파 GPIO·위치센서)는 **전부 hook 뒤 / 로그 스텁**(실 GPIO 드라이브·센서·TRIGGER·안전 abort·energy·multi = 슬라이스 2~4 deferred). 사이클 완료 시 **`work_cnt++` + FRAM 영속 + LCD `LV_WORK_CNT` 갱신** — 이게 PC HMI의 "사이클 종료" 의미를 확정한다. 충실도 = 혼합(거동 samd20 충실 + 명백한 버그만 수정, quirk는 문서화). 시간 단위 = **10ms/count**.
+> **요약**: samd20의 공압 프레스 용접 사이클 FSM(`RUN_READY→CYL1→WELD→HOLD→CYL2→work_cnt++`)을 STM32F410으로 포팅하는 첫 슬라이스. **DELAY 모드 전용**(시간 기반, 위치센서 불필요), `energy_ctrl`/`multi_ctrl` off 경로만. 신규 모듈 2개로 분리: **`app_weld_fsm.c`(HAL-free 순수 FSM 코어, host-test)** + **`app_weld.c`(글루)**. WELD 단계는 신규 소스 **`US_CYCLE`**로 기존 `app_reg` 초음파 게이트를 구동(진폭 hook·peak 래치·STATUS bit0 재사용), WELD 길이는 weld 타이머(`limit_delay_time2`)가 지배(on-time ceiling 아님). 물리 IO(SOL_DN 솔레노이드·OSC 초음파 GPIO·위치센서)는 **전부 hook 뒤 / 로그 스텁**(실 GPIO 드라이브·센서·TRIGGER·안전 abort·energy·multi = 슬라이스 2~4 deferred). 사이클 완료 시 **`work_cnt++` + FRAM 영속 + LCD `LV_WORK_CNT` 갱신**. **트리거(samd20 충실, 2026-06-14 사용자 확정)**: weld 사이클은 **물리 양수 시작스위치(SW_START1/2)로만** 열린다 — **패널/Modbus START는 직접 초음파(hand/comm) 경로로 사이클 아님, 현 STM32 거동 무수정**. 물리 스위치는 물리입력 → 슬라이스4이므로, **슬라이스1은 사이클 FSM 로직만 구축하고 프로덕션 트리거는 미와이어**(FSM은 host 테스트로 검증, HW E2E는 슬라이스4). work_cnt++는 PC HMI "사이클 종료" 의미를 **설계로 확정**(런타임 증가는 슬라이스4 물리 트리거 후). 충실도 = 혼합(거동 samd20 충실 + 명백한 버그만 수정, quirk는 문서화). 시간 단위 = **10ms/count**.
 
 ---
 
@@ -19,8 +19,8 @@
 - **진폭 계산**: `temp_i = ((output_power-50)*255)/100`, `comp_time<7`이면 `temp_i -= (7-comp_time)*10` (samd20 충실). 진폭은 hook(`app_lcd_hook_set_pot` 또는 전용 weld 진폭 hook)으로 — 슬라이스1은 로그 스텁.
 - **사이클 완료 부수효과**: `work_cnt++` → FRAM 영속(`app_config_save_all` 패턴) → LCD `LV_WORK_CNT` 갱신.
 - **물리 hook(로그만)**: `SOL_DN` on/off (신규 hook). 실 GPIO 미구동.
-- **START 라우팅**: 패널(US_TOUCH)·Modbus(US_COMM) START 명령이 **사이클을 트리거**(CYL1 시작)하도록 라우팅(§5.3).
-- **host 테스트**: FSM 코어의 상태전이·타이밍·comp_time·work_cnt를 `fw/test`에서 검증.
+- **트리거 = 미와이어**(§5.3): 사이클 트리거는 물리 SW_START1/2(슬라이스4). 슬라이스1은 `app_weld_request_start()` 공개 API만 정의(슬라이스4 합류점). **패널/Modbus START는 직접 초음파 경로로 무수정** — 사이클 아님.
+- **host 테스트**: FSM 코어의 상태전이·타이밍·comp_time·work_cnt를 `fw/test`에서 검증(코어 `start` 직접 주입).
 
 ### 1.3 Out of scope (deferred — 후속 슬라이스)
 | 항목 | 슬라이스 |
@@ -33,7 +33,7 @@
 | 물리 start 스위치(`SW_START1/2`) + `in_cycle` 재-arm 로직 | 4 (HW-gated) |
 | `overload`/`weld error`(ERR_OVLD/OUTERR) → SYS_ERROR 전이 | 별도(overload 스테이지) |
 
-> 슬라이스1은 물리 센서·스위치 없이 **명령 트리거(START) → DELAY 타이머 시퀀스 완주 → work_cnt++**까지를 host-test + mon 트레이스로 검증한다.
+> 슬라이스1은 물리 트리거 없이 **FSM 코어가 `start` 주입 → DELAY 타이머 시퀀스 완주 → work_cnt++**까지를 **host-test로 검증**한다. HW에선 사이클이 휴면(READY) 상태로 idle, 기존 직접-초음파(패널/Modbus START)는 무회귀. 사이클 HW E2E는 슬라이스4(물리 SW_START + SOL_DN/센서)에서.
 
 ---
 
@@ -115,7 +115,7 @@ READY --start--> CYL1 --ldt1--> WELD --ldt2--> HOLD --ldt3--> CYL2 --ldt1--> REA
 
 1. **superloop**가 `app_weld_tick()`를 매 루프 호출(`app_reg_tick`/`app_modbus_tick` 옆).
 2. `app_weld_tick`이 **10ms 게이트**(`sys_tick_get_ms()` 델타) — 게이트 통과 시:
-   a. live config에서 `weld_in_t` 채움(run_mode, limit_delay_time1/2/3, output_power) + 보류 중인 start 트리거 반영.
+   a. live config에서 `weld_in_t` 채움(run_mode, limit_delay_time1/2/3, output_power) + 보류 중인 start 래치 반영(`app_weld_request_start()`가 세팅 — 슬라이스1엔 프로덕션 호출자 없음, 슬라이스4 물리 스위치가 합류; §5.3).
    b. `weld_fsm_step(&in, &out)` 호출(내부에서 temp_time 감소 + 상태 평가).
    c. `out` 이벤트 → 부수효과:
       - `out.sol_dn` 변화 → `app_weld_hook_sol_dn(on)` (슬라이스1 로그).
@@ -139,12 +139,16 @@ READY --start--> CYL1 --ldt1--> WELD --ldt2--> HOLD --ldt3--> CYL2 --ldt1--> REA
 - **on-time ceiling 블록에서 US_CYCLE 제외**: 현재 `(rs==US_TOUCH)||(rs==US_COMM)`에 US_CYCLE 미포함 → WELD 길이는 FSM의 `limit_delay_time2`가 지배(ceiling 무관). (자연히 제외됨 — 명시 주석 추가.)
 - peak 래치(last_power/last_amp), STATUS bit0(MB_STATUS_US), curr/max publish는 **무수정 재사용** — US_CYCLE 런도 동일하게 표시·미러됨.
 
-### 5.3 START 라우팅 (사용자 확정 2026-06-14)
-**물리 양수 시작스위치(SW_START1/2, 슬라이스4) · 패널 START(KEY_MULTI) · Modbus START 레지스터는 모두 동등한 사이클 트리거** — 셋 다 `app_weld_request_start()` 호출 → CYL1 시작. **모델 게이팅·hand 바이패스 없음**(직접-초음파 START는 사이클로 통합). samd20에선 물리 스위치만 사이클을 열고 comm/touch는 직접 초음파였으나, 통합 STM32 제품은 세 트리거를 동일 거동으로 함(사용자 결정).
-- 요청은 **one-shot 래치**: 글루가 보류 플래그를 세우고 다음 step 1회에만 `in.start=1`로 전달한 뒤 클리어(READY가 아니면 소실, samd20 매-10ms 레벨 재계산과 동일 효과; 큐잉 없음).
-- 슬라이스1은 **패널·Modbus 트리거를 와이어**(물리 SW_START1/2는 슬라이스4 — 같은 `app_weld_request_start()`로 합류).
-- **패널 V30 RUN**: press(data 3, 또는 IDLE 중 data 0) → `app_weld_request_start()`; release(data 4, 또는 비-IDLE data 0) → 무시(사이클 자가완주 — hold-to-run 의미 소멸). 기존 V30 swallow_start/hold 로직은 직접 경로 잔재라 press 트리거엔 미적용.
-- 기존 app_reg `US_TOUCH`/`US_COMM` 직접 게이트 경로는 **코드상 유지(휴면)** — 제거 리스크 회피. 사이클은 `US_CYCLE`만 사용.
+### 5.3 START 라우팅 (samd20 충실 — 2026-06-14 사용자 확정)
+samd20 충실 구조 확정: **weld 사이클은 물리 양수 시작스위치(SW_START1/2)로만 열린다** (`re_start1==0 && re_start2==0 && in_cycle==0` → `start_key_pressed`, main.c:1404-1466). **패널 START(KEY_MULTI)·Modbus START 레지스터는 직접 초음파(hand/comm) 경로이며 사이클이 아니다** — 현재 STM32 거동(`app_reg` US_TOUCH/US_COMM + on-time ceiling)을 **그대로 유지·무수정**.
+
+→ 초음파가 켜지는 경로 **두 가지가 공존**:
+1. **직접(hand/comm)**: 패널/Modbus START → `app_reg_command(START, US_TOUCH|US_COMM)` → 즉시 초음파 + on-time ceiling. **기존, 본 스테이지 무수정.**
+2. **사이클(press)**: 물리 SW_START1/2 → CYL1 → WELD(`app_reg_command(START, US_CYCLE)`) → HOLD → CYL2. **본 스테이지가 추가하는 머신.**
+
+- **사이클 트리거(물리 SW_START1/2)는 물리입력 → 슬라이스4(HW-gated)**. 따라서 **슬라이스1은 사이클 FSM 로직만 구축하고 프로덕션 트리거를 와이어하지 않는다**. 사이클 FSM은 host 테스트로 검증(코어에 `start=1` 직접 주입). 사이클 HW E2E는 슬라이스4에서 물리 스위치(+ `in_cycle` 재-arm, 양손 AND, 안전 abort)와 함께.
+- 글루는 `app_weld_request_start()` **공개 API**를 슬라이스1에 정의(슬라이스4 물리 스위치 폴/ISR이 호출할 합류점). one-shot 래치 시맨틱(§4.2: 보류 플래그 → 다음 step 1회 `in.start=1` → 클리어, READY 아니면 소실)은 슬라이스4를 위해 구현·유지하나 **슬라이스1엔 프로덕션 호출자 없음**(host 테스트는 코어를 직접 구동).
+- 패널/Modbus START·V30 quirk·swallow_start = **무수정**(직접 경로 잔재, 본 스테이지 무관).
 
 ### 5.4 SETUP 게이트
 글루는 LCD가 SETUP 페이지(`lcd_status`가 SETUP_* 군)일 때 step 호출을 건너뜀 — samd20 `sys_status!=SYS_SETUP` 재현. (LCD 상태 조회는 `app_lcd_state()->lcd_status`.)
@@ -171,7 +175,7 @@ STM32 슬라이스1:
 - `out.cycle_done` 엣지 → `cfg->work_cnt++` (app_lcd_cfg, u32).
 - FRAM 영속: 프로젝트 패턴 `app_config_save_all()` (Modbus work_cnt 리셋이 쓰는 동일 경로).
 - LCD: `app_lcd_set_work_cnt(cfg->work_cnt)` (기존 함수).
-- **Modbus 미러 자동**: `app_modbus.c mirror_live`가 매 tick `cfg->work_cnt`를 WORK_CNTH/L에 미러 → PC HMI가 FC03로 읽음(미해결 #7 종결).
+- **Modbus 미러 자동**: `app_modbus.c mirror_live`가 매 tick `cfg->work_cnt`를 WORK_CNTH/L에 미러 → PC HMI가 FC03로 읽음. 슬라이스1은 work_cnt 증가 **로직**을 확정(PC HMI "사이클 종료" 의미 = 설계 확정); **실제 런타임 증가는 슬라이스4 물리 트리거로 사이클이 완주해야** 발생.
 
 ---
 
@@ -200,15 +204,16 @@ STM32 슬라이스1:
 
 ## 10. 빌드/검증 게이트
 
-- 호스트: `env -u STM32_TOOLCHAIN cmake --build fw/build` 0-warning + `make -C fw/test test` 신규 스위트 PASS.
-- HW(보드): mon 트레이스로 START → 상태 시퀀스(READY→CYL1→WELD→HOLD→CYL2) 시간·work_cnt 증가 관측. ICON_RUN/STATUS bit0 = WELD 동안 set. (SOL_DN/OSC 실구동 없음 — 로그/상태만.)
+- **호스트(슬라이스1 주 게이트)**: `env -u STM32_TOOLCHAIN cmake --build fw/build` 0-warning + `make -C fw/test test` 신규 스위트 PASS. FSM 코어의 전 시퀀스·타이밍·comp_time·work_cnt 검증.
+- **HW(보드, 슬라이스1)**: 프로덕션 사이클 트리거가 없으므로(§5.3) **회귀 없음 확인 위주** — 플래시 부팅 정상, `app_weld_tick`이 READY 휴면, **기존 직접-초음파(패널/Modbus START → ICON_RUN/ceiling)가 무회귀**. (선택) 임시 디버그 트리거(`#ifdef WELD_DEBUG_TRIG`로 Modbus 미사용 reg 1개를 `app_weld_request_start()`에 임시 연결)로 mon 트레이스 사이클 시퀀스 스모크 가능 — 슬라이스1 머지 전 제거.
+- **사이클 HW E2E는 슬라이스4**(물리 SW_START + SOL_DN/센서 실구동).
 - 머지: `--no-ff` 로컬, 태그 `hw-revA_fw-stage-weld1`.
 
 ---
 
 ## 11. 미해결/HW 확인 항목
 
-1. ~~START 모드 게이팅~~ **해소(2026-06-14, 사용자 확정)**: 물리 SW_START1/2·패널·Modbus START 모두 동등하게 사이클 트리거. 모델 게이팅·hand 바이패스 없음(§5.3).
+1. ~~START 모드 게이팅~~ **해소(2026-06-14, 사용자 확정 — samd20 충실)**: weld 사이클은 **물리 SW_START1/2로만** 트리거. **패널/Modbus START는 직접 초음파(사이클 아님), 무수정**(§5.3). 두 초음파 경로(직접/사이클) 공존.
 2. **SOL_DN 극성**(PB5): active-HIGH/LOW — 슬라이스4 실구동 시 측정.
 3. **사이클 중 STOP/취소**: 패널/Modbus가 진행 중 사이클을 중단하는 경로가 필요한지(samd20엔 SYS_ERROR/ESTOP 경로뿐 — 정상 중단은 deferred). 슬라이스1은 사이클 완주 가정.
 4. **work_cnt FRAM 마모**: 매 사이클 save_all → FRAM(마모 무한 가정이나 확인). 사람 페이스라 무해.
