@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### 2026-06-14 e — weld-cycle 슬라이스2 (energy_ctrl) HW 회귀확인 PASS + main 머지 + 태그
+
+보드 연결 세션. 슬라이스2(energy 기반 WELD exit) 플래시 후 기존 경로 무회귀를 mbpoll RTU(SERIAL/addr=1/9600/EVEN)로 확인 → main 머지 + 태그.
+
+- **HW 회귀 PASS**: ① **직접-초음파 ceiling 무회귀**(START reg0x1B→STATUS bit0 545–609ms 밴드=ON_TIME 56×10ms, slice-1 동일) + LCD **ICON_RUN 켜짐→꺼짐 육안**(user, 3회) ② **§6 deviation 확인**: energy_ctrl=ON 직접런이 에너지 조기종료 없이 전 ceiling 완주(에너지-exit은 weld FSM 전용, app_reg 런 경로에 없음) ③ **work_cnt 0 유지**(weld FSM dormant=프로덕션 트리거 없음 구조증명; 직접 COMM런 미증가) ④ **Modbus FC03 config 미러 전건 일치**(OUT_POWER 55/ON_TIME 56/ENERGY 567/TIMEOVER 8/work_cnt 0/STATUS 0) + FC06(EN_ENERGY write+restore) 무회귀.
+- **#2 누산 점등 = 벤치 한계(6b 이연, 사용자 수용)**: **DISP_POWER=0**(실 초음파 무신호)→curr_power 0→curr_energy 0, 누산 관측 불가. 누산 로직은 host-test 검증; 절대 에너지는 6b/실 초음파 rig(spec §4.2/§11).
+- **머지** `d32d014`(`--no-ff`) + 태그 `hw-revA_fw-stage-weld2`(⚠ **host + HW-regression verified** — energy 누산/exit E2E는 6b/실 rig 필요). feature 브랜치 삭제. 머지 후 0-warning(우리 코드, text 53776B/FLASH 41.46%)·host 4스위트 PASS.
+- 보드 종료 = SERIAL/addr=1/9600/EVEN, OUT_POWER 55, EN_ENERGY 0(복원), ether_ip .70(무변경).
+- ⚠ **레지스터 정정**: DISP_ENERGY = wire **0x05**(mbpoll `-r 6`), **0x16 아님**(0x16=EN_SAFTY). slice2 d블록/RESUME/NEXT_STEPS의 "0x16" 오기 정정.
+- **다음 = 슬라이스3(multi_ctrl, HW 불요)** 또는 HW-gated(B-SEAM OSC·6b cal·SEEK/RESET·overload·슬라이스4).
+
 ### 2026-06-14 d — weld-cycle 슬라이스2 (energy_ctrl) CODE-COMPLETE (host+build verified, 미머지)
 
 samd20 energy 기반 WELD 종료(`energy_ctrl && curr_energy>=limit_energy`) 포팅. `superpowers:brainstorming → spec → writing-plans → subagent-driven`(plan 5 Task, Task별 fresh subagent + 2-stage 리뷰[spec 준수 + cpp-reviewer]). 브랜치 `feat/stage-weld-cycle-slice2-energy` **미머지**(HW 회귀확인=보드 게이트, spec §10). 빌드 **0-warning(우리 코드)**(FLASH 41.46%/text 53776B; vendor wiznet socket.h 3경고는 stage C부터 기존, slice2 무관), 호스트 **4스위트 PASS**(weld_fsm 12함수, reg_calc 에너지 헬퍼 포함).
