@@ -212,7 +212,10 @@ uint32_t reg_energy_from_acc(uint32_t acc_energy);
 1. **누산 divisor(`REG_ENERGY_DIV=250`) 절대 보정** — samd20 1ms·/500 가정의 2ms·/250 보정. 실제 samd20 ADC sample period + STM32 publish 실측 cadence + curr_power 물리단위(6b)로 미세조정. host-test는 구조만, 절대 용접 에너지 일치는 실 초음파 rig/스코프(6b 동반).
 2. **abort 경로 = 즉시 READY vs CYL2 경유** — 사용자 확정 "즉시 상승+중단"(즉시 SOL OFF + READY). 기계적으로 제어된 상승(CYL2 ldt1 경유)이 필요하면 재검토. samd20 에러 abort는 사이클 경로 안 거침(에러상태).
 3. **fault 후 재-arm** — abort 후 READY에서 다음 start가 정상 수용되는지(슬라이스1 start 시맨틱 그대로 — fault는 상태 잔존 없음, READY 복귀로 충분). 슬라이스4 물리 트리거에서 재확인.
-4. **energy_ctrl 동적 변경 mid-WELD** — WELD 중 패널/Modbus가 energy_ctrl 토글 시 거동(글루가 매 tick 주입 → 즉시 반영). samd20도 라이브 변수라 동형. 경계 케이스이나 host-test로 토글 시점 검증 가능(선택).
+4. **energy_ctrl 동적 변경 mid-WELD** — WELD 중 패널/Modbus가 energy_ctrl 토글 시 거동(글루가 매 tick 주입 → 즉시 반영). `s_temp_time`은 WELD 진입 시 1회 래치되므로: **off 토글** = 백스톱-크기 카운터(최대 10s)까지 기다린 뒤 정상 HOLD(무해); **on 토글** = ldt2-크기 카운터가 0될 때 에너지 미충족이면 **spurious fault abort**(정상 완주할 weld가 fault). 슬라이스2는 fault=mon-log + 프로덕션 트리거 없음이라 무해하나, **슬라이스4 전 `energy_ctrl`을 WELD 진입 시 FSM에 래치**(comp_time/temp_time 옆)하거나 "mid-cycle 토글 금지"를 LCD/Modbus가 보장할 것 (cpp-review Task4 LOW-1).
+5. **limit_energy=0 즉시 종료** (cpp-review 최종 MEDIUM) — `energy_ctrl=1 && limit_energy=0`이면 2번째 WELD tick에서 `curr_energy(0)>=0` → 즉시 정상 exit(zero-duration weld, work_cnt++). **samd20 충실**(`>=`, 가드 없음, main.c:5272). `weld_backstop_ticks`의 0→1s floor와 비대칭이나, M1(limit_out_time=0)은 backstop을 깨 *모든* weld를 fault로 만드는 반면 limit_energy=0은 samd20-동형 benign degenerate라 **FSM floor 미추가, 입력 검증은 config 계층 이연**(향후 config-validation 슬라이스에서 limit_energy≥1 / limit_out_time≥1 / output_power<50 클램프 일괄). 비차단.
+6. **acc_energy uint32 wrap (display-only)** (cpp-review Task3 LOW-1) — ceiling-off 직접런(limit_on_time=0) 최대전력 지속 시 ~24분에 acc_energy wrap → curr_energy 표시값 순환. **로직 무영향**(에너지-exit는 US_CYCLE FSM 전용, 직접런은 표시만). samd20도 가드 없음(충실). 다분 연속 직접런이 실제 운용이면 포화 처리 고려.
+7. **DISP_ENERGY/VAR_ENERGY uint16 truncation** (cpp-review Task1/3 NOTE) — Modbus reg 0x16·LCD VAR_ENERGY는 `(uint16_t)curr_energy`로 미러(limit_energy clamp 100000 > 65535 → 표시 wrap). **samd20 충실**(동일 캐스트), **EXIT는 full uint32 비교**라 표시만. 무수정.
 
 ---
 

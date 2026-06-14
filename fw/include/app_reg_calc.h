@@ -32,3 +32,10 @@ uint16_t reg_ramp_level(uint16_t counter);
  * guard (main.c:5223); computing live from the run-start stamp is equivalent
  * and needs no per-200ms cadence state. */
 uint8_t reg_on_time_200m(uint32_t run_elapsed_ms);
+
+/* 누산 전력 -> 표시 에너지. samd20 main.c:436 (curr_energy = acc_energy/500)
+ * 구조 포팅. STM32는 curr_power를 REG_TICK_MS(=2ms) publish gate에서 누산하므로
+ * divisor를 500ms/2ms=250으로 두어 samd20의 1ms·/500 energy-per-second를 재현
+ * (spec §4.2). ⚠ REG_ENERGY_DIV는 app_reg.c의 REG_TICK_MS=2ms 누산 cadence와
+ * 결합 — REG_TICK_MS 변경 시 divisor도 재산정. 절대 보정은 6b/HW. */
+uint32_t reg_energy_from_acc(uint32_t acc_energy);

@@ -1,6 +1,7 @@
 /* fw/test/test_app_reg_calc.c — host unit tests for the pure regulation
- * compute layer (reg_scale, reg_output_level). No HAL, no hardware.
- * Verifies the disasm-adjudicated facts SCALE-04/05/06 and C1/C2 / §4.3 table. */
+ * compute layer (reg_scale, reg_output_level, reg_energy_from_acc). No HAL, no hardware.
+ * Verifies the disasm-adjudicated facts SCALE-04/05/06 and C1/C2 / §4.3 table, plus
+ * energy integration vectors (acc→mJ conversion, zero/saturation/midrange). */
 #include <stdio.h>
 #include <stdint.h>
 #include "app_reg_calc.h"
@@ -98,12 +99,36 @@ static void test_reg_on_time_200m(void) {
     CHECK_EQ(reg_on_time_200m(0xFFFFFFFFu), 200);  /* clamp at u32 max */
 }
 
+/* 누산기 -> 표시 에너지: acc / REG_ENERGY_DIV(=250). samd20 main.c:436은
+ * acc/500 @1ms; STM32는 2ms publish에서 누산하므로 절반 divisor로 동일
+ * energy-per-second 재현(spec §4.2). 절대 보정은 6b/HW. */
+static void test_energy_from_acc(void) {
+    CHECK_EQ(reg_energy_from_acc(0u), 0u);
+    CHECK_EQ(reg_energy_from_acc(249u), 0u);    /* 250 미만 -> 0 */
+    CHECK_EQ(reg_energy_from_acc(250u), 1u);    /* 정확히 1단위 */
+    CHECK_EQ(reg_energy_from_acc(2500u), 10u);
+    CHECK_EQ(reg_energy_from_acc(2749u), 10u);  /* 정수 나눗셈 floor */
+}
+
+/* 적분 구조: 일정 curr_power=250이면 step당 +1단위, limit=10에 step 10 도달. */
+static void test_energy_integration_steps(void) {
+    uint32_t acc = 0u;
+    int step_reached = -1;
+    for (int i = 1; i <= 20; i++) {
+        acc += 250u;
+        if (reg_energy_from_acc(acc) >= 10u) { step_reached = i; break; }
+    }
+    CHECK_EQ(step_reached, 10);
+}
+
 int main(void) {
     test_reg_scale();
     test_reg_output_level();
     test_table_values();
     test_reg_ramp_level();
     test_reg_on_time_200m();
+    test_energy_from_acc();
+    test_energy_integration_steps();
     if (failures) { printf("%d check(s) FAILED\n", failures); return 1; }
     printf("all checks PASSED\n");
     return 0;

@@ -51,3 +51,11 @@ uint8_t reg_on_time_200m(uint32_t run_elapsed_ms)
     uint32_t units = run_elapsed_ms / 200u;
     return (units > 200u) ? 200u : (uint8_t)units;
 }
+
+/* spec §4.2: 500ms 에너지-단위 윈도우 / REG_TICK_MS(2ms) = 250 샘플. */
+#define REG_ENERGY_DIV  250u
+
+uint32_t reg_energy_from_acc(uint32_t acc_energy)
+{
+    return acc_energy / REG_ENERGY_DIV;
+}

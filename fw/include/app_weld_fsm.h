@@ -29,10 +29,14 @@ typedef struct {
     uint16_t limit_delay_time2;  /* WELD duration (x10 ms) */
     uint16_t limit_delay_time3;  /* HOLD duration (x10 ms) */
     uint8_t  output_power;       /* amplitude base, 50..100 (clamped upstream) */
+    uint8_t  energy_ctrl;        /* 1 = WELD 종료를 에너지로 (시간-exit 스킵) */
+    uint32_t curr_energy;        /* app_reg 누산 라이브 값 (글루가 주입) */
+    uint32_t limit_energy;       /* 에너지 목표 (cfg; 외부 계약 Modbus reg 0x08) */
+    uint16_t limit_out_time;     /* backstop 한계 (cfg; 초 단위, samd20 *10@100ms) */
 } weld_in_t;
 
-/* step output — edge flags (weld_start/weld_stop/cycle_done) are 1 for exactly
- * the one step they fire; sol_dn/run_status are levels. */
+/* step output — edge flags (weld_start/weld_stop/weld_fault/cycle_done) are 1
+ * for exactly the one step they fire; sol_dn/run_status are levels. */
 typedef struct {
     uint8_t  run_status;   /* current state (WELD_*) */
     uint8_t  sol_dn;       /* solenoid-down request level (1=ON, 0=OFF) */
@@ -40,6 +44,7 @@ typedef struct {
     uint8_t  weld_stop;    /* 1 = WELD exit edge: glue does US_CYCLE RUN_RELEASE */
     uint8_t  amplitude;    /* valid when weld_start: comp_time-corrected DAC 0..127 */
     uint8_t  cycle_done;   /* 1 = CYL2 completion edge: glue does work_cnt++ */
+    uint8_t  weld_fault;   /* 1 = WELD backstop abort 엣지: 글루가 fault hook 호출 */
 } weld_out_t;
 
 void weld_fsm_init(void);                                 /* reset to READY (boot) */

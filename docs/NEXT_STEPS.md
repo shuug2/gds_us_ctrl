@@ -36,7 +36,7 @@
 - **6b signal calibration** — `>>2` 정규화 + 2.56V↔3.3V 도메인 실측 보정, ch0/scaled 물리단위, ADC offset·gain, OSC 비트매핑·극성
 - **SEEK/RESET 효과** — RESET→SEEK 500ms 자동 체인 + SEEK 자동해제(분석 §5)
 - **overload 보호** — CON_OVLD 입력 + 보호 동작
-- **weld-cycle 머신** — 슬라이스1(DELAY FSM) **main 머지 완료**(`hw-revA_fw-stage-weld1`, host + HW-regression verified; §1.1 표). 남은 슬라이스(미착수): energy(2)/multi(3)/**TRIGGER+물리 SW_START+센서+실 SOL_DN GPIO+안전 abort(4)**. 슬라이스2·3은 HW 불요(설계·코드·host-test 가능), 슬라이스4는 HW-gated(물리 트리거+센서+실 SOL_DN). ⚠ **슬라이스4 must-fix(cpp-review LOW-1)**: `weld_amplitude`의 `output_power<50` 진폭 언더플로 — Modbus는 `app_modbus.c` [50,100] 클램프하나 **LCD `app_lcd_input.c:752` `LV_OUT_POWER`는 클램프 없음** → 물리 트리거+실 I2C_POT 연결 시 HIGH. 슬라이스4 진입 시 LCD 입력에 `if(data16<50u) data16=50u;` 미러(기존 직접 set_pot도 동일 pre-existing 노출). ⚠ M1(글루 tick `=now` 누적슬립): 슬라이스4 실 공압 dwell엔 `app_weld.c`를 `s_prev_ms += WELD_TICK_MS`로(코드 주석 있음).
+- **weld-cycle 머신** — 슬라이스1(DELAY FSM) **main 머지 완료**(`hw-revA_fw-stage-weld1`, host + HW-regression verified; §1.1 표). 남은 슬라이스: **energy(2) = CODE-COMPLETE(2026-06-14 d, host+build verified, 브랜치 `feat/stage-weld-cycle-slice2-energy` 미머지=보드 회귀확인 대기 — §2.2)** / multi(3) 미착수 / **TRIGGER+물리 SW_START+센서+실 SOL_DN GPIO+안전 abort(4)** 미착수. 슬라이스3은 HW 불요(설계·코드·host-test 가능), 슬라이스4는 HW-gated(물리 트리거+센서+실 SOL_DN). ⚠ **슬라이스4 must-fix(cpp-review LOW-1)**: `weld_amplitude`의 `output_power<50` 진폭 언더플로 — Modbus는 `app_modbus.c` [50,100] 클램프하나 **LCD `app_lcd_input.c:752` `LV_OUT_POWER`는 클램프 없음** → 물리 트리거+실 I2C_POT 연결 시 HIGH. 슬라이스4 진입 시 LCD 입력에 `if(data16<50u) data16=50u;` 미러(기존 직접 set_pot도 동일 pre-existing 노출). ⚠ M1(글루 tick `=now` 누적슬립): 슬라이스4 실 공압 dwell엔 `app_weld.c`를 `s_prev_ms += WELD_TICK_MS`로(코드 주석 있음).
 
 **설계상 이연(slice 2)**: DHCP 핫플러그(링크 드롭 후 재획득 — 현재 LINKWAIT→UP 단방향), SERIAL boot-skip.
 
@@ -60,11 +60,10 @@ make -C fw/test test                                # 4 스위트 PASS 기대 (r
 
 ### 2.2 다음 작업 후보 (사용자 선택)
 
-- **★ 다음 세션 = weld 슬라이스2 (energy_ctrl) — `superpowers:brainstorming`부터** (HW 불필요, host-test 가능).
-  - **범위 씨앗**: WELD 종료를 시간(`limit_delay_time2`, 슬라이스1) 대신 **에너지 도달**(`energy_ctrl==true`)로.
-  - **samd20 참조**: 에너지 누산 `acc_energy += curr_power; curr_energy = acc_energy/500`(1ms마다) = `ref/samd20/main.c:434-436`; WELD 진입 시 누산 리셋 `main.c:1554-1555`; 시간-exit가 `(multi_ctrl!=true)&&(energy_ctrl!=true)`로 게이트 = `main.c:1560`(→ energy_ctrl면 시간-exit 스킵, 에너지 도달로 종료; 정확한 정지 비교 지점은 brainstorming서 측정 경로 추적).
-  - **STM32 현황**: energy_ctrl/limit_energy **config는 이미 포팅됨**(LCD `app_lcd_input.c:758,770`·`app_lcd_render.c:66-90`, Modbus reg ENERGY 0x08 / EN_ENERGY 0x14); **누산(acc_energy/curr_energy)·에너지-기반 WELD exit는 미포팅 = 슬라이스2 범위**.
-  - **결정점 후보**: 누산 위치(app_reg vs weld_fsm 주입), curr_power source, FSM WELD에 에너지-exit 분기 추가(현 `weld_fsm_step` WELD는 `temp_time==0` 시간-exit만), host-test(에너지=시간×전력 결정적이라 HW 불요).
+- **★ 다음 세션 = weld 슬라이스2 (energy_ctrl) HW 회귀확인 + 머지** (보드 게이트). 슬라이스2는 **CODE-COMPLETE**(2026-06-14 d, host+build verified, 미머지) — 브랜치 `feat/stage-weld-cycle-slice2-energy` 체크아웃 상태 유지.
+  - **무엇**: WELD 종료를 시간(`limit_delay_time2`) 대신 **에너지 도달**(`energy_ctrl && curr_energy>=limit_energy`)로. 아키텍처 Option A(누산=app_reg, 순수 FSM은 curr_energy 주입받아 비교만) + backstop abort(limit_out_time 미도달→`weld_fault`+READY). 산출물 `app_reg_calc.reg_energy_from_acc` / `app_weld_fsm` WELD 분기 / `app_reg` 누산 / `app_weld` 글루. host 4스위트 PASS(weld_fsm 12), 빌드 0-warning(우리 코드).
+  - **보드 세션 체크**: ① 직접-초음파(START→~560ms ceiling + ICON_RUN) 무회귀 ② **DISP_ENERGY(Modbus 0x16)/VAR_ENERGY 누산 점등**(energy_ctrl=ON 직접런 0→증가→stop 시 last_energy) ③ energy_ctrl=ON 직접런이 **ceiling 종료**(에너지 조기종료 없음 = spec §6 deviation 확인) → `--no-ff` 머지 + 태그 `hw-revA_fw-stage-weld2`. (사이클 자체 E2E는 슬라이스4 물리 트리거.)
+  - 상세 = RESUME.md d블록, spec/plan = `docs/superpowers/{specs,plans}/2026-06-14-stage-weld-cycle-slice2-energy*.md`.
 - **weld 슬라이스3 (multi_ctrl)** — 다단 진폭 스테핑(`multi_ctrl_stage`, limit_mo_*); 슬라이스2 후.
 - **기타 신규(HW 불필요)** — SEEK·RESET 효과 / overload 보호. `brainstorming`→spec→plan→구현.
 - **HW-gated** — weld 슬라이스4(TRIGGER+물리 SW_START+실 SOL_DN/센서+안전abort + LOW-1 LCD 클램프) / B-SEAM OSC 물리 구동 + 6b calibration(실 초음파 rig/스코프).
