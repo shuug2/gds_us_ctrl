@@ -105,7 +105,10 @@ void weld_fsm_step(const weld_in_t *in, weld_out_t *out)
         break;
 
     default:
+        /* unreachable in normal operation (s_run_status is only ever a WELD_*
+         * value); fail-safe on fault — drop the solenoid (cpp-review LOW-2). */
         s_run_status = WELD_READY;
+        s_sol_dn     = 0u;
         break;
     }
 
