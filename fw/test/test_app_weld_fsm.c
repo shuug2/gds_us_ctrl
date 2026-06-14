@@ -171,6 +171,89 @@ static void test_cycle_done_single_edge(void)
     CHECK_EQ(extra, 0);
 }
 
+/* energy-exit 정상: energy_ctrl=1, WELD step마다 curr_energy 증가 주입 ->
+ * curr_energy>=limit_energy에서 정확히 1회 weld_stop+HOLD, ldt2(=100)와 무관. */
+static void test_energy_exit_normal(void)
+{
+    weld_fsm_init();
+    weld_in_t in = { .start=1u, .run_mode=0u,
+                     .limit_delay_time1=2u, .limit_delay_time2=100u,
+                     .limit_delay_time3=2u, .output_power=100u,
+                     .energy_ctrl=1u, .curr_energy=0u, .limit_energy=50u,
+                     .limit_out_time=10u };
+    int weld_stop=0, weld_fault=0, cycle_done=0, weld_steps=0;
+    for (int i = 0; i < 2000; i++) {
+        weld_out_t out;
+        weld_fsm_step(&in, &out);
+        in.start = 0u;
+        if (out.run_status == WELD_WELD) { weld_steps++; in.curr_energy += 10u; }
+        if (out.weld_stop)  weld_stop++;
+        if (out.weld_fault) weld_fault++;
+        if (out.cycle_done) { cycle_done++; break; }
+    }
+    CHECK_EQ(weld_stop, 1);       /* 에너지 도달 -> 1회 정상 종료 */
+    CHECK_EQ(weld_fault, 0);      /* fault 아님 */
+    CHECK_EQ(cycle_done, 1);      /* HOLD->CYL2->READY 정상 완주 -> work_cnt++ */
+    if (weld_steps >= 100) {      /* ldt2=100; 에너지-exit면 그보다 훨씬 짧아야 */
+        printf("FAIL energy exit took %d weld steps (>= ldt2=100)\n", weld_steps);
+        failures++;
+    }
+}
+
+/* 시간-exit 스킵: energy_ctrl=1, ldt2=2(작음), 에너지 미도달 -> 50 step 후에도
+ * WELD 유지(ldt2 시간-exit가 안 일어남), fault/stop 없음. */
+static void test_time_exit_skipped_when_energy(void)
+{
+    weld_fsm_init();
+    weld_in_t in = { .start=1u, .run_mode=0u,
+                     .limit_delay_time1=2u, .limit_delay_time2=2u,
+                     .limit_delay_time3=2u, .output_power=100u,
+                     .energy_ctrl=1u, .curr_energy=0u, .limit_energy=1000u,
+                     .limit_out_time=10u };   /* backstop=1000 tick, 50 step 내 미만료 */
+    int weld_stop=0, weld_fault=0; uint8_t status=0xffu;
+    for (int i = 0; i < 50; i++) {
+        weld_out_t out;
+        weld_fsm_step(&in, &out);
+        in.start = 0u;
+        if (out.weld_stop)  weld_stop++;
+        if (out.weld_fault) weld_fault++;
+        status = out.run_status;
+    }
+    CHECK_EQ(weld_stop, 0);          /* ldt2=2 시간-exit 안 일어남 (스킵) */
+    CHECK_EQ(weld_fault, 0);
+    CHECK_EQ(status, WELD_WELD);     /* 여전히 용접 중 */
+}
+
+/* backstop abort: energy_ctrl=1, 에너지 영원히 미도달, limit_out_time=1초
+ * (=100 tick) -> abort. weld_fault+weld_stop 각 1회, cycle_done 0(work_cnt 미발생),
+ * READY 복귀, sol_dn OFF. */
+static void test_backstop_abort(void)
+{
+    weld_fsm_init();
+    weld_in_t in = { .start=1u, .run_mode=0u,
+                     .limit_delay_time1=2u, .limit_delay_time2=5u,
+                     .limit_delay_time3=2u, .output_power=100u,
+                     .energy_ctrl=1u, .curr_energy=0u, .limit_energy=1000u,
+                     .limit_out_time=1u };
+    int weld_stop=0, weld_fault=0, cycle_done=0;
+    uint8_t final_status=0xffu, final_sol=1u;
+    for (int i = 0; i < 300; i++) {
+        weld_out_t out;
+        weld_fsm_step(&in, &out);
+        in.start = 0u;
+        if (out.weld_stop)  weld_stop++;
+        if (out.weld_fault) weld_fault++;
+        if (out.cycle_done) cycle_done++;
+        final_status = out.run_status;
+        final_sol    = out.sol_dn;
+    }
+    CHECK_EQ(weld_fault, 1);          /* backstop abort 1회 */
+    CHECK_EQ(weld_stop, 1);           /* abort도 US 정지 */
+    CHECK_EQ(cycle_done, 0);          /* work_cnt++ 안 함 */
+    CHECK_EQ(final_status, WELD_READY);
+    CHECK_EQ(final_sol, 0);           /* 실린더 상승 */
+}
+
 int main(void)
 {
     test_init_ready();
@@ -181,6 +264,9 @@ int main(void)
     test_amplitude_underflow_guard();
     test_start_ignored_outside_ready();
     test_cycle_done_single_edge();
+    test_energy_exit_normal();
+    test_time_exit_skipped_when_energy();
+    test_backstop_abort();
     if (failures) { printf("test_app_weld_fsm: %d FAILED\n", failures); return 1; }
     printf("test_app_weld_fsm: all passed\n");
     return 0;

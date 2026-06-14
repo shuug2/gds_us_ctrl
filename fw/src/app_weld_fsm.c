@@ -22,6 +22,15 @@ uint8_t weld_fsm_status(void)
     return s_run_status;
 }
 
+/* limit_out_time(초) -> FSM tick(10ms/tick) 수. samd20 backstop은
+ * us_on_time(100ms 단위) >= limit_out_time*10, 즉 limit_out_time초. 10ms tick에선
+ * limit_out_time*100 (limit_out_time<=10 -> 최대 1000 tick, uint16 OK). spec §3.2. */
+#define WELD_TICKS_PER_SEC  100u
+static uint16_t weld_backstop_ticks(uint16_t limit_out_time_sec)
+{
+    return (uint16_t)(limit_out_time_sec * WELD_TICKS_PER_SEC);
+}
+
 /* slice-1 진폭: base = ((op-50)*255)/100 (op 50..100 -> 0..127); comp_time<7
  * (짧은 용접)이면 (7-comp_time)*10 감쇠. samd20은 uint8_t로 언더플로(저전력+
  * 짧은용접 -> 큰 진폭) — 혼합 입장상 0 클램프로 수정 (spec §8). */
@@ -60,12 +69,17 @@ void weld_fsm_step(const weld_in_t *in, weld_out_t *out)
         } else if (s_temp_time == 0u) {
             s_f_status_start = 0u;
             s_run_status     = WELD_WELD;
-            if (in->limit_delay_time2 > 6u) {           /* samd20 main.c:1504 */
-                s_temp_time = in->limit_delay_time2;
-                s_comp_time = WELD_COMP_FULL;
+            /* comp_time은 항상 ldt2에서 유도 (진폭 보정; energy 모드에서도 적용 —
+             * samd20 main.c:1546-1547은 energy_ctrl 무관). slice2 §3.2. */
+            s_comp_time = (in->limit_delay_time2 > 6u) ? WELD_COMP_FULL
+                                                       : in->limit_delay_time2;
+            /* temp_time: energy 모드 -> backstop 카운트다운(limit_out_time초 ×100
+             * tick), 시간 모드 -> 기존 ldt2/7 (samd20 main.c:1504). */
+            if (in->energy_ctrl) {
+                s_temp_time = weld_backstop_ticks(in->limit_out_time);
             } else {
-                s_comp_time = in->limit_delay_time2;
-                s_temp_time = WELD_COMP_FULL;
+                s_temp_time = (in->limit_delay_time2 > 6u) ? in->limit_delay_time2
+                                                           : WELD_COMP_FULL;
             }
         }
         break;
@@ -75,8 +89,24 @@ void weld_fsm_step(const weld_in_t *in, weld_out_t *out)
             s_f_status_start = 1u;
             out->amplitude   = weld_amplitude(in->output_power, s_comp_time);
             out->weld_start  = 1u;       /* glue: US_CYCLE START + pot write */
+        } else if (in->energy_ctrl) {
+            /* energy 모드: 에너지 도달 -> 정상 종료(samd20 5272); 미도달 +
+             * backstop 만료 -> abort(samd20 5288, 에러 표시는 이연). spec §3.3. */
+            if (in->curr_energy >= in->limit_energy) {
+                out->weld_stop   = 1u;
+                s_f_status_start = 0u;
+                s_run_status     = WELD_HOLD;
+                s_temp_time      = in->limit_delay_time3;
+            } else if (s_temp_time == 0u) {
+                out->weld_stop   = 1u;   /* abort도 US 정지 */
+                out->weld_fault  = 1u;   /* glue: fault hook (mon; 후속 SYS_ERROR) */
+                s_sol_dn         = 0u;   /* 실린더 즉시 상승 */
+                s_f_status_start = 0u;
+                s_run_status     = WELD_READY;   /* CYL2 미경유, work_cnt++ 없음 */
+            }
         } else if (s_temp_time == 0u) {
-            out->weld_stop   = 1u;       /* glue: US_CYCLE RUN_RELEASE */
+            /* slice-1 시간-exit (energy_ctrl off) — 무회귀. */
+            out->weld_stop   = 1u;
             s_f_status_start = 0u;
             s_run_status     = WELD_HOLD;
             s_temp_time      = in->limit_delay_time3;
