@@ -41,6 +41,11 @@ void app_weld_hook_set_amp(uint8_t dac)
     mon_printf("[weld] set_amp dac=%u\r\n", (unsigned)dac);
 }
 
+void app_weld_hook_fault(void)
+{
+    mon_printf("[weld] fault: energy timeout (backstop abort)\r\n");
+}
+
 void app_weld_tick(void)
 {
     uint32_t now = sys_tick_get_ms();
@@ -62,6 +67,10 @@ void app_weld_tick(void)
         .limit_delay_time2 = cfg->limit_delay_time2,
         .limit_delay_time3 = cfg->limit_delay_time3,
         .output_power      = cfg->output_power,
+        .energy_ctrl       = cfg->energy_ctrl ? 1u : 0u,
+        .limit_energy      = cfg->limit_energy,
+        .limit_out_time    = cfg->limit_out_time,
+        .curr_energy       = app_reg_measure()->curr_energy,
     };
     /* one-shot consumed: cleared every tick after the copy above, regardless of
      * whether the core acted on it. The core takes `start` ONLY in WELD_READY,
@@ -83,6 +92,9 @@ void app_weld_tick(void)
     }
     if (out.weld_stop) {
         app_reg_command(US_CMD_RUN_RELEASE, (uint8_t)US_CYCLE);
+    }
+    if (out.weld_fault) {
+        app_weld_hook_fault();
     }
     if (out.cycle_done) {
         cfg->work_cnt++;

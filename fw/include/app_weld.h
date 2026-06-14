@@ -19,3 +19,8 @@ void app_weld_hook_sol_dn(bool on);
  * B-SEAM: real I2C_POT. Do NOT route through app_lcd_hook_set_pot — that one
  * takes output_power and re-converts (x-50)*255/100 = double-convert bug. */
 void app_weld_hook_set_amp(uint8_t dac);
+
+/* WELD backstop abort hook — energy_ctrl 모드에서 limit_out_time 안에 에너지
+ * 미도달 시 1회. slice2: mon 로그만(저에너지=불량 용접 표시). 후속 에러 슬라이스가
+ * SYS_ERROR | ERR_OVTIME + LCD 에러 표시로 배선. spec §7. */
+void app_weld_hook_fault(void);
