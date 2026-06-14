@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### 2026-06-14 d — weld-cycle 슬라이스2 (energy_ctrl) CODE-COMPLETE (host+build verified, 미머지)
+
+samd20 energy 기반 WELD 종료(`energy_ctrl && curr_energy>=limit_energy`) 포팅. `superpowers:brainstorming → spec → writing-plans → subagent-driven`(plan 5 Task, Task별 fresh subagent + 2-stage 리뷰[spec 준수 + cpp-reviewer]). 브랜치 `feat/stage-weld-cycle-slice2-energy` **미머지**(HW 회귀확인=보드 게이트, spec §10). 빌드 **0-warning(우리 코드)**(FLASH 41.46%/text 53776B; vendor wiznet socket.h 3경고는 stage C부터 기존, slice2 무관), 호스트 **4스위트 PASS**(weld_fsm 12함수, reg_calc 에너지 헬퍼 포함).
+
+- **아키텍처 Option A**(advisor): 누산 acc_energy/curr_energy는 `app_reg`(samd20 ADC-ISR 동형), WELD 진입 리셋은 `US_CMD_START` 핸들러 1줄(run-start 엣지=공짜). 순수 FSM은 curr_energy 주입받아 비교만.
+- **산출물**: `app_reg_calc.reg_energy_from_acc(acc/250)` 순수 헬퍼(host-test; 2ms publish가 samd20 1ms·/500 재현, 절대보정 6b/HW) / `app_weld_fsm` WELD energy-exit + backstop abort(limit_out_time×100 tick, floor 1s → US정지+실린더상승+READY+work_cnt 미증가+`weld_fault` 엣지) + comp_time/temp_time 디커플 / `app_reg` 누산+last_energy 래치(START 리셋·RUN_RELEASE·ceiling) / `app_weld` 글루 4필드+curr_energy 주입 + fault hook(mon).
+- **커밋 6**: `bc43ed5`(헬퍼+test)→`260ed00`(test 헤더 LOW-2)→`6a48931`(FSM)→`a387624`(M1 backstop floor+회귀test)→`8cdd651`(app_reg 누산+LOW-1 cross-ref)→`7825ab5`(글루+fault hook).
+- **리뷰**: Task별 spec✅ + cpp-reviewer APPROVED-WITH-COMMENTS(0 Crit/High), 최종 통합 APPROVED/READY-pending-HW. 수정: M1(limit_out_time=0 즉시-fault → floor 1s). 이연(spec §11): limit_energy=0 즉시-exit(samd20 충실, config-validation 슬라이스)·mid-cycle energy_ctrl 토글(슬라이스4 래치)·acc 24분 wrap/uint16 truncation(display-only, samd20 충실).
+- **범위=weld-only**(사용자 확정): energy_ctrl=ON 직접 START(TOUCH/COMM)는 에너지 자동정지 안 함=on-time ceiling 종료(samd20 5270 일부 deviation, spec §6).
+- **다음 = 보드 세션**(이 브랜치): 직접-초음파 무회귀 + DISP_ENERGY(Modbus 0x16)/VAR_ENERGY 누산 점등 + energy_ctrl=ON 직접런 ceiling 종료(deviation) 확인 → `--no-ff` 머지 + 태그 `hw-revA_fw-stage-weld2`.
+
 ### 2026-06-14 c — weld-cycle 슬라이스1 HW 회귀확인 PASS + main 머지 + 태그
 
 보드 연결 세션(ST-LINK V3 플래시, USART6=Modbus 9600 8E1 addr 1 = 보드 벤치 기본). 슬라이스1 dormant `app_weld_tick` 삽입의 **기존 경로 무회귀**를 실보드로 확인 후 `finishing-a-development-branch`로 main 머지 + 태그.
