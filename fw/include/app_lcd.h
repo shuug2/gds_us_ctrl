@@ -64,7 +64,8 @@ typedef enum {
  * publishes the owning source (US_TOUCH = panel, US_COMM = Modbus, Stage C)
  * while a run is active, US_IDLE when stopped. REMOTE (physical switch / IPC)
  * is reserved for a later slice. disp gate = (us_run_status != US_IDLE). */
-enum { US_IDLE = 0, US_REMOTE = 1, US_TOUCH = 2, US_COMM = 3 };
+enum { US_IDLE = 0, US_REMOTE = 1, US_TOUCH = 2, US_COMM = 3, US_CYCLE = 4 };
+/* US_CYCLE = weld-cycle WELD 단계가 게이트를 구동하는 소스 — app_reg_command는 src를 그대로 us_run_status에 저장하므로 별도 분기 불필요. */
 
 /* ether-input field selector (LV_ETHER_KEY 'I'/'M'/'G'); NONE = idle. */
 #define LCD_ETHER_INPUT_NONE  0xFFu
