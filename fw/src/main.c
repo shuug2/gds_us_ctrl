@@ -3,6 +3,7 @@
 #include "clock.h"
 #include "app.h"
 #include "app_reg.h"
+#include "app_weld.h"
 #include "app_modbus.h"
 #include "app_eth.h"
 #include "usart1.h"
@@ -25,6 +26,7 @@ int main(void) {
     dgus_init();       /* Stage A: DGUS 프로토콜 레이어 상태 클리어 */
     app_init();        /* sys_tick start, mon banner */
     app_reg_init();    /* Stage D: ADC1 + regulation state (needs sys_tick up) */
+    app_weld_init();   /* Stage Weld-Cycle: FSM reset (needs sys_tick up) */
     app_modbus_init(); /* Stage C: USART6 occupancy decision (needs cfg loaded by app_init) */
     app_eth_init();    /* Stage C slice 2a/2b: W5500 bring-up (non-fatal). TCP
                         * server runs from app_modbus_tick() when comm_mode is

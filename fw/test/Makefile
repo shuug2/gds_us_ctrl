@@ -6,12 +6,14 @@ CFLAGS := -std=c11 -Wall -Wextra -Wundef -Wshadow -O0 -g
 INC    := -I../include
 BIN_REG := /tmp/gds_test_app_reg_calc
 BIN_MB  := /tmp/gds_test_app_modbus_core
-BIN_TCP := /tmp/gds_test_app_modbus_tcp_frame
+BIN_TCP  := /tmp/gds_test_app_modbus_tcp_frame
+BIN_WELD := /tmp/gds_test_app_weld_fsm
 
-test: $(BIN_REG) $(BIN_MB) $(BIN_TCP)
+test: $(BIN_REG) $(BIN_MB) $(BIN_TCP) $(BIN_WELD)
 	$(BIN_REG)
 	$(BIN_MB)
 	$(BIN_TCP)
+	$(BIN_WELD)
 
 $(BIN_REG): test_app_reg_calc.c ../src/app_reg_calc.c ../include/app_reg_calc.h
 	$(CC) $(CFLAGS) $(INC) -o $@ test_app_reg_calc.c ../src/app_reg_calc.c
@@ -22,7 +24,10 @@ $(BIN_MB): test_app_modbus_core.c ../src/app_modbus_core.c ../include/app_modbus
 $(BIN_TCP): test_app_modbus_tcp_frame.c ../src/app_modbus_tcp_frame.c ../src/app_modbus_core.c ../include/app_modbus_tcp_frame.h ../include/app_modbus_core.h
 	$(CC) $(CFLAGS) $(INC) -o $@ test_app_modbus_tcp_frame.c ../src/app_modbus_tcp_frame.c ../src/app_modbus_core.c
 
+$(BIN_WELD): test_app_weld_fsm.c ../src/app_weld_fsm.c ../include/app_weld_fsm.h
+	$(CC) $(CFLAGS) $(INC) -o $@ test_app_weld_fsm.c ../src/app_weld_fsm.c
+
 clean:
-	rm -f $(BIN_REG) $(BIN_MB) $(BIN_TCP)
+	rm -f $(BIN_REG) $(BIN_MB) $(BIN_TCP) $(BIN_WELD)
 
 .PHONY: test clean

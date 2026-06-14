@@ -230,6 +230,9 @@ void app_reg_tick(uint16_t limit_on_time)
      * samd20's multi_ctrl/energy_ctrl run branches (main.c:5234..) belong to
      * the weld-cycle machine — deferred, spec §8. */
     {
+        /* US_CYCLE(weld-cycle WELD)은 의도적으로 ceiling 대상 아님: WELD 길이는
+         * weld-cycle FSM의 limit_delay_time2가 지배(app_weld). 아래 조건이
+         * TOUCH/COMM만 포함하므로 US_CYCLE은 자연히 제외됨 (spec §5.2). */
         uint8_t rs = g_reg.us_run_status;
         if ((rs == (uint8_t)US_TOUCH) || (rs == (uint8_t)US_COMM)) {
             /* limit_on_time is injected by the caller from the live config
