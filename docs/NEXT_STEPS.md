@@ -60,13 +60,19 @@ make -C fw/test test                                # 4 스위트 PASS 기대 (r
 
 ### 2.2 다음 작업 후보 (사용자 선택)
 
-- **신규 스테이지** (HW 불필요, 설계/코드 단계 가능) — weld-cycle 머신 / SEEK·RESET 효과 / overload 보호 흡수. `superpowers:brainstorming`부터 → spec → plan → 구현. 코드-우선(호스트 테스트), HW 검증은 rig 준비 시(기존 패턴: code-complete → host-gate → HW E2E).
-- **B-SEAM OSC 물리 구동 + 6b calibration** — 실 초음파 rig/스코프 필요. 흡수의 마지막 HW 검증 핵심.
-- 진입 절차 = **§3** (subagent-driven-development 패턴).
+- **★ 다음 세션 = weld 슬라이스2 (energy_ctrl) — `superpowers:brainstorming`부터** (HW 불필요, host-test 가능).
+  - **범위 씨앗**: WELD 종료를 시간(`limit_delay_time2`, 슬라이스1) 대신 **에너지 도달**(`energy_ctrl==true`)로.
+  - **samd20 참조**: 에너지 누산 `acc_energy += curr_power; curr_energy = acc_energy/500`(1ms마다) = `ref/samd20/main.c:434-436`; WELD 진입 시 누산 리셋 `main.c:1554-1555`; 시간-exit가 `(multi_ctrl!=true)&&(energy_ctrl!=true)`로 게이트 = `main.c:1560`(→ energy_ctrl면 시간-exit 스킵, 에너지 도달로 종료; 정확한 정지 비교 지점은 brainstorming서 측정 경로 추적).
+  - **STM32 현황**: energy_ctrl/limit_energy **config는 이미 포팅됨**(LCD `app_lcd_input.c:758,770`·`app_lcd_render.c:66-90`, Modbus reg ENERGY 0x08 / EN_ENERGY 0x14); **누산(acc_energy/curr_energy)·에너지-기반 WELD exit는 미포팅 = 슬라이스2 범위**.
+  - **결정점 후보**: 누산 위치(app_reg vs weld_fsm 주입), curr_power source, FSM WELD에 에너지-exit 분기 추가(현 `weld_fsm_step` WELD는 `temp_time==0` 시간-exit만), host-test(에너지=시간×전력 결정적이라 HW 불요).
+- **weld 슬라이스3 (multi_ctrl)** — 다단 진폭 스테핑(`multi_ctrl_stage`, limit_mo_*); 슬라이스2 후.
+- **기타 신규(HW 불필요)** — SEEK·RESET 효과 / overload 보호. `brainstorming`→spec→plan→구현.
+- **HW-gated** — weld 슬라이스4(TRIGGER+물리 SW_START+실 SOL_DN/센서+안전abort + LOW-1 LCD 클램프) / B-SEAM OSC 물리 구동 + 6b calibration(실 초음파 rig/스코프).
+- 진입 절차 = **§3** (brainstorming → spec → writing-plans → subagent-driven → finishing).
 
-### 2.3 보드 현 상태 (2026-06-13 j 마감 시점)
+### 2.3 보드 현 상태 (2026-06-14 c 마감 시점)
 
-- **SERIAL / addr=1 / 9600 / EVEN** (핸드오프 벤치 기본과 일치), OUT_POWER=55, FRAM `ether_ip=.70` 잔여(무해).
+- **SERIAL / addr=1 / 9600 / EVEN** (벤치 기본; USART6=Modbus 점유 → mon 115200 비가용, mon 필요 시 LCD에서 addr=NONE), OUT_POWER=55, FRAM `ether_ip=.70` 잔여(무해). weld-1 펌웨어(태그 `hw-revA_fw-stage-weld1`) 플래시됨.
 - ETH 재검증 시: LCD에서 `comm_mode=ETH_STATIC`(static `.70`) 또는 `ETH_DHCP` 전환 + SAVE + **물리 전원사이클**. ETH E2E 재현 절차 = 루트 `HANDOFF.md`(⚠ 시리얼 캡처 함정 절 필독).
 
 ---
