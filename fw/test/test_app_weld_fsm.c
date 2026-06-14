@@ -23,9 +23,78 @@ static void test_init_ready(void)
     CHECK_EQ(weld_fsm_status(), WELD_READY);
 }
 
+/* 한 사이클을 구동하며 상태별 step 수 + 이벤트를 집계 (DELAY 모드). */
+typedef struct {
+    int cyl1_steps, weld_steps, hold_steps, cyl2_steps;
+    int weld_start_cnt, weld_stop_cnt, cycle_done_cnt;
+    int sol_on_edges, sol_off_edges;
+    uint8_t weld_amp;
+    int prev_sol;
+} trace_t;
+
+static void run_cycle(const weld_in_t *base, trace_t *t, int max_steps)
+{
+    memset(t, 0, sizeof(*t));
+    weld_in_t in = *base;
+    in.start = 1u;                 /* trigger on the first step */
+    for (int i = 0; i < max_steps; i++) {
+        weld_out_t out;
+        weld_fsm_step(&in, &out);
+        in.start = 0u;             /* one-shot */
+        switch (out.run_status) {
+            case WELD_CYL1: t->cyl1_steps++; break;
+            case WELD_WELD: t->weld_steps++; break;
+            case WELD_HOLD: t->hold_steps++; break;
+            case WELD_CYL2: t->cyl2_steps++; break;
+            default: break;
+        }
+        if (out.weld_start) { t->weld_start_cnt++; t->weld_amp = out.amplitude; }
+        if (out.weld_stop)  { t->weld_stop_cnt++; }
+        if (out.cycle_done) { t->cycle_done_cnt++; }
+        if (out.sol_dn && !t->prev_sol)  { t->sol_on_edges++; }
+        if (!out.sol_dn && t->prev_sol)  { t->sol_off_edges++; }
+        t->prev_sol = out.sol_dn;
+        if (out.cycle_done) { break; }
+    }
+}
+
+/* 완전 DELAY 사이클: 이벤트가 정확히 1회씩, SOL on→off, READY 복귀. */
+static void test_full_cycle_delay(void)
+{
+    weld_fsm_init();
+    weld_in_t in = { .start=0u, .run_mode=0u,
+                     .limit_delay_time1=3u, .limit_delay_time2=10u,
+                     .limit_delay_time3=2u, .output_power=100u };
+    trace_t t;
+    run_cycle(&in, &t, 200);
+    CHECK_EQ(t.weld_start_cnt, 1);
+    CHECK_EQ(t.weld_stop_cnt, 1);
+    CHECK_EQ(t.cycle_done_cnt, 1);
+    CHECK_EQ(t.sol_on_edges, 1);
+    CHECK_EQ(t.sol_off_edges, 1);
+    CHECK_EQ(weld_fsm_status(), WELD_READY);   /* 사이클 후 READY 복귀 */
+}
+
+/* 각 상태의 점유 step 수 = 해당 limit (out.run_status 기준). */
+static void test_timing_durations(void)
+{
+    weld_fsm_init();
+    weld_in_t in = { .start=0u, .run_mode=0u,
+                     .limit_delay_time1=5u, .limit_delay_time2=8u,
+                     .limit_delay_time3=4u, .output_power=100u };
+    trace_t t;
+    run_cycle(&in, &t, 200);
+    CHECK_EQ(t.cyl1_steps, 5);   /* limit_delay_time1 */
+    CHECK_EQ(t.weld_steps, 8);   /* limit_delay_time2 */
+    CHECK_EQ(t.hold_steps, 4);   /* limit_delay_time3 */
+    CHECK_EQ(t.cyl2_steps, 5);   /* limit_delay_time1 */
+}
+
 int main(void)
 {
     test_init_ready();
+    test_full_cycle_delay();
+    test_timing_durations();
     if (failures) { printf("test_app_weld_fsm: %d FAILED\n", failures); return 1; }
     printf("test_app_weld_fsm: all passed\n");
     return 0;
