@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### 2026-06-14 b — weld-cycle 슬라이스1 (DELAY FSM) 구현 완료 (host-verified, 미머지)
+
+samd20 공압 프레스 weld-cycle FSM(`READY→CYL1→WELD→HOLD→CYL2→work_cnt++`) **DELAY 모드** 포팅. `superpowers:subagent-driven-development`로 plan 6 Task 전부 구현(Task별 fresh subagent + 리뷰 + host-test 게이트). 브랜치 `feat/stage-weld-cycle-slice1` **미머지**(사용자 "보드 먼저" — 다음 보드 세션에서 기존 직접-초음파 무회귀 HW 확인 후 머지+태그). 빌드 0-warning(우리 코드, FLASH 41.25%/RAM 16.70%), 호스트 **4스위트** PASS, 최종 cpp-reviewer APPROVED.
+
+- **신규 모듈**: `app_weld_fsm.{h,c}`(HAL-free 순수 FSM 코어, host-test 8함수 = init/완전사이클/타이밍/진폭 0·63·127/comp_time 감쇠 127−40=87/언더플로 가드 0/start READY-only/cycle_done 단일엣지) + `app_weld.{h,c}`(글루: `sys_tick_get_ms` 10ms 게이트 → live cfg 주입 → `weld_fsm_step` → SOL_DN hook·`app_weld_hook_set_amp`·`app_reg_command(US_CYCLE START/RUN_RELEASE)`·`work_cnt++`+FRAM+LCD).
+- **통합**: `app_lcd.h` `us_run_status` enum에 `US_CYCLE=4`(WELD가 게이트 구동 소스; `app_reg_command`가 src 그대로 저장→분기 불필요) + `app_reg.c` on-time ceiling 블록 **comment-only**(US_CYCLE은 TOUCH/COMM 조건에서 자연 제외, 로직 무변경 — HW 검증 코드 보호) + `main.c`(`app_weld_init` boot)·`app.c`(`app_weld_tick` app_lcd 뒤/app_reg 앞 배선 → 같은 iter publish 반영).
+- **설계 버그 수정(구현 전, advisor+1차증거)**: plan 글루가 `app_lcd_hook_set_pot(out.amplitude)`를 호출했는데 이는 **이중 변환** — 기존 hook은 output_power(50..100)를 받아 내부에서 `(x-50)*255/100` 적용(`app_lcd.c:28`)하나, 코어 `amplitude`는 이미 보정된 DAC(0..127) = samd20 `temp_i`를 I2C_POT에 직접 쓰는 값(`ref/samd20/main.c:1549`). op=100→127→196 오류. → **전용 `app_weld_hook_set_amp(uint8_t dac)` raw-DAC hook 신설**(spec §6 정정, docs `e550414`). comp_time 감쇠는 DAC 도메인이라 output_power로 역산 불가 → raw 경로 필수.
+- **충실도 = 혼합**: 거동 samd20 충실 + 진폭 언더플로 가드 1건 수정(저전력+짧은용접 시 uint8 언더플로→큰 진폭 안전위험 → uint16 계산 후 `amp>=reduction? amp-reduction : 0` 클램프).
+- **cpp-reviewer LOW 2건**: ① **LOW-2 fix**(`f482af9`) — `weld_fsm_step` default fault-path(정상 도달 불가)에서 `s_sol_dn=0` fail-safe(공압 프레스 솔레노이드 잔류 방지; SOL_DN 실 GPIO는 슬라이스4). ② **LOW-1 deferred = 슬라이스4 must-fix** — `weld_amplitude`의 `output_power<50` 언더플로: Modbus는 `app_modbus.c`에서 [50,100] 클램프하나 **LCD `app_lcd_input.c:752` `LV_OUT_POWER`는 클램프 없음**. 슬라이스1 dormant(프로덕션 트리거 없음, hook 로그만) → 무수정. **슬라이스4에서 물리 트리거+실 I2C_POT 연결 시 HIGH** → LCD 입력에 Modbus와 동일한 `if(data16<50u) data16=50u;` 클램프 미러 필요(기존 직접-초음파 set_pot도 동일 노출 = pre-existing).
+- **트리거 분리(samd20 충실)**: weld 사이클 = 물리 SW_START1/2 전용(슬라이스4); 패널/Modbus START = 직접 초음파 무수정. 슬라이스1은 프로덕션 트리거 미와이어 → FSM은 host-test로만 검증, HW에서는 READY 휴면(직접-초음파 무회귀).
+- 커밋 8: `e550414`(docs 설계수정)·`aef0885`·`fba8001`·`d1c680d`·`70992f8`·`0cda1e4`·`26913f9`·`ba05147`·`f482af9`. **다음**: 보드 연결 → 직접-초음파 무회귀 확인 → 머지(`--no-ff`)+태그 `hw-revA_fw-stage-weld1`(⚠ host-only 태그 = HW 회귀확인 시점 명시).
+
 ### 2026-06-13 j — Stage C slice 2 deferred HW 검증 (보드 ETH_DHCP .70 연결) — 코드 무수정
 
 보드 연결 세션(ST-LINK V3, W5500 실장 + DHCP 망, 보드 부팅 시 ETH_DHCP 리스 `.70`). slice 2 deferred HW 항목 중 ① ICON_RUN, ③ RAM-only 재리스 검증. **펌웨어 무수정**(분석·확인만).

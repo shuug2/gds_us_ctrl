@@ -2,7 +2,7 @@
 
 > CLAUDE.md 에 명시된 first-load 문서. 새 세션 시작 시 본 파일을 가장 먼저 읽고 진행 상황 + 다음 작업을 확인.
 >
-> **본 문서 최신화: 2026-06-13 j** — Stage C/D 완료 + Stage C slice-2 deferred HW 종결 반영. 변경 이력 = `docs/changelog.md`(최신 위), 세션별 상태 로그 = `docs/superpowers/RESUME.md`(SessionStart 자동 로드), slice-2 상세 핸드오프 = 루트 `HANDOFF.md`.
+> **본 문서 최신화: 2026-06-14 b** — weld-cycle 슬라이스1(DELAY FSM) 구현 완료(host-verified, **미머지** — 보드 먼저) 반영. 변경 이력 = `docs/changelog.md`(최신 위), 세션별 상태 로그 = `docs/superpowers/RESUME.md`(SessionStart 자동 로드), weld-cycle 상세 핸드오프 = 루트 `HANDOFF.md`.
 
 ---
 
@@ -35,7 +35,7 @@
 - **6b signal calibration** — `>>2` 정규화 + 2.56V↔3.3V 도메인 실측 보정, ch0/scaled 물리단위, ADC offset·gain, OSC 비트매핑·극성
 - **SEEK/RESET 효과** — RESET→SEEK 500ms 자동 체인 + SEEK 자동해제(분석 §5)
 - **overload 보호** — CON_OVLD 입력 + 보호 동작
-- **weld-cycle 머신** — work_cnt 증가, energy_ctrl/multi_ctrl run 분기(samd20 main.c:5234+, spec §8)
+- **weld-cycle 머신** — 슬라이스1(DELAY FSM) **구현 완료·host-verified·미머지**(브랜치 `feat/stage-weld-cycle-slice1`, 보드 직접-초음파 무회귀 확인 후 머지+태그 `hw-revA_fw-stage-weld1`). 남은 슬라이스: energy(2)/multi(3)/**TRIGGER+물리 SW_START+센서+실 SOL_DN GPIO+안전 abort(4)**. ⚠ **슬라이스4 must-fix(cpp-review LOW-1)**: `weld_amplitude`의 `output_power<50` 진폭 언더플로 — Modbus는 `app_modbus.c` [50,100] 클램프하나 **LCD `app_lcd_input.c:752` `LV_OUT_POWER`는 클램프 없음** → 물리 트리거+실 I2C_POT 연결 시 HIGH. 슬라이스4 진입 시 LCD 입력에 `if(data16<50u) data16=50u;` 미러(기존 직접 set_pot도 동일 pre-existing 노출).
 
 **설계상 이연(slice 2)**: DHCP 핫플러그(링크 드롭 후 재획득 — 현재 LINKWAIT→UP 단방향), SERIAL boot-skip.
 
@@ -54,7 +54,7 @@ git tag -l 'hw-revA*'                  # 위 §1.1 태그들 확인
 # 빌드 + 호스트 테스트 sanity
 env -u STM32_TOOLCHAIN cmake -S fw -B fw/build -G Ninja
 env -u STM32_TOOLCHAIN cmake --build fw/build      # 0-warning 기대
-make -C fw/test test                                # 3 스위트 PASS 기대
+make -C fw/test test                                # 4 스위트 PASS 기대 (reg_calc/modbus_core/tcp_frame/weld_fsm)
 ```
 
 ### 2.2 다음 작업 후보 (사용자 선택)

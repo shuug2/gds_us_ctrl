@@ -1,8 +1,8 @@
-# Handoff: Weld-Cycle Slice 1 (Core FSM, DELAY mode) — 구현 대기
+# Handoff: Weld-Cycle Slice 1 (Core FSM, DELAY mode) — 구현 완료(host-verified) · 미머지(보드 먼저)
 
 **Generated**: 2026-06-14
 **Branch**: `feat/stage-weld-cycle-slice1` (main에서 분기, 6개 docs 커밋, 코드 0줄)
-**Status**: Ready for implementation — spec+계획 확정·커밋, 구현 미시작
+**Status**: CODE-COMPLETE (host-verified) · 미머지 — 8 코드커밋, 최종 cpp-reviewer APPROVED, 호스트 4스위트 PASS, 빌드 0-warning(우리 코드). 사용자 "보드 먼저" → 다음 = 보드 직접-초음파 무회귀 확인 → 머지+태그.
 
 > 이전 HANDOFF(Stage C slice-2)는 머지 완료로 supersede. 이력 = `docs/changelog.md` / `docs/superpowers/RESUME.md` / 메모리 `project_stage_c_modbus`.
 
@@ -17,16 +17,21 @@ samd20 공압 프레스 **weld-cycle FSM**(`READY→CYL1→WELD→HOLD→CYL2→
 - [x] 구현 계획 (6 tasks, TDD, 전 step 실코드) 작성·커밋 → `docs/superpowers/plans/2026-06-14-stage-weld-cycle-slice1.md`
 - [x] 통합 지점 사전 확인: CMake `file(GLOB src/*.c)`(신규 .c 자동), main.c/app.c 배선 위치, mon/sys_tick/app_lcd/app_config API 시그니처
 
-## Not Yet Done (구현 — 계획서 Task 1~6)
+## Done (구현 — 계획서 Task 1~6 전부 완료)
 
-- [ ] **Task 1**: `app_weld_fsm.{h,c}` 스캐폴드 + `fw/test/test_app_weld_fsm.c` + Makefile `BIN_WELD`
-- [ ] **Task 2**: `weld_fsm_step()` 전체(5상태 DELAY) + 완전사이클·타이밍 테스트
-- [ ] **Task 3**: comp_time 진폭보정 + **언더플로 가드** + 진폭/엣지/start 테스트
-- [ ] **Task 4**: `app_lcd.h` enum `US_CYCLE=4` + `app_reg.c` ceiling 제외 주석 + 펌웨어 빌드
-- [ ] **Task 5**: 글루 `app_weld.{h,c}` + `app_weld_hook_sol_dn` 스텁
-- [ ] **Task 6**: 슈퍼루프 배선(main.c `app_weld_init`, app.c `app_weld_tick`) + 최종 빌드/테스트
-- [ ] (HW, 선택) 보드 회귀확인 — 기존 직접-초음파 무회귀 + 사이클 READY 휴면
-- [ ] 머지(`--no-ff`) + 태그 `hw-revA_fw-stage-weld1`
+- [x] **Task 1**: `app_weld_fsm.{h,c}` 스캐폴드 + `test_app_weld_fsm.c` + Makefile `BIN_WELD` (`aef0885`)
+- [x] **Task 2**: `weld_fsm_step()` 전체(5상태 DELAY) + 완전사이클·타이밍 테스트 (`fba8001`)
+- [x] **Task 3**: comp_time 진폭보정 + **언더플로 가드** + 진폭/엣지/start 테스트 (`d1c680d`)
+- [x] **Task 4**: `US_CYCLE=4` enum + `app_reg.c` ceiling 제외 주석(**comment-only**) + 펌웨어 빌드 (`70992f8`)
+- [x] **Task 5**: 글루 `app_weld.{h,c}` + SOL_DN/**set_amp** hook (`0cda1e4` + 리뷰코멘트 `26913f9`)
+- [x] **Task 6**: 슈퍼루프 배선(main.c init, app.c tick) + 최종 빌드/테스트 (`ba05147`)
+- [x] 최종 cpp-reviewer **APPROVED** + LOW-2 fail-safe fix (`f482af9`)
+
+## Not Yet Done (보드 대기)
+
+- [ ] (HW) 보드 회귀확인 — 기존 직접-초음파(패널/Modbus START) 무회귀 + 사이클 READY 휴면(슬라이스1 트리거 없음)
+- [ ] 머지(`--no-ff`) + 태그 `hw-revA_fw-stage-weld1` (⚠ **host-only 태그** — HW 회귀확인 시점 명시; 사이클 자체 E2E는 슬라이스4)
+- [ ] (슬라이스4 must-fix) LOW-1: LCD `LV_OUT_POWER` [50,100] 클램프 — 아래 Edge Cases 참조
 
 ## Failed Approaches (반복 금지)
 
@@ -94,20 +99,20 @@ uint8_t weld_fsm_status(void);
 
 **비자명 로직**: `app_reg_command(START, US_CYCLE)`는 코드 변경 없이 동작 — START 케이스가 `us_run_status = src`로 저장하고 swallow_start 체크는 `src==US_TOUCH`만. ceiling은 `(rs==US_TOUCH)||(rs==US_COMM)`라 US_CYCLE 자연 제외. **enum에 US_CYCLE 추가만 필요**.
 
-## Resume Instructions
+## Resume Instructions (보드 연결 세션 — 회귀확인 후 머지)
 
-새 세션:
+구현은 끝났다(8 커밋, cpp-reviewer APPROVED). 남은 건 HW 회귀확인 + 머지뿐.
 1. `cd /Users/tknoh/dev/work/gds_us_ctrl && git checkout feat/stage-weld-cycle-slice1`
 2. 사전 점검:
    ```bash
-   env -u STM32_TOOLCHAIN cmake -S fw -B fw/build -G Ninja && env -u STM32_TOOLCHAIN cmake --build fw/build   # 0-warning 기대
-   make -C fw/test test                                                                                       # 3 스위트 PASS 기대
+   env -u STM32_TOOLCHAIN cmake -S fw -B fw/build -G Ninja && env -u STM32_TOOLCHAIN cmake --build fw/build   # 0-warning(우리 코드)
+   make -C fw/test test                                                                                       # 4 스위트 PASS
    ```
-3. `docs/superpowers/plans/2026-06-14-stage-weld-cycle-slice1.md` 정독.
-4. **`superpowers:subagent-driven-development`로 Task 1부터** — Task별 fresh subagent + 2단계 리뷰(spec 준수 + cpp-reviewer). 각 Task 끝에 `make -C fw/test test` 게이트.
-   - subagent dispatch 가드(NEXT_STEPS §3): 브랜치/worktree only, main 무관 touch ✗, doc 자동재생성 ✗, controller가 빌드 sanity.
-5. Task별 기대출력은 계획서에 명시(예: Task2 Step2 = `weld_start_cnt = 0, expected 1` FAIL → 구현 후 PASS).
-6. 완료 후: 빌드 0-warning + host 4스위트 PASS → (선택)HW 회귀확인 → 머지`--no-ff` + 태그`hw-revA_fw-stage-weld1` → changelog/RESUME/NEXT_STEPS 갱신.
+3. 플래시 → mon(`/dev/cu.usbserial-AB0MLYXA`)로 **회귀확인**(슬라이스1은 프로덕션 트리거 없음 → 사이클 안 돎이 정상, 속지 말 것):
+   - 부팅 후 `[weld]` SOL_DN/set_amp 로그 **없음**(READY 휴면 확인).
+   - 기존 직접-초음파 무회귀: 패널 RUN press → ICON_RUN + on-time ceiling 정상 / Modbus START도 동일(stage-d2b·c 거동 유지).
+4. 통과 시 `superpowers:finishing-a-development-branch` → 머지(`--no-ff`) + 태그 `hw-revA_fw-stage-weld1`(⚠ host+HW-regression 검증 시점 명시) → changelog/RESUME/NEXT_STEPS/memory 갱신.
+5. **사이클 동작 자체의 HW E2E(상태 시퀀스·work_cnt 증가·SOL_DN 구동)는 슬라이스4** — 물리 SW_START + 실 SOL_DN/센서 필요. 슬라이스1은 보드로 사이클 검증 불가(host-test가 전부).
 
 ## Edge Cases & Warnings
 
@@ -117,3 +122,6 @@ uint8_t weld_fsm_status(void);
 - **빌드 env**: `$STM32_TOOLCHAIN` stale → `env -u STM32_TOOLCHAIN` 필수.
 - **슬라이스1 HW 한계**: 프로덕션 트리거 없음 → 보드에서 사이클은 절대 안 돎(READY 휴면). 사이클 동작 검증은 host 테스트가 전부. 속지 말 것 — "보드에서 사이클 안 보임"은 정상.
 - **work_cnt 런타임**: 슬라이스1은 work_cnt 증가 **로직**만 확정(PC HMI 미해결 #7 설계 종결); 실제 증가는 슬라이스4 물리 트리거 후. PC HMI 연계 = 메모리 `project_pc_hmi_spinoff`.
+- **⚠ 슬라이스4 MUST-FIX (cpp-review LOW-1) — 진폭 언더플로**: `weld_amplitude`의 `(uint16_t)(output_power - 50u)`는 `output_power<50`이면 unsigned 언더플로 → 거대 진폭(안전 위험). Modbus 경로는 `app_modbus.c`에서 `[50,100]` 클램프하나 **LCD 패널 경로 `app_lcd_input.c:752` `LV_OUT_POWER`는 클램프 없음**(기존 직접 set_pot `app_lcd.c:28`도 동일 pre-existing 노출). 슬라이스1은 **dormant**(프로덕션 트리거 없음 + hook 로그만) → 무수정 OK. **슬라이스4에서 물리 SW_START + 실 I2C_POT 연결 시 HIGH 격상** → 슬라이스4 진입 시 `app_lcd_input.c:752`에 Modbus와 동일한 `if (data16 < 50u) data16 = 50u;` 클램프 미러. (samd20도 여기서 클램프 안 함 = 충실; 그래서 슬라이스1은 추가 가드 없이 둠.)
+- **cpp-review LOW-2 (반영됨)**: `weld_fsm_step` default fault-path(정상 도달 불가)에서 `s_sol_dn=0` fail-safe — 슬라이스4 실 SOL_DN GPIO 연결 시 fault 시 솔레노이드 잔류 방지.
+- **글루 tick 게이트 슬라이스4 메모(cpp-review M1)**: `app_weld.c` 10ms 게이트가 `s_prev_ms = now`(누적 슬립)이라 weld 단계가 길어지면 dwell이 누적 지연 — 슬라이스1 무해(액추에이터 없음), 슬라이스4 실 공압 dwell엔 `s_prev_ms += WELD_TICK_MS`로 변경 권장(코드에 주석 있음).
