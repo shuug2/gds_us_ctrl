@@ -22,11 +22,17 @@ uint8_t weld_fsm_status(void)
     return s_run_status;
 }
 
-/* slice-1 진폭: base만 (comp_time 보정은 Task 3). output_power 50..100 계약. */
+/* slice-1 진폭: base = ((op-50)*255)/100 (op 50..100 -> 0..127); comp_time<7
+ * (짧은 용접)이면 (7-comp_time)*10 감쇠. samd20은 uint8_t로 언더플로(저전력+
+ * 짧은용접 -> 큰 진폭) — 혼합 입장상 0 클램프로 수정 (spec §8). */
 static uint8_t weld_amplitude(uint8_t output_power, uint16_t comp_time)
 {
-    (void)comp_time;
-    return (uint8_t)(((uint16_t)(output_power - 50u) * 255u) / 100u);
+    uint16_t amp = (uint16_t)(((uint16_t)(output_power - 50u) * 255u) / 100u);
+    if (comp_time < WELD_COMP_FULL) {
+        uint16_t reduction = (uint16_t)((WELD_COMP_FULL - comp_time) * 10u);
+        amp = (amp >= reduction) ? (uint16_t)(amp - reduction) : 0u;
+    }
+    return (uint8_t)amp;
 }
 
 void weld_fsm_step(const weld_in_t *in, weld_out_t *out)
