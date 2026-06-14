@@ -115,7 +115,8 @@ make -C fw/test test                                # 4 스위트 PASS 기대 (r
 - **리다이렉트 형식 필수**: `{ stty 115200 cs8 -parenb -cstopb raw -echo; exec cat; } < /dev/cu.usbserial-AB0MLYXA > /tmp/mon.log &` (`cat /dev/...` 인자형식은 포트를 9600으로 리셋 → garbage).
 - 비-UTF8 글리치: `LC_ALL=C tr -d '\000'`로 바이트 처리. 종료: `pkill -x cat`(`-f 'cat'`은 과매칭).
 - 깨끗한 부팅 mon = **물리 전원사이클**(openocd reset은 boot 버스트 안 나옴).
-- mon ↔ Modbus RTU = USART6 공유. SERIAL+addr!=0면 Modbus가 점유 → mon 게이트오프. ETH 모드는 mon 동작.
+- mon ↔ Modbus RTU = USART6 공유. SERIAL+addr!=0면 Modbus가 점유 → USART6=comm 속도(9600 9E)·mon 게이트오프. addr=NONE으로 풀리면 `usart6_init()`이 **115200 8N1로 정확히 복원**(SWD 검증됨). ETH 모드는 mon 동작.
+- ⚠ **baud 의심 시 추측 말고 SWD로 USART6 레지스터 직독**(시리얼 캡처는 macOS 포트 재개방 플레이키 + 상태 thrash로 신뢰 낮음): `mdw 0x40011408`(BRR) → **833(0x341)=115200 / 10000(0x2710)=9600**(BRR=PCLK2 96MHz/baud). `mdw 0x4001140C`(CR1) → M(bit12)=0·PCE(bit10)=0 → mon 8N1 / M=1·PCE=1 → Modbus 9E. (2026-06-14 e: "mon baud 미복원 버그" 의심 → controlled SWD 실험으로 **버그 아님** 규명. live addr은 g_cfg `mdb 0x20000a86`로 확인.)
 
 ### 4.4 보드 BOOT0 — 해결됨 (2026-05-26)
 - BOOT0(U2.60)→GND 연결로 평범한 `reset run` 플래시 부팅. force-jump 워크어라운드 불필요. (메모리 `project_board_boot0_workaround`)
