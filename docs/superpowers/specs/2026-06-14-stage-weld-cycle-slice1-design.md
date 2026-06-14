@@ -30,7 +30,8 @@
 | **TRIGGER 모드** + 위치센서(`re_dn_pressed`/`re_up_pressed` = SENSE_DN/UP) | 4 (HW-gated) |
 | **물리 GPIO 드라이브**: SOL_DN(PB5) 실구동 + 극성, OSC 초음파(CTRL_OSC0-4 = B-SEAM) | 4 (HW-gated) |
 | **안전 abort**: CYL1 중 `f_safty && (re_start1\|\|re_start2)` → SOL_DN OFF, READY 복귀 (SW_START1/2 물리입력) | 4 (HW-gated) |
-| 물리 start 스위치(`SW_START1/2`) + `in_cycle` 재-arm 로직 | 4 (HW-gated) |
+| 물리 start 스위치(`SW_START1/2`) + `in_cycle` 재-arm 로직 (사이클 트리거) | 4 (HW-gated) |
+| **SETUP 게이트**(사이클 진행 중 setup 진입 시 정지 — §5.4) | 4 (사이클 런타임 동반) |
 | `overload`/`weld error`(ERR_OVLD/OUTERR) → SYS_ERROR 전이 | 별도(overload 스테이지) |
 
 > 슬라이스1은 물리 트리거 없이 **FSM 코어가 `start` 주입 → DELAY 타이머 시퀀스 완주 → work_cnt++**까지를 **host-test로 검증**한다. HW에선 사이클이 휴면(READY) 상태로 idle, 기존 직접-초음파(패널/Modbus START)는 무회귀. 사이클 HW E2E는 슬라이스4(물리 SW_START + SOL_DN/센서)에서.
@@ -122,7 +123,7 @@ READY --start--> CYL1 --ldt1--> WELD --ldt2--> HOLD --ldt3--> CYL2 --ldt1--> REA
       - `out.weld_start` → `app_lcd_hook_set_pot(out.amplitude)` + `app_reg_command(US_CMD_START, US_CYCLE)`.
       - `out.weld_stop` → `app_reg_command(US_CMD_RUN_RELEASE, US_CYCLE)`.
       - `out.cycle_done` → `cfg->work_cnt++`, FRAM save, `app_lcd_set_work_cnt(cfg->work_cnt)`.
-3. SETUP 페이지 진입 중엔 글루가 step 호출을 막음(samd20 `sys_status!=SYS_SETUP` 게이트 재현).
+3. (SETUP 게이트는 슬라이스4 이연 — §5.4. 슬라이스1 글루는 무조건 step 호출.)
 
 > 10ms cadence는 samd20 timer(`tick_1ms>=10`)와 동일. app_reg는 2ms/1ms로 독립 — weld_fsm은 별도 10ms 게이트(서로 간섭 없음, 단일스레드 superloop).
 
@@ -150,8 +151,8 @@ samd20 충실 구조 확정: **weld 사이클은 물리 양수 시작스위치(S
 - 글루는 `app_weld_request_start()` **공개 API**를 슬라이스1에 정의(슬라이스4 물리 스위치 폴/ISR이 호출할 합류점). one-shot 래치 시맨틱(§4.2: 보류 플래그 → 다음 step 1회 `in.start=1` → 클리어, READY 아니면 소실)은 슬라이스4를 위해 구현·유지하나 **슬라이스1엔 프로덕션 호출자 없음**(host 테스트는 코어를 직접 구동).
 - 패널/Modbus START·V30 quirk·swallow_start = **무수정**(직접 경로 잔재, 본 스테이지 무관).
 
-### 5.4 SETUP 게이트
-글루는 LCD가 SETUP 페이지(`lcd_status`가 SETUP_* 군)일 때 step 호출을 건너뜀 — samd20 `sys_status!=SYS_SETUP` 재현. (LCD 상태 조회는 `app_lcd_state()->lcd_status`.)
+### 5.4 SETUP 게이트 — **슬라이스4로 이연**
+samd20은 `sys_status!=SYS_SETUP`일 때만 `temp_time--`(사이클 진행). 그러나 STM32엔 `sys_status`가 실제 유지되지 않고(struct 필드만 존재, SYS_* define 미포팅) 신뢰할 SETUP 표시자가 없다. **슬라이스1은 프로덕션 트리거가 없어 HW에서 사이클이 절대 실행되지 않으므로**(READY 휴면) SETUP 게이트는 무의미 → **슬라이스4(사이클이 실제 도는 시점)로 이연**. 그때 `lcd_status`의 SETUP_* 페이지 범위 체크 또는 sys_status 포팅으로 구현. 슬라이스1 글루는 무조건 step 호출.
 
 ---
 
