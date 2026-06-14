@@ -139,9 +139,12 @@ READY --start--> CYL1 --ldt1--> WELD --ldt2--> HOLD --ldt3--> CYL2 --ldt1--> REA
 - **on-time ceiling 블록에서 US_CYCLE 제외**: 현재 `(rs==US_TOUCH)||(rs==US_COMM)`에 US_CYCLE 미포함 → WELD 길이는 FSM의 `limit_delay_time2`가 지배(ceiling 무관). (자연히 제외됨 — 명시 주석 추가.)
 - peak 래치(last_power/last_amp), STATUS bit0(MB_STATUS_US), curr/max publish는 **무수정 재사용** — US_CYCLE 런도 동일하게 표시·미러됨.
 
-### 5.3 START 라우팅 포크 (press 모델)
-- 패널 START(KEY_MULTI) 및 Modbus START 레지스터가 슬라이스1에선 **사이클 트리거**로 라우팅: `app_weld_request_start()` 호출(직접 `app_reg_command(START)` 대신). 이 요청은 **one-shot 래치** — 글루가 보류 플래그를 세우고 다음 step 1회에만 `in.start=1`로 전달한 뒤 클리어(READY가 아니면 그대로 소실, samd20의 매-10ms 레벨 재계산과 동일 효과; 큐잉 없음).
-- 기존 직접-US 경로(hand/직접 제어)는 코드상 유지하되, press 제품은 사이클 경로 사용. **모드 게이팅(어떤 model_type이 직접 vs 사이클)은 슬라이스1 구현 시 단일 지점에 명시** — 기본값 = START는 사이클로(제품이 프레스 용접기). hand-mode 바이패스 필요 시 `model_type` 게이트로 분기(HW 확인 항목, §11).
+### 5.3 START 라우팅 (사용자 확정 2026-06-14)
+**물리 양수 시작스위치(SW_START1/2, 슬라이스4) · 패널 START(KEY_MULTI) · Modbus START 레지스터는 모두 동등한 사이클 트리거** — 셋 다 `app_weld_request_start()` 호출 → CYL1 시작. **모델 게이팅·hand 바이패스 없음**(직접-초음파 START는 사이클로 통합). samd20에선 물리 스위치만 사이클을 열고 comm/touch는 직접 초음파였으나, 통합 STM32 제품은 세 트리거를 동일 거동으로 함(사용자 결정).
+- 요청은 **one-shot 래치**: 글루가 보류 플래그를 세우고 다음 step 1회에만 `in.start=1`로 전달한 뒤 클리어(READY가 아니면 소실, samd20 매-10ms 레벨 재계산과 동일 효과; 큐잉 없음).
+- 슬라이스1은 **패널·Modbus 트리거를 와이어**(물리 SW_START1/2는 슬라이스4 — 같은 `app_weld_request_start()`로 합류).
+- **패널 V30 RUN**: press(data 3, 또는 IDLE 중 data 0) → `app_weld_request_start()`; release(data 4, 또는 비-IDLE data 0) → 무시(사이클 자가완주 — hold-to-run 의미 소멸). 기존 V30 swallow_start/hold 로직은 직접 경로 잔재라 press 트리거엔 미적용.
+- 기존 app_reg `US_TOUCH`/`US_COMM` 직접 게이트 경로는 **코드상 유지(휴면)** — 제거 리스크 회피. 사이클은 `US_CYCLE`만 사용.
 
 ### 5.4 SETUP 게이트
 글루는 LCD가 SETUP 페이지(`lcd_status`가 SETUP_* 군)일 때 step 호출을 건너뜀 — samd20 `sys_status!=SYS_SETUP` 재현. (LCD 상태 조회는 `app_lcd_state()->lcd_status`.)
@@ -205,7 +208,7 @@ STM32 슬라이스1:
 
 ## 11. 미해결/HW 확인 항목
 
-1. **START 모드 게이팅**(§5.3): press 제품이 모든 model_type에서 사이클을 쓰는지, 아니면 특정 model_type만(hand 바이패스) — 기본값=전부 사이클, HW에서 확인.
+1. ~~START 모드 게이팅~~ **해소(2026-06-14, 사용자 확정)**: 물리 SW_START1/2·패널·Modbus START 모두 동등하게 사이클 트리거. 모델 게이팅·hand 바이패스 없음(§5.3).
 2. **SOL_DN 극성**(PB5): active-HIGH/LOW — 슬라이스4 실구동 시 측정.
 3. **사이클 중 STOP/취소**: 패널/Modbus가 진행 중 사이클을 중단하는 경로가 필요한지(samd20엔 SYS_ERROR/ESTOP 경로뿐 — 정상 중단은 deferred). 슬라이스1은 사이클 완주 가정.
 4. **work_cnt FRAM 마모**: 매 사이클 save_all → FRAM(마모 무한 가정이나 확인). 사람 페이스라 무해.
