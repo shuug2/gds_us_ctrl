@@ -28,6 +28,14 @@ uint8_t weld_fsm_status(void)
 #define WELD_TICKS_PER_SEC  100u
 static uint16_t weld_backstop_ticks(uint16_t limit_out_time_sec)
 {
+    /* floor 0 -> 1s: a 0 backstop (corrupt FRAM / Modbus FC06 0 / LCD 0 — none
+     * floor-clamp upstream) would abort every energy weld on the first WELD tick.
+     * cpp-review M1. samd20 shares the hole but compares real time; the FSM's
+     * discrete per-WELD-entry tick budget makes 0 instantaneous. Upper bound:
+     * limit_out_time is cfg-clamped <=10 -> max 1000 tick (uint16 OK). */
+    if (limit_out_time_sec == 0u) {
+        limit_out_time_sec = 1u;
+    }
     return (uint16_t)(limit_out_time_sec * WELD_TICKS_PER_SEC);
 }
 

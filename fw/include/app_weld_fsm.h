@@ -35,8 +35,8 @@ typedef struct {
     uint16_t limit_out_time;     /* backstop 한계 (cfg; 초 단위, samd20 *10@100ms) */
 } weld_in_t;
 
-/* step output — edge flags (weld_start/weld_stop/cycle_done) are 1 for exactly
- * the one step they fire; sol_dn/run_status are levels. */
+/* step output — edge flags (weld_start/weld_stop/weld_fault/cycle_done) are 1
+ * for exactly the one step they fire; sol_dn/run_status are levels. */
 typedef struct {
     uint8_t  run_status;   /* current state (WELD_*) */
     uint8_t  sol_dn;       /* solenoid-down request level (1=ON, 0=OFF) */

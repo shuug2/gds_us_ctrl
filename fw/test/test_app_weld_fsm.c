@@ -186,6 +186,7 @@ static void test_energy_exit_normal(void)
         weld_out_t out;
         weld_fsm_step(&in, &out);
         in.start = 0u;
+        /* 에너지는 step 후 주입 -> FSM은 1 step 지연된 값을 봄 (hence weld_steps<100 proxy). */
         if (out.run_status == WELD_WELD) { weld_steps++; in.curr_energy += 10u; }
         if (out.weld_stop)  weld_stop++;
         if (out.weld_fault) weld_fault++;
@@ -254,6 +255,32 @@ static void test_backstop_abort(void)
     CHECK_EQ(final_sol, 0);           /* 실린더 상승 */
 }
 
+/* M1 회귀: limit_out_time=0이 floor되어 1s(=100 tick) backstop이 됨 — 0틱
+ * 즉시-abort가 아님을 검증. floor 없으면 weld step ~1에서 abort. */
+static void test_backstop_floor_zero(void)
+{
+    weld_fsm_init();
+    weld_in_t in = { .start=1u, .run_mode=0u,
+                     .limit_delay_time1=2u, .limit_delay_time2=5u,
+                     .limit_delay_time3=2u, .output_power=100u,
+                     .energy_ctrl=1u, .curr_energy=0u, .limit_energy=1000u,
+                     .limit_out_time=0u };
+    int weld_fault=0, weld_steps=0, weld_steps_at_fault=-1;
+    for (int i = 0; i < 300; i++) {
+        weld_out_t out;
+        weld_fsm_step(&in, &out);
+        in.start = 0u;
+        if (out.run_status == WELD_WELD) weld_steps++;
+        if (out.weld_fault) { weld_fault++; if (weld_steps_at_fault < 0) weld_steps_at_fault = weld_steps; }
+    }
+    CHECK_EQ(weld_fault, 1);              /* backstop 결국 동작 */
+    if (weld_steps_at_fault < 50) {       /* floor 미적용이면 ~1 step에 abort */
+        printf("FAIL backstop floor: aborted at weld step %d (<50; floor not applied)\n",
+               weld_steps_at_fault);
+        failures++;
+    }
+}
+
 int main(void)
 {
     test_init_ready();
@@ -267,6 +294,7 @@ int main(void)
     test_energy_exit_normal();
     test_time_exit_skipped_when_energy();
     test_backstop_abort();
+    test_backstop_floor_zero();
     if (failures) { printf("test_app_weld_fsm: %d FAILED\n", failures); return 1; }
     printf("test_app_weld_fsm: all passed\n");
     return 0;
