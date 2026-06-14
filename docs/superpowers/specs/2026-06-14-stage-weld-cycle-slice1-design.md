@@ -183,7 +183,8 @@ STM32 슬라이스1:
 
 - **comp_time 진폭보정**(§3): 짧은 weld 시간의 의도된 거동. 1:1 포팅, 주석 문서화.
 - **READY→CYL1 시 f_status_start 미설정**(samd20 `//f_status_start=1;` 주석처리): 의도. CYL1 최초진입에서 SOL_DN ON 발동하도록 0 유지 — 충실 재현.
-- **수정할 명백한 버그**: 없음 식별(슬라이스1 DELAY 경로). samd20 FRAM 주소 copy-paste 버그(ADDR_TRIGGER2/DELAY2)는 Stage C에서 이미 save_all로 해소 — 본 슬라이스 무관.
+- **수정할 명백한 버그 1건 — 진폭 언더플로 가드**: samd20 `temp_i = ((output_power-50)*255)/100; if(comp_time<7) temp_i -= (7-comp_time)*10;`에서 `temp_i`(uint8_t)는 저전력+짧은용접(예 output_power=50→amp 0, comp_time=0→감쇠 70)에서 **언더플로→큰 진폭**(안전상 위험). 혼합 입장상 **수정**: 코어에서 amp를 uint16_t로 계산 후 `amp = (amp >= reduction) ? amp-reduction : 0;` 클램프. samd20의 wrap 거동과 의도적 차이 — §11에 플래그.
+- samd20 FRAM 주소 copy-paste 버그(ADDR_TRIGGER2/DELAY2)는 Stage C에서 이미 save_all로 해소 — 본 슬라이스 무관.
 - **us_on_time 리셋**: samd20 WELD 진입 시 `us_on_time=0`. STM32는 app_reg가 START 엣지에서 `us_on_time_200m=0` 처리(기존) — US_CYCLE START도 동일 경로라 자동.
 
 ---
@@ -194,7 +195,7 @@ STM32 슬라이스1:
 1. **완전 사이클(DELAY)**: start=1 주입 → N×10ms step → 이벤트 시퀀스 검증: SOL_DN ON(CYL1) → weld_start(amplitude 정확) → weld_stop(ldt2 후) → SOL_DN OFF(CYL2) → cycle_done(ldt1 후). 각 상태 지속시간 = 해당 limit 시간.
 2. **타이밍 정확도**: limit_delay_time1/2/3 각 값에 대해 상태 전이가 정확히 `time×10ms`(=time 스텝) 후 발생.
 3. **comp_time quirk**: `limit_delay_time2<=6` → temp_time=7 스텝 동안 WELD + amplitude 감쇠(`(7-comp_time)*10`) 검증; `>6` → 감쇠 없음.
-4. **진폭 계산**: output_power 50/75/100 → temp_i 0/127/255 경계.
+4. **진폭 계산**: `(output_power-50)*255/100`, output_power 50/75/100 → temp_i **0/63/127**(op 50..100 → pot 0..127). + 언더플로 가드: 저전력+짧은용접(예 op=50, comp_time=0 → 0-70) → amp=0 클램프(§8).
 5. **start 무시**: WELD/HOLD/CYL2 중 start=1 재주입은 무시(READY에서만 소비).
 6. **cycle_done은 1틱 엣지**: 다음 step에서 0으로 클리어(중복 work_cnt++ 방지).
 
