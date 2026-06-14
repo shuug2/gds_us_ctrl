@@ -4,7 +4,7 @@
 #include "app_weld.h"
 #include "app_weld_fsm.h"
 #include "app_lcd.h"      /* app_lcd_cfg, app_lcd_set_work_cnt, US_CYCLE, us_cmd_t */
-#include "app_reg.h"      /* app_reg_command, US_CMD_START/RUN_RELEASE */
+#include "app_reg.h"      /* app_reg_command (US_CMD_x and us_cmd_t come via app_lcd.h) */
 #include "app_config.h"   /* app_config_t, app_config_save_all */
 #include "sys_tick.h"
 #include "mon.h"
@@ -47,6 +47,11 @@ void app_weld_tick(void)
     if ((uint32_t)(now - s_prev_ms) < WELD_TICK_MS) {
         return;
     }
+    /* slice-4 flag (cpp-review M1): `= now` (vs `+= WELD_TICK_MS`) lets per-tick
+     * superloop slip accumulate across the contiguous weld stages — harmless
+     * slice 1 (host-test only, no actuators), but for slice 4 real-pneumatic
+     * dwell, use `s_prev_ms += WELD_TICK_MS` to match the samd20 timer ISR's
+     * exact 10 ms period. Consistent with app_reg.c's gate for now. */
     s_prev_ms = now;
 
     app_config_t *cfg = app_lcd_cfg();
@@ -58,7 +63,12 @@ void app_weld_tick(void)
         .limit_delay_time3 = cfg->limit_delay_time3,
         .output_power      = cfg->output_power,
     };
-    s_start_pending = 0u;          /* one-shot consumed */
+    /* one-shot consumed: cleared every tick after the copy above, regardless of
+     * whether the core acted on it. The core takes `start` ONLY in WELD_READY,
+     * so a request_start() arriving mid-cycle is copied in and immediately
+     * dropped (lost), NOT queued for the next cycle. No production caller this
+     * slice; slice-4's physical SW_START trigger will define real semantics. */
+    s_start_pending = 0u;
 
     weld_out_t out;
     weld_fsm_step(&in, &out);
