@@ -86,11 +86,11 @@ uint8_t weld_fsm_status(void);
 
 **글루 → 기존 API 연결** (Task 5):
 ```c
-/* out.weld_start */ app_lcd_hook_set_pot(out.amplitude); app_reg_command(US_CMD_START, (uint8_t)US_CYCLE);
+/* out.weld_start */ app_weld_hook_set_amp(out.amplitude); app_reg_command(US_CMD_START, (uint8_t)US_CYCLE);  /* set_amp=raw DAC, NOT set_pot(이중변환) */
 /* out.weld_stop  */ app_reg_command(US_CMD_RUN_RELEASE, (uint8_t)US_CYCLE);
 /* out.cycle_done */ cfg->work_cnt++; app_config_save_all(cfg); app_lcd_set_work_cnt(cfg->work_cnt);
 ```
-확인된 시그니처: `app_reg_command(us_cmd_t, uint8_t)`, `app_lcd_cfg()→app_config_t*`, `app_lcd_hook_set_pot(uint8_t)`, `app_lcd_set_work_cnt(uint32_t)`, `app_config_save_all(const app_config_t*)`, `sys_tick_get_ms()`, `mon_printf(...)`(무가드).
+확인된 시그니처: `app_reg_command(us_cmd_t, uint8_t)`, `app_lcd_cfg()→app_config_t*`, `app_lcd_set_work_cnt(uint32_t)`, `app_config_save_all(const app_config_t*)`, `sys_tick_get_ms()`, `mon_printf(...)`(무가드). ⚠ 진폭은 신규 `app_weld_hook_set_amp(uint8_t dac)`(raw DAC 직접) — 기존 `app_lcd_hook_set_pot(uint8_t output_power)`은 인자를 output_power로 받아 내부에서 `(x-50)*255/100`을 적용하므로 보정된 DAC를 넘기면 이중 변환(op=100→127→196). spec §6 참조.
 
 **비자명 로직**: `app_reg_command(START, US_CYCLE)`는 코드 변경 없이 동작 — START 케이스가 `us_run_status = src`로 저장하고 swallow_start 체크는 `src==US_TOUCH`만. ceiling은 `(rs==US_TOUCH)||(rs==US_COMM)`라 US_CYCLE 자연 제외. **enum에 US_CYCLE 추가만 필요**.
 

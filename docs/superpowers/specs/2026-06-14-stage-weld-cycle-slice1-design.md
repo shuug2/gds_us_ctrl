@@ -16,7 +16,7 @@
 - **DELAY 모드 FSM**: `RUN_READY→CYL1→WELD→HOLD→CYL2→RUN_READY`. 모든 전이는 `temp_time` 카운트다운(10ms/count) 기반.
 - **`energy_ctrl==false && multi_ctrl==false` 경로만** (WELD 종료 = `limit_delay_time2` 시간 만료).
 - **WELD↔초음파 게이트 통합**: 신규 소스 `US_CYCLE`로 `app_reg_command(START/RUN_RELEASE, US_CYCLE)`. `app_reg.c` 최소 수정(enum 추가 + ceiling에서 US_CYCLE 제외).
-- **진폭 계산**: `temp_i = ((output_power-50)*255)/100`, `comp_time<7`이면 `temp_i -= (7-comp_time)*10` (samd20 충실). 진폭은 hook(`app_lcd_hook_set_pot` 또는 전용 weld 진폭 hook)으로 — 슬라이스1은 로그 스텁.
+- **진폭 계산**: `temp_i = ((output_power-50)*255)/100`, `comp_time<7`이면 `temp_i -= (7-comp_time)*10` (samd20 충실, **0..127 DAC 도메인**). samd20은 이 보정된 `temp_i`를 **I2C_POT에 직접** 쓴다(`i2c_adc_write_byte(I2C_POT, ..., temp_i)`, main.c:1549). → **전용 weld raw-DAC hook `app_weld_hook_set_amp(uint8_t dac)` 신설**(슬라이스1 로그 스텁). ⚠ 기존 `app_lcd_hook_set_pot`은 인자를 **output_power(50..100)로 받아 내부에서 `(x-50)*255/100`을 적용**(app_lcd.c:28)하므로 재사용 불가 — 보정된 DAC를 넘기면 **이중 변환**(op=100→127→196). §6 참조.
 - **사이클 완료 부수효과**: `work_cnt++` → FRAM 영속(`app_config_save_all` 패턴) → LCD `LV_WORK_CNT` 갱신.
 - **물리 hook(로그만)**: `SOL_DN` on/off (신규 hook). 실 GPIO 미구동.
 - **트리거 = 미와이어**(§5.3): 사이클 트리거는 물리 SW_START1/2(슬라이스4). 슬라이스1은 `app_weld_request_start()` 공개 API만 정의(슬라이스4 합류점). **패널/Modbus START는 직접 초음파 경로로 무수정** — 사이클 아님.
@@ -76,7 +76,7 @@ typedef struct {
     uint8_t  sol_dn;             /* 현재 솔레노이드 요청 레벨 (1=ON,0=OFF) */
     uint8_t  weld_start;         /* 1 = WELD 진입 엣지 (US_CYCLE START + pot write) */
     uint8_t  weld_stop;          /* 1 = WELD 종료 엣지 (US_CYCLE RUN_RELEASE) */
-    uint8_t  amplitude;          /* weld_start 시 유효: comp_time 보정된 0..255 pot 값 */
+    uint8_t  amplitude;          /* weld_start 시 유효: comp_time 보정된 0..127 raw DAC(pot) 값 */
     uint8_t  cycle_done;         /* 1 = CYL2 완료 엣지 (work_cnt++) */
 } weld_out_t;
 
@@ -120,7 +120,7 @@ READY --start--> CYL1 --ldt1--> WELD --ldt2--> HOLD --ldt3--> CYL2 --ldt1--> REA
    b. `weld_fsm_step(&in, &out)` 호출(내부에서 temp_time 감소 + 상태 평가).
    c. `out` 이벤트 → 부수효과:
       - `out.sol_dn` 변화 → `app_weld_hook_sol_dn(on)` (슬라이스1 로그).
-      - `out.weld_start` → `app_lcd_hook_set_pot(out.amplitude)` + `app_reg_command(US_CMD_START, US_CYCLE)`.
+      - `out.weld_start` → `app_weld_hook_set_amp(out.amplitude)`(raw DAC 직접) + `app_reg_command(US_CMD_START, US_CYCLE)`.
       - `out.weld_stop` → `app_reg_command(US_CMD_RUN_RELEASE, US_CYCLE)`.
       - `out.cycle_done` → `cfg->work_cnt++`, FRAM save, `app_lcd_set_work_cnt(cfg->work_cnt)`.
 3. (SETUP 게이트는 슬라이스4 이연 — §5.4. 슬라이스1 글루는 무조건 step 호출.)
@@ -161,10 +161,12 @@ samd20은 `sys_status!=SYS_SETUP`일 때만 `temp_time--`(사이클 진행). 그
 | hook | 호출 시점 | 슬라이스1 | 후속 |
 |---|---|---|---|
 | `app_weld_hook_sol_dn(bool on)` | CYL1 진입(ON) / CYL2 진입(OFF) | mon 로그만 | 4: PB5 실 GPIO + 극성 확정 |
-| `app_lcd_hook_set_pot(uint8_t amp)` | WELD 진입(comp_time 보정 진폭) | 기존 로그 스텁 재사용 | B-SEAM: 실 I2C_POT |
+| `app_weld_hook_set_amp(uint8_t dac)` | WELD 진입(comp_time 보정 진폭) | 신규 raw-DAC 로그 스텁 | B-SEAM: 실 I2C_POT |
 | (초음파 OSC 구동) | US_CYCLE START가 게이트 set | 게이트 상태만(STATUS bit0) | 4/B-SEAM: CTRL_OSC0-4 실 GPIO |
 
 > 신규 hook은 기존 `app_lcd_hook_*`와 동일 패턴(바디는 `mon_printf`만). 실 하드웨어 드라이브는 슬라이스4/B-SEAM.
+>
+> ⚠ **`app_weld_hook_set_amp(dac)` vs `app_lcd_hook_set_pot(output_power)` 입력 도메인 주의**: 둘 다 결국 같은 I2C_POT를 향하지만 입력 도메인이 다르다 — set_amp는 **이미 변환된 raw DAC(0..127)**, set_pot은 **output_power(50..100)를 받아 내부 변환**. B-SEAM에서 실 I2C_POT 연결 시 둘을 잘못 병합하면 이중/누락 변환 발생. weld는 comp_time 감쇠를 **DAC 도메인**에서 하므로(output_power로 역산 불가) raw 경로가 필수.
 
 ---
 
