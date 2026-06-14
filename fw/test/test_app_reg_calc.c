@@ -1,6 +1,7 @@
 /* fw/test/test_app_reg_calc.c — host unit tests for the pure regulation
- * compute layer (reg_scale, reg_output_level). No HAL, no hardware.
- * Verifies the disasm-adjudicated facts SCALE-04/05/06 and C1/C2 / §4.3 table. */
+ * compute layer (reg_scale, reg_output_level, reg_energy_from_acc). No HAL, no hardware.
+ * Verifies the disasm-adjudicated facts SCALE-04/05/06 and C1/C2 / §4.3 table, plus
+ * energy integration vectors (acc→mJ conversion, zero/saturation/midrange). */
 #include <stdio.h>
 #include <stdint.h>
 #include "app_reg_calc.h"
