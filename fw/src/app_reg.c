@@ -15,7 +15,8 @@
 #endif
 
 /* Cadence: Timer0 0xF0 -> 16 ct -> ~2.05 ms @8 MHz (cad-C1). Reproduced in ms. */
-#define REG_TICK_MS      2u
+#define REG_TICK_MS      2u    /* ⚠ app_reg_calc.c REG_ENERGY_DIV(=250)가 이 2ms 누산
+                                * cadence에 결합 — 변경 시 divisor 재산정 (cpp-review LOW-1) */
 #define REG_ACQ_MS       1u    /* ADC pace: M16 ISR self-re-armed ~417 us/ch (ch0_avg
                                 * ~8.3 ms). Both channels per 1 ms -> ch0_avg 10 ms,
                                 * ch1_avg 50 ms — closest the ms-grid superloop gets
@@ -53,6 +54,8 @@ typedef struct {
     uint32_t run_start_ms;           /* TOUCH/COMM run start (on-time ceiling base) */
     uint8_t  swallow_start;          /* 1 = next START is the orphaned release of a
                                       * timeout-stopped run (V30 data=0 quirk) */
+    uint32_t acc_energy;             /* 전력 적분기 (run-start 리셋; samd20 acc_energy) */
+    uint32_t last_energy;            /* run-stop 시 curr_energy 래치 (samd20 last_energy) */
 
     uint32_t prev_acq_ms;
     uint32_t prev_ms;
@@ -110,6 +113,10 @@ void app_reg_command(us_cmd_t cmd, uint8_t src)
              * but zeroing here closes the <=2ms window where a disp read could
              * pair the old time value with the new run status. */
             g_measure.us_on_time_200m = 0u;
+            /* 에너지 적분 run-start 리셋 (samd20 main.c:1340/1366/1555 — 전부
+             * run-start 엣지). curr_energy 직접 0으로 read-window 닫음. slice2 §2.2. */
+            g_reg.acc_energy      = 0u;
+            g_measure.curr_energy = 0u;
         }
         break;
     case US_CMD_RUN_RELEASE:
@@ -119,6 +126,7 @@ void app_reg_command(us_cmd_t cmd, uint8_t src)
         if (g_reg.us_run_status == src) {
             g_reg.last_power    = g_reg.max_power;
             g_reg.last_amp      = g_reg.max_amp;
+            g_reg.last_energy   = g_measure.curr_energy;   /* stopped-display 미러 (slice2) */
             g_reg.us_run_status = (uint8_t)US_IDLE;
         } else if ((src == (uint8_t)US_TOUCH) && (g_reg.swallow_start != 0u)) {
             /* Any touch RUN_RELEASE arriving while IDLE after a ceiling stop
@@ -183,6 +191,13 @@ static void reg_publish_measure(uint32_t now)
     if (active && (g_reg.adc_scaled_value > g_reg.max_power)) {
         g_reg.max_power = g_reg.adc_scaled_value;
     }
+    /* 에너지 적분: active면 curr_power를 acc에 누산(2ms publish cadence) ->
+     * curr_energy = acc/250 (samd20 main.c:434-436 구조). idle엔 curr_power=0이라
+     * 누산 정지. EXIT 판정은 weld FSM(US_CYCLE)만, 누산/표시는 모든 run 보편. slice2 §5. */
+    if (active) {
+        g_reg.acc_energy += g_measure.curr_power;
+        g_measure.curr_energy = reg_energy_from_acc(g_reg.acc_energy);
+    }
     if (active) {
         /* LV_TIME bar: live on-time in 200 ms units from the run-start stamp
          * (samd20 main.c:5223 cadence counter equivalent). TOUCH and COMM runs
@@ -198,6 +213,7 @@ static void reg_publish_measure(uint32_t now)
     g_measure.last_power    = g_reg.last_power;
     g_measure.max_amp  = g_reg.max_amp;
     g_measure.last_amp = g_reg.last_amp;
+    g_measure.last_energy = g_reg.last_energy;
     g_measure.us_run_status = g_reg.us_run_status;
 }
 
@@ -243,6 +259,7 @@ void app_reg_tick(uint16_t limit_on_time)
                  (uint32_t)limit_on_time * ON_TIME_UNIT_MS)) {
                 g_reg.last_power    = g_reg.max_power;   /* same latch as release */
                 g_reg.last_amp      = g_reg.max_amp;
+                g_reg.last_energy   = g_measure.curr_energy;   /* slice2 last_energy 래치 */
                 g_reg.us_run_status = (uint8_t)US_IDLE;
                 if (rs == (uint8_t)US_TOUCH) {
                     /* held button's release still pending — touch-only quirk */
