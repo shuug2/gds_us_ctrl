@@ -8,6 +8,7 @@
 #include "app_config.h"
 #include "app_lcd.h"
 #include "app_reg.h"
+#include "app_weld.h"
 #include "app_modbus.h"
 #include "app_eth.h"
 
@@ -75,6 +76,11 @@ void app_loop_iter(void)
 
     /* 2. Display step machine — 4 ms cadence (spec §11), one VP-group per step. */
     app_lcd_tick();
+
+    /* 2.5 Weld-cycle FSM — 10 ms cadence. WELD가 US_CYCLE로 게이트를 구동하므로
+     * app_reg_tick 앞에 둬서 이번 iter publish에 반영. 슬라이스1은 프로덕션
+     * 트리거 없음 -> READY 휴면(회귀 영향 없음). */
+    app_weld_tick();
 
     /* 3. Regulation core — ~2 ms cadence (spec §6), compute-only this slice.
      * limit_on_time injected from the live config (cpp-review M1: app_reg
