@@ -2,11 +2,11 @@
 
 > CLAUDE.md 에 명시된 first-load 문서. 새 세션 시작 시 본 파일을 가장 먼저 읽고 진행 상황 + 다음 작업을 확인.
 >
-> **본 문서 최신화: 2026-06-14 b** — weld-cycle 슬라이스1(DELAY FSM) 구현 완료(host-verified, **미머지** — 보드 먼저) 반영. 변경 이력 = `docs/changelog.md`(최신 위), 세션별 상태 로그 = `docs/superpowers/RESUME.md`(SessionStart 자동 로드), weld-cycle 상세 핸드오프 = 루트 `HANDOFF.md`.
+> **본 문서 최신화: 2026-06-14 c** — weld-cycle 슬라이스1(DELAY FSM) **HW 회귀확인 PASS + main 머지 + 태그** 반영. 변경 이력 = `docs/changelog.md`(최신 위), 세션별 상태 로그 = `docs/superpowers/RESUME.md`(SessionStart 자동 로드).
 
 ---
 
-## 1. 현재 상태 (2026-06-13 j)
+## 1. 현재 상태 (2026-06-14 c)
 
 **통합 핵심 기능 대부분 흡수 완료.** STM32F410RBT 단일 MCU로 기존 SAMD20 + ATmega16 기능을 통합 중. LCD·레귤레이션·Modbus(RTU+TCP)까지 main에 있고, 남은 것은 대부분 **실 초음파/가변전압이 있어야 검증 가능한 출력·효과 계층**.
 
@@ -20,6 +20,7 @@
 | LCD full port | LCD 전체 거동 포팅 (comm 표시 등, DGUS 에셋 root) | `hw-revA_fw-stage-lcd` |
 | Stage D | ATmega16 흡수 — 레귤레이션 compute · 상태머신 · soft-start · RUN 게이트 · m1(param 주입) | `hw-revA_fw-stage-d` / `-d2` / `-d2b` |
 | Stage C | Modbus 흡수 — slice 1 RTU(USART6) + slice 2 TCP(W5500 static+DHCP) | `hw-revA_fw-stage-c1` / `-c2b` |
+| Weld-cycle | 공압 프레스 사이클 FSM 흡수 — slice 1 DELAY FSM (host + HW-regression verified; 사이클 E2E는 슬라이스4) | `hw-revA_fw-stage-weld1` |
 
 > ⚠ `hw-revA_fw-stage-c2a`는 **없음** — pre-refactor slice 2a는 1s PHY-폴 버그 보유라 태그하지 않음. `-c2b`가 static+DHCP 전부 커버.
 
@@ -35,7 +36,7 @@
 - **6b signal calibration** — `>>2` 정규화 + 2.56V↔3.3V 도메인 실측 보정, ch0/scaled 물리단위, ADC offset·gain, OSC 비트매핑·극성
 - **SEEK/RESET 효과** — RESET→SEEK 500ms 자동 체인 + SEEK 자동해제(분석 §5)
 - **overload 보호** — CON_OVLD 입력 + 보호 동작
-- **weld-cycle 머신** — 슬라이스1(DELAY FSM) **구현 완료·host-verified·미머지**(브랜치 `feat/stage-weld-cycle-slice1`, 보드 직접-초음파 무회귀 확인 후 머지+태그 `hw-revA_fw-stage-weld1`). 남은 슬라이스: energy(2)/multi(3)/**TRIGGER+물리 SW_START+센서+실 SOL_DN GPIO+안전 abort(4)**. ⚠ **슬라이스4 must-fix(cpp-review LOW-1)**: `weld_amplitude`의 `output_power<50` 진폭 언더플로 — Modbus는 `app_modbus.c` [50,100] 클램프하나 **LCD `app_lcd_input.c:752` `LV_OUT_POWER`는 클램프 없음** → 물리 트리거+실 I2C_POT 연결 시 HIGH. 슬라이스4 진입 시 LCD 입력에 `if(data16<50u) data16=50u;` 미러(기존 직접 set_pot도 동일 pre-existing 노출).
+- **weld-cycle 머신** — 슬라이스1(DELAY FSM) **main 머지 완료**(`hw-revA_fw-stage-weld1`, host + HW-regression verified; §1.1 표). 남은 슬라이스(미착수): energy(2)/multi(3)/**TRIGGER+물리 SW_START+센서+실 SOL_DN GPIO+안전 abort(4)**. 슬라이스2·3은 HW 불요(설계·코드·host-test 가능), 슬라이스4는 HW-gated(물리 트리거+센서+실 SOL_DN). ⚠ **슬라이스4 must-fix(cpp-review LOW-1)**: `weld_amplitude`의 `output_power<50` 진폭 언더플로 — Modbus는 `app_modbus.c` [50,100] 클램프하나 **LCD `app_lcd_input.c:752` `LV_OUT_POWER`는 클램프 없음** → 물리 트리거+실 I2C_POT 연결 시 HIGH. 슬라이스4 진입 시 LCD 입력에 `if(data16<50u) data16=50u;` 미러(기존 직접 set_pot도 동일 pre-existing 노출). ⚠ M1(글루 tick `=now` 누적슬립): 슬라이스4 실 공압 dwell엔 `app_weld.c`를 `s_prev_ms += WELD_TICK_MS`로(코드 주석 있음).
 
 **설계상 이연(slice 2)**: DHCP 핫플러그(링크 드롭 후 재획득 — 현재 LINKWAIT→UP 단방향), SERIAL boot-skip.
 

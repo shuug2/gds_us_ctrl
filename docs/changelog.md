@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### 2026-06-14 c — weld-cycle 슬라이스1 HW 회귀확인 PASS + main 머지 + 태그
+
+보드 연결 세션(ST-LINK V3 플래시, USART6=Modbus 9600 8E1 addr 1 = 보드 벤치 기본). 슬라이스1 dormant `app_weld_tick` 삽입의 **기존 경로 무회귀**를 실보드로 확인 후 `finishing-a-development-branch`로 main 머지 + 태그.
+
+- **HW 회귀 PASS**: ① **FC03 미러 = SWD 직독 g_cfg 전건 일치**(OUT_POWER 55 / ON_TIME 56 / ENERGY 567 / work_cnt 0 / DELAY 53·52·51 / TRIGGER 50·50 / MULTI 25·50·25·50 / MODEL 1·1 / STATUS 0) → 레지스터 publish 경로가 weld tick 삽입 후 무회귀 ② **START(reg 0x1B)→STATUS bit0=1→~560ms ceiling 자동정지**(STATUS 폴 0.078~0.558s=1, 0.638s=0; limit_on_time=56×10ms, t0=write 직후 오프셋 감안 537–617ms 밴드 내) + LCD **ICON_RUN 점등→소등 육안**(user, 3회 재현) ③ **work_cnt 0 유지** = weld 사이클 미발화(dormant **구조증명** = `app_weld_request_start` 프로덕션 호출자 없음) + US_COMM 직접런은 work_cnt 미증가 ④ 명령 레지스터 consume-and-clear, clean idle 복귀.
+- **mon 비가용**: 보드 SERIAL/addr=1이라 USART6=Modbus 점유 → 115200 mon 글리치만. dormancy는 코드증명이라 mon `[weld]` 부재 확인 불요(advisor); Modbus 매트릭스가 공유 run FSM 무회귀를 더 강하게 입증.
+- **머지** `718678b`(`--no-ff`) + 태그 `hw-revA_fw-stage-weld1`(⚠ **host + HW-regression verified** — 사이클 자체 E2E 아님, 슬라이스4). feature 브랜치 `feat/stage-weld-cycle-slice1` 삭제. 머지 후 0-warning(우리 코드, text 53500B/FLASH 41.25%)·호스트 4스위트 PASS.
+- 보드 종료 상태 = SERIAL/addr=1/9600/EVEN, OUT_POWER=55, ether_ip=.70 (as-found, 무변경).
+
 ### 2026-06-14 b — weld-cycle 슬라이스1 (DELAY FSM) 구현 완료 (host-verified, 미머지)
 
 samd20 공압 프레스 weld-cycle FSM(`READY→CYL1→WELD→HOLD→CYL2→work_cnt++`) **DELAY 모드** 포팅. `superpowers:subagent-driven-development`로 plan 6 Task 전부 구현(Task별 fresh subagent + 리뷰 + host-test 게이트). 브랜치 `feat/stage-weld-cycle-slice1` **미머지**(사용자 "보드 먼저" — 다음 보드 세션에서 기존 직접-초음파 무회귀 HW 확인 후 머지+태그). 빌드 0-warning(우리 코드, FLASH 41.25%/RAM 16.70%), 호스트 **4스위트** PASS, 최종 cpp-reviewer APPROVED.

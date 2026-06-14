@@ -1,8 +1,8 @@
-# Handoff: Weld-Cycle Slice 1 (Core FSM, DELAY mode) — 구현 완료(host-verified) · 미머지(보드 먼저)
+# Handoff: Weld-Cycle Slice 1 (Core FSM, DELAY mode) — ✅ MERGED (host + HW-regression verified)
 
 **Generated**: 2026-06-14
-**Branch**: `feat/stage-weld-cycle-slice1` (main에서 분기, 6개 docs 커밋, 코드 0줄)
-**Status**: CODE-COMPLETE (host-verified) · 미머지 — 8 코드커밋, 최종 cpp-reviewer APPROVED, 호스트 4스위트 PASS, 빌드 0-warning(우리 코드). 사용자 "보드 먼저" → 다음 = 보드 직접-초음파 무회귀 확인 → 머지+태그.
+**Branch**: `feat/stage-weld-cycle-slice1` — **머지 완료 후 삭제**(main `718678b` `--no-ff`, 태그 `hw-revA_fw-stage-weld1`).
+**Status**: ✅ DONE — main 머지 + 태그 완료. HW 회귀 PASS(FC03 미러=g_cfg / START→~560ms ceiling 자동정지 / work_cnt 0 dormant / ICON_RUN 육안). ⚠ 태그는 **host + HW-regression verified** — 사이클 자체 E2E 아님(슬라이스4). 본 HANDOFF은 머지 완료로 **supersede** — 다음 스테이지(weld 슬라이스2/3/4 또는 신규) 착수 시 덮어씀. 이력 = `docs/changelog.md`(2026-06-14 c) / `docs/superpowers/RESUME.md`(c블록) / 메모리 `project_weld_cycle`.
 
 > 이전 HANDOFF(Stage C slice-2)는 머지 완료로 supersede. 이력 = `docs/changelog.md` / `docs/superpowers/RESUME.md` / 메모리 `project_stage_c_modbus`.
 
