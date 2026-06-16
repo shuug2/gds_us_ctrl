@@ -7,6 +7,8 @@ static uint8_t  s_f_status_start;   /* per-state "first entry done" flag */
 static uint16_t s_temp_time;        /* active countdown (10ms/count) */
 static uint16_t s_comp_time;        /* weld amplitude-comp counter (samd20) */
 static uint8_t  s_sol_dn;           /* solenoid level held across steps */
+static uint8_t  s_multi_stage;      /* 0 = out1 단계, 1 = out2 단계 (samd20 multi_ctrl_stage) */
+static uint16_t s_multi_elapsed;    /* WELD 진입 후 경과 (10ms/count); time1/time2와 직접 비교 */
 
 void weld_fsm_init(void)
 {
@@ -15,6 +17,8 @@ void weld_fsm_init(void)
     s_temp_time      = 0u;
     s_comp_time      = WELD_COMP_FULL;
     s_sol_dn         = 0u;
+    s_multi_stage    = 0u;
+    s_multi_elapsed  = 0u;
 }
 
 uint8_t weld_fsm_status(void)
