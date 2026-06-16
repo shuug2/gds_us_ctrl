@@ -9,6 +9,7 @@
 #include "app_lcd.h"
 #include "app_reg.h"
 #include "app_weld.h"
+#include "app_seek_reset.h"
 #include "app_modbus.h"
 #include "app_eth.h"
 
@@ -81,6 +82,11 @@ void app_loop_iter(void)
      * app_reg_tick 앞에 둬서 이번 iter publish에 반영. 슬라이스1은 프로덕션
      * 트리거 없음 -> READY 휴면(회귀 영향 없음). */
     app_weld_tick();
+
+    /* 2.6 SEEK/RESET FSM — 10 ms cadence. run_active(us_run_status)를 읽어 RUN
+     * 직교; ICON/hook만 emit (app_reg에 명령 안 보냄)이라 reg_tick 앞/뒤 무관 —
+     * weld 패턴 일관성 위해 weld_tick 다음에 배치 (1-iter stale run_active 무해). */
+    app_seek_reset_tick();
 
     /* 3. Regulation core — ~2 ms cadence (spec §6), compute-only this slice.
      * limit_on_time injected from the live config (cpp-review M1: app_reg

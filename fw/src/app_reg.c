@@ -8,6 +8,7 @@
 #include <string.h>
 #include "app_reg.h"
 #include "app_reg_calc.h"
+#include "app_seek_reset.h"   /* app_seek_reset_request, app_seek_reset_active */
 #include "adc1.h"
 #include "sys_tick.h"
 #ifdef REG_TRACE
@@ -104,6 +105,12 @@ void app_reg_command(us_cmd_t cmd, uint8_t src)
                 g_reg.swallow_start = 0u;
                 break;
             }
+            /* SEEK/RESET active 중 START 무시 (spec §3.4). 직교는 새 RUN 시작만
+             * 막고, 위 swallow_start 페어링 동기화는 건드리지 않음 (advisor —
+             * guard를 if 조건에 합치면 swallow consume도 스킵되는 비대칭 발생). */
+            if (app_seek_reset_active() != 0u) {
+                break;
+            }
             g_reg.us_run_status = src;   /* US_TOUCH or US_COMM */
             g_reg.max_power     = 0u;
             g_reg.max_amp       = 0u;    /* samd20 comm START zeroes max_amp too */
@@ -138,11 +145,15 @@ void app_reg_command(us_cmd_t cmd, uint8_t src)
         break;
     case US_CMD_SEEK:
     case US_CMD_RESET:
+        /* SEEK/RESET 효과를 app_seek_reset FSM에 위임 (이전 no-op 교체, spec §4).
+         * RUN 중이면 FSM이 run_active 직교로 자체 무시. samd20 comm RESET src
+         * quirk + 에러 표시 클리어는 입력 레이어(app_lcd_input.c)/에러 머신.
+         * warm-up(main_state) 게이팅 불요 — samd20 충실, spec §3.4 (SEEK/RESET은
+         * START과 별도 경로; FSM 자체 타임아웃으로 해제, cpp-review Minor 3). */
+        app_seek_reset_request(cmd, src);
+        break;
     default:
-        /* Regulation effect deferred (spec §9): the input layer already does
-         * the RESET icon/page restore; SEEK/RESET drive is B-SEAM. NB samd20
-         * comm RESET marks src US_TOUCH (main.c:4353 quirk) and clears the
-         * error display — both inert until the error machine slice. */
+        /* alien cmd 흡수 (no-op). */
         break;
     }
 #ifdef REG_TRACE
