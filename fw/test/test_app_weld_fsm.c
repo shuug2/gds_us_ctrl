@@ -29,6 +29,8 @@ typedef struct {
     int weld_start_cnt, weld_stop_cnt, cycle_done_cnt;
     int sol_on_edges, sol_off_edges;
     uint8_t weld_amp;
+    int amp_change_cnt;        /* 0→1 전환 엣지 횟수 */
+    uint8_t amp_at_change;     /* amp_change step의 amplitude (2단 진폭) */
     int prev_sol;
 } trace_t;
 
@@ -49,6 +51,7 @@ static void run_cycle(const weld_in_t *base, trace_t *t, int max_steps)
             default: break;
         }
         if (out.weld_start) { t->weld_start_cnt++; t->weld_amp = out.amplitude; }
+        if (out.amp_change) { t->amp_change_cnt++; t->amp_at_change = out.amplitude; }
         if (out.weld_stop)  { t->weld_stop_cnt++; }
         if (out.cycle_done) { t->cycle_done_cnt++; }
         if (out.sol_dn && !t->prev_sol)  { t->sol_on_edges++; }
@@ -281,6 +284,188 @@ static void test_backstop_floor_zero(void)
     }
 }
 
+/* multi 스테핑: out1=75 -> 1단 진폭 63 at weld_start, time1(=5) step에서 amp_change
+ * +2단 진폭(out2=100 -> 127), time2(=12) step에서 weld_stop+HOLD, 정상 사이클 완주. */
+static void test_multi_stepping(void)
+{
+    weld_fsm_init();
+    weld_in_t in = { .start=0u, .run_mode=0u,
+                     .limit_delay_time1=2u, .limit_delay_time2=100u,
+                     .limit_delay_time3=2u, .output_power=100u,
+                     .multi_ctrl=1u, .limit_mo_out1=75u, .limit_mo_out2=100u,
+                     .limit_mo_time1=5u, .limit_mo_time2=12u };
+    trace_t t;
+    run_cycle(&in, &t, 300);
+    CHECK_EQ(t.weld_start_cnt, 1);
+    CHECK_EQ(t.weld_amp, 63u);          /* out1=75 -> (75-50)*255/100 = 63 (1단) */
+    CHECK_EQ(t.amp_change_cnt, 1);      /* 0->1 전환 1회 */
+    CHECK_EQ(t.amp_at_change, 127u);    /* out2=100 -> 127 (2단) */
+    CHECK_EQ(t.weld_stop_cnt, 1);
+    CHECK_EQ(t.cycle_done_cnt, 1);      /* graceful HOLD->CYL2->READY 완주 */
+    CHECK_EQ(t.weld_steps, 12);         /* limit_mo_time2 (ldt2=100 무관) */
+}
+
+/* multi가 energy override: multi_ctrl=1 + energy_ctrl=1, curr_energy를 limit
+ * 훨씬 초과 주입해도 energy-exit/backstop 미발동, time2에 종료. */
+static void test_multi_overrides_energy(void)
+{
+    weld_fsm_init();
+    weld_in_t in = { .start=1u, .run_mode=0u,
+                     .limit_delay_time1=2u, .limit_delay_time2=100u,
+                     .limit_delay_time3=2u, .output_power=100u,
+                     .multi_ctrl=1u, .limit_mo_out1=60u, .limit_mo_out2=80u,
+                     .limit_mo_time1=3u, .limit_mo_time2=8u,
+                     .energy_ctrl=1u, .curr_energy=99999u, .limit_energy=1u,
+                     .limit_out_time=10u };
+    int weld_stop=0, weld_steps=0, fault=0;
+    for (int i = 0; i < 300; i++) {
+        weld_out_t out;
+        weld_fsm_step(&in, &out);
+        in.start = 0u;
+        if (out.run_status == WELD_WELD) weld_steps++;
+        if (out.weld_stop)  weld_stop++;
+        if (out.weld_fault) fault++;
+        if (out.cycle_done) break;
+    }
+    CHECK_EQ(weld_stop, 1);
+    CHECK_EQ(fault, 0);          /* energy exit/backstop 미발동 (multi 우선) */
+    CHECK_EQ(weld_steps, 8);     /* time2, energy 무관 */
+}
+
+/* multi가 DELAY override: multi_ctrl=1, ldt2=2(작음), s_temp_time 만료 무시, time2에 종료. */
+static void test_multi_overrides_delay(void)
+{
+    weld_fsm_init();
+    weld_in_t in = { .start=1u, .run_mode=0u,
+                     .limit_delay_time1=2u, .limit_delay_time2=2u,
+                     .limit_delay_time3=2u, .output_power=100u,
+                     .multi_ctrl=1u, .limit_mo_out1=60u, .limit_mo_out2=80u,
+                     .limit_mo_time1=4u, .limit_mo_time2=10u };
+    int weld_steps=0, weld_stop=0;
+    for (int i = 0; i < 300; i++) {
+        weld_out_t out;
+        weld_fsm_step(&in, &out);
+        in.start = 0u;
+        if (out.run_status == WELD_WELD) weld_steps++;
+        if (out.weld_stop) weld_stop++;
+        if (out.cycle_done) break;
+    }
+    CHECK_EQ(weld_steps, 10);    /* time2, NOT ldt2=2 */
+    CHECK_EQ(weld_stop, 1);
+}
+
+/* 언더플로 가드: limit_mo_out1=25(<50) -> 1단 진폭 0(wrap 금지), out2=60 -> 25 정상 전환. */
+static void test_multi_underflow_guard(void)
+{
+    weld_fsm_init();
+    weld_in_t in = { .start=0u, .run_mode=0u,
+                     .limit_delay_time1=2u, .limit_delay_time2=100u,
+                     .limit_delay_time3=2u, .output_power=100u,
+                     .multi_ctrl=1u, .limit_mo_out1=25u, .limit_mo_out2=60u,
+                     .limit_mo_time1=3u, .limit_mo_time2=8u };
+    trace_t t;
+    run_cycle(&in, &t, 300);
+    CHECK_EQ(t.weld_amp, 0u);          /* out1=25<50 -> 0 (가드) */
+    CHECK_EQ(t.amp_at_change, 25u);    /* out2=60 -> (60-50)*255/100 = 25 */
+}
+
+/* stage 리셋: 1사이클 후 재실행 시 stage/elapsed 재시작 -> 2회차도 1단 진폭부터. */
+static void test_multi_stage_reset(void)
+{
+    weld_fsm_init();
+    weld_in_t base = { .start=0u, .run_mode=0u,
+                       .limit_delay_time1=2u, .limit_delay_time2=100u,
+                       .limit_delay_time3=2u, .output_power=100u,
+                       .multi_ctrl=1u, .limit_mo_out1=75u, .limit_mo_out2=100u,
+                       .limit_mo_time1=3u, .limit_mo_time2=7u };
+    trace_t t1, t2;
+    run_cycle(&base, &t1, 300);
+    run_cycle(&base, &t2, 300);   /* READY 복귀 후 재실행 */
+    CHECK_EQ(t2.weld_amp, 63u);          /* 2회차도 1단 진폭(out1=75->63)부터 */
+    CHECK_EQ(t2.amp_change_cnt, 1);      /* 2회차도 전환 1회 */
+    CHECK_EQ(t2.amp_at_change, 127u);
+}
+
+/* 경계 time1==time2: 전환과 종료가 같은 step (정의된 거동 동결: 둘 다 같은 step). */
+static void test_multi_boundary_equal(void)
+{
+    weld_fsm_init();
+    weld_in_t in = { .start=1u, .run_mode=0u,
+                     .limit_delay_time1=2u, .limit_delay_time2=100u,
+                     .limit_delay_time3=2u, .output_power=100u,
+                     .multi_ctrl=1u, .limit_mo_out1=60u, .limit_mo_out2=100u,
+                     .limit_mo_time1=5u, .limit_mo_time2=5u };
+    int amp_change=0, weld_stop=0, both_same_step=0;
+    for (int i = 0; i < 300; i++) {
+        weld_out_t out;
+        weld_fsm_step(&in, &out);
+        in.start = 0u;
+        if (out.amp_change) amp_change++;
+        if (out.weld_stop)  weld_stop++;
+        if (out.amp_change && out.weld_stop) both_same_step++;
+        if (out.cycle_done) break;
+    }
+    CHECK_EQ(amp_change, 1);
+    CHECK_EQ(weld_stop, 1);
+    CHECK_EQ(both_same_step, 1);   /* 전환+종료 같은 step */
+}
+
+/* 경계 time1>time2: 종료가 먼저 -> 단일 진폭(out1)로 종료, amp_change 없음. */
+static void test_multi_boundary_time1_gt_time2(void)
+{
+    weld_fsm_init();
+    weld_in_t in = { .start=1u, .run_mode=0u,
+                     .limit_delay_time1=2u, .limit_delay_time2=100u,
+                     .limit_delay_time3=2u, .output_power=100u,
+                     .multi_ctrl=1u, .limit_mo_out1=60u, .limit_mo_out2=100u,
+                     .limit_mo_time1=20u, .limit_mo_time2=6u };
+    int amp_change=0, weld_stop=0, weld_steps=0;
+    for (int i = 0; i < 300; i++) {
+        weld_out_t out;
+        weld_fsm_step(&in, &out);
+        in.start = 0u;
+        if (out.run_status == WELD_WELD) weld_steps++;
+        if (out.amp_change) amp_change++;
+        if (out.weld_stop)  weld_stop++;
+        if (out.cycle_done) break;
+    }
+    CHECK_EQ(amp_change, 0);     /* time1=20 미도달 -> 전환 없음 */
+    CHECK_EQ(weld_stop, 1);
+    CHECK_EQ(weld_steps, 6);     /* time2에 종료 */
+}
+
+/* 진폭 known-vector: out1/out2 = 50/100 -> 0/127 (역순/경계 포함 변환 검증). */
+static void test_multi_amp_vectors(void)
+{
+    weld_fsm_init();
+    weld_in_t in = { .start=0u, .run_mode=0u,
+                     .limit_delay_time1=2u, .limit_delay_time2=100u,
+                     .limit_delay_time3=2u, .output_power=100u,
+                     .multi_ctrl=1u, .limit_mo_out1=50u, .limit_mo_out2=100u,
+                     .limit_mo_time1=3u, .limit_mo_time2=8u };
+    trace_t t;
+    run_cycle(&in, &t, 300);
+    CHECK_EQ(t.weld_amp, 0u);          /* out1=50 -> 0 */
+    CHECK_EQ(t.amp_at_change, 127u);   /* out2=100 -> 127 */
+}
+
+/* multi_ctrl=0 회귀: 기존 슬라이스1 시간-exit 시퀀스 동일 (multi 분기 미진입). */
+static void test_multi_off_regression(void)
+{
+    weld_fsm_init();
+    weld_in_t in = { .start=0u, .run_mode=0u,
+                     .limit_delay_time1=3u, .limit_delay_time2=10u,
+                     .limit_delay_time3=2u, .output_power=100u,
+                     .multi_ctrl=0u, .limit_mo_out1=75u, .limit_mo_out2=100u,
+                     .limit_mo_time1=2u, .limit_mo_time2=4u };
+    trace_t t;
+    run_cycle(&in, &t, 300);
+    CHECK_EQ(t.weld_steps, 10);        /* ldt2 시간-exit (multi 무시) */
+    CHECK_EQ(t.amp_change_cnt, 0);     /* 전환 없음 */
+    CHECK_EQ(t.weld_amp, 127u);        /* output_power=100 진폭 (limit_mo_out 무시) */
+    CHECK_EQ(t.cycle_done_cnt, 1);
+}
+
 int main(void)
 {
     test_init_ready();
@@ -295,6 +480,15 @@ int main(void)
     test_time_exit_skipped_when_energy();
     test_backstop_abort();
     test_backstop_floor_zero();
+    test_multi_stepping();
+    test_multi_overrides_energy();
+    test_multi_overrides_delay();
+    test_multi_underflow_guard();
+    test_multi_stage_reset();
+    test_multi_boundary_equal();
+    test_multi_boundary_time1_gt_time2();
+    test_multi_amp_vectors();
+    test_multi_off_regression();
     if (failures) { printf("test_app_weld_fsm: %d FAILED\n", failures); return 1; }
     printf("test_app_weld_fsm: all passed\n");
     return 0;
