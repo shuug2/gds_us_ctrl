@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+### 2026-06-17 — weld-cycle 슬라이스3 (multi_ctrl 2단 진폭 스테핑) CODE-COMPLETE (host+build verified, 미머지)
+
+samd20 `multi_ctrl` 2단 진폭 스테핑 포팅. WELD 단계에서 진입 시 `limit_mo_out1` → `limit_mo_time1` 경과 후 `limit_mo_out2`로 전환 → `limit_mo_time2`에서 WELD 정상 종료(→HOLD). `superpowers:brainstorming → spec → writing-plans → subagent-driven`(plan 3 Task, Task별 fresh subagent + 2-stage 리뷰[controller spec 대조 + cpp-reviewer]). 브랜치 `feat/stage-weld-cycle-slice3-multi` **미머지**(HW 회귀확인=보드 게이트, spec §10). 빌드 **0-warning(우리 코드, FLASH 41.64%)**, 호스트 **4스위트 PASS**(weld_fsm 21함수 = 기존 12 + multi 9).
+
+- **아키텍처 = FSM 내부 상태**(advisor — 슬라이스2 Option A보다 단순): multi는 순수 시간 기반이라 `s_multi_stage`(0/1)·`s_multi_elapsed`(10ms tick)를 FSM 내부 런타임 상태로 둠(`app_reg`/주입 불필요). **진폭 emit 단일 설계**: 기존 `weld_start` 엣지(1단) + 신규 `amp_change` 엣지(2단)가 같은 `amplitude` 필드를 내보내고 글루가 같은 `app_weld_hook_set_amp` 재호출(START/STOP 없음, US_CYCLE 유지).
+- **우선순위 multi>energy>시간**(samd20 if-else `main.c:1562`): multi ON이면 슬라이스1 DELAY-exit·슬라이스2 energy-exit 둘 다 게이팅(else-if 단락). **comp_time 미적용**(samd20 multi 경로 `5242`/`1540` 직접 변환). **언더플로 가드**(`weld_mo_amplitude`: `<50→0`, 팩토리 기본 `limit_mo_out1=25`가 바로 트리거; `weld_amplitude`와 별개 함수). **타이밍 액면가 10ms tick**(사용자 확정; `s_multi_elapsed`를 time1/time2와 직접 비교, samd20 100ms 절단 미재현 → ~90ms divergence).
+- **산출물**: `app_weld_fsm`(`weld_in_t` multi 5필드 + `weld_out_t` `amp_change` + WELD multi 분기 + `weld_mo_amplitude`) / `app_weld` 글루(cfg 5필드 주입 + `amp_change`→`set_amp` 라우팅) / host-test 9(스테핑·override energy·override DELAY·언더플로·stage리셋·경계 `time1==time2`·`time1>time2`·진폭 vector·multi-off 회귀).
+- **커밋 3**: `49ca2c7`(인터페이스 5필드+amp_change+정적 stage/elapsed)→`52a24f2`(FSM multi 분기+host-test 9)→`f9c4ac9`(글루 5필드 주입+amp_change 라우팅+amplitude 주석 M1; Co-Authored trailer amend 제거).
+- **리뷰**: Task2 cpp-reviewer APPROVED-WITH-COMMENTS(0 Crit/High), **최종 통합 cpp-reviewer APPROVED(머지 가능)**. Minor 2 = `limit_mo_out`(uint8) 캐스트 truncation(Modbus 256-305 시; config-validation 클램프 슬라이스4 이연)·`time1==time2` 경계(test_multi_boundary_equal로 동결) — 둘 다 spec §8/§11 기록.
+- ⚠ **`s_multi_elapsed` 진입값 = `1u`(plan은 `0u`에서 implementer가 정정)**: CYL1→WELD 전이 step이 이미 `weld_step`으로 카운트되므로 elapsed=1이라야 WELD가 정확히 `limit_mo_time2` tick 지속(슬라이스1 `s_temp_time` convention 정합). plan/spec §3.3은 0으로 기재됐으나 **코드가 정답**(host-test `weld_steps==time2` 동결). spec/plan 추후 정정 후보.
+- **범위=weld-only**(슬라이스2 선례): `multi_ctrl=ON` 직접 START(TOUCH/COMM)는 스테핑 안 함=단일 진폭 on-time ceiling 종료(spec §6 deviation). 이연(spec §11): 직접 RUN 스테핑·`limit_mo_out` config 클램프(슬라이스4)·mid-cycle 토글 래치·절대 진폭 보정(6b).
+- **다음 = 보드 세션**(이 브랜치): ① 직접-초음파 무회귀(START→~560ms ceiling+ICON_RUN) ② `multi_ctrl=ON` 직접 START 스테핑 안 함(§6 deviation) ③ work_cnt 0(dormant) → `--no-ff` 머지 + 태그 `hw-revA_fw-stage-weld3`(host + HW-regression verified; 스테핑 E2E는 슬라이스4).
+
 ### 2026-06-14 e — weld-cycle 슬라이스2 (energy_ctrl) HW 회귀확인 PASS + main 머지 + 태그
 
 보드 연결 세션. 슬라이스2(energy 기반 WELD exit) 플래시 후 기존 경로 무회귀를 mbpoll RTU(SERIAL/addr=1/9600/EVEN)로 확인 → main 머지 + 태그.

@@ -2,11 +2,11 @@
 
 > CLAUDE.md 에 명시된 first-load 문서. 새 세션 시작 시 본 파일을 가장 먼저 읽고 진행 상황 + 다음 작업을 확인.
 >
-> **본 문서 최신화: 2026-06-14 c** — weld-cycle 슬라이스1(DELAY FSM) **HW 회귀확인 PASS + main 머지 + 태그** 반영. 변경 이력 = `docs/changelog.md`(최신 위), 세션별 상태 로그 = `docs/superpowers/RESUME.md`(SessionStart 자동 로드).
+> **본 문서 최신화: 2026-06-17** — weld-cycle 슬라이스3(multi_ctrl 2단 진폭 스테핑) **CODE-COMPLETE(host+build verified, 미머지)** 반영. 변경 이력 = `docs/changelog.md`(최신 위), 세션별 상태 로그 = `docs/superpowers/RESUME.md`(SessionStart 자동 로드).
 
 ---
 
-## 1. 현재 상태 (2026-06-14 e)
+## 1. 현재 상태 (2026-06-17)
 
 **통합 핵심 기능 대부분 흡수 완료.** STM32F410RBT 단일 MCU로 기존 SAMD20 + ATmega16 기능을 통합 중. LCD·레귤레이션·Modbus(RTU+TCP)까지 main에 있고, 남은 것은 대부분 **실 초음파/가변전압이 있어야 검증 가능한 출력·효과 계층**.
 
@@ -36,7 +36,7 @@
 - **6b signal calibration** — `>>2` 정규화 + 2.56V↔3.3V 도메인 실측 보정, ch0/scaled 물리단위, ADC offset·gain, OSC 비트매핑·극성
 - **SEEK/RESET 효과** — RESET→SEEK 500ms 자동 체인 + SEEK 자동해제(분석 §5)
 - **overload 보호** — CON_OVLD 입력 + 보호 동작
-- **weld-cycle 머신** — 슬라이스1(DELAY FSM) **main 머지 완료**(`hw-revA_fw-stage-weld1`, host + HW-regression verified; §1.1 표). 남은 슬라이스: **energy(2) = MERGED 2026-06-14 e**(`hw-revA_fw-stage-weld2`, host + HW-regression verified; energy 누산/exit 절대 E2E는 6b/실 rig 이연) / **multi(3) 미착수 = ★다음(§2.2)** / **TRIGGER+물리 SW_START+센서+실 SOL_DN GPIO+안전 abort(4)** 미착수. 슬라이스3은 HW 불요(설계·코드·host-test 가능), 슬라이스4는 HW-gated(물리 트리거+센서+실 SOL_DN). ⚠ **슬라이스4 must-fix(cpp-review LOW-1)**: `weld_amplitude`의 `output_power<50` 진폭 언더플로 — Modbus는 `app_modbus.c` [50,100] 클램프하나 **LCD `app_lcd_input.c:752` `LV_OUT_POWER`는 클램프 없음** → 물리 트리거+실 I2C_POT 연결 시 HIGH. 슬라이스4 진입 시 LCD 입력에 `if(data16<50u) data16=50u;` 미러(기존 직접 set_pot도 동일 pre-existing 노출). ⚠ M1(글루 tick `=now` 누적슬립): 슬라이스4 실 공압 dwell엔 `app_weld.c`를 `s_prev_ms += WELD_TICK_MS`로(코드 주석 있음).
+- **weld-cycle 머신** — 슬라이스1(DELAY FSM) **main 머지 완료**(`hw-revA_fw-stage-weld1`, host + HW-regression verified; §1.1 표). 남은 슬라이스: **energy(2) = MERGED 2026-06-14 e**(`hw-revA_fw-stage-weld2`, host + HW-regression verified; energy 누산/exit 절대 E2E는 6b/실 rig 이연) / **multi(3) = CODE-COMPLETE 2026-06-17 미머지**(브랜치 `feat/stage-weld-cycle-slice3-multi`, 3커밋 `49ca2c7`→`52a24f2`→`f9c4ac9`, host+build verified, 최종 통합 cpp APPROVED; **HW 회귀확인=보드 게이트** → §2.2) / **TRIGGER+물리 SW_START+센서+실 SOL_DN GPIO+안전 abort(4)** 미착수. 슬라이스4는 HW-gated(물리 트리거+센서+실 SOL_DN). ⚠ **슬라이스4 must-fix(cpp-review LOW-1)**: `weld_amplitude`의 `output_power<50` 진폭 언더플로 — Modbus는 `app_modbus.c` [50,100] 클램프하나 **LCD `app_lcd_input.c:752` `LV_OUT_POWER`는 클램프 없음** → 물리 트리거+실 I2C_POT 연결 시 HIGH. 슬라이스4 진입 시 LCD 입력에 `if(data16<50u) data16=50u;` 미러(기존 직접 set_pot도 동일 pre-existing 노출). ⚠ M1(글루 tick `=now` 누적슬립): 슬라이스4 실 공압 dwell엔 `app_weld.c`를 `s_prev_ms += WELD_TICK_MS`로(코드 주석 있음).
 
 **설계상 이연(slice 2)**: DHCP 핫플러그(링크 드롭 후 재획득 — 현재 LINKWAIT→UP 단방향), SERIAL boot-skip.
 
@@ -61,7 +61,8 @@ make -C fw/test test                                # 4 스위트 PASS 기대 (r
 ### 2.2 다음 작업 후보 (사용자 선택)
 
 - **weld 슬라이스2 (energy_ctrl) = MERGED 2026-06-14 e** (머지 `d32d014`, 태그 `hw-revA_fw-stage-weld2`, host + HW-regression verified). HW 회귀: 직접-초음파 ceiling 무회귀 + ICON_RUN 육안 / §6 deviation(energy_ctrl=ON 직접런 ceiling 종료) / work_cnt 0 / Modbus 무회귀. **#2 energy 누산 점등은 벤치 무신호(DISP_POWER=0)로 6b/실 rig 이연**(누산 절대 E2E + divisor REG_ENERGY_DIV=250 검증은 실 초음파 rig). ⚠ DISP_ENERGY=wire **0x05**(mbpoll `-r 6`), 0x16 아님.
-- **★ 다음 세션 = weld 슬라이스3 (multi_ctrl) — `superpowers:brainstorming`부터** (HW 불요, host-test 가능). 다단 진폭 스테핑(`multi_ctrl_stage`, limit_mo_out1/out2·limit_mo_time1/time2) = samd20 `ref/samd20/main.c:5234-5265`(multi 런 단계 전환)·`1537-1541`(WELD 진입 multi 초기화). STM32 현황: multi_ctrl/limit_mo_* **config·Modbus reg(EN_MULTI 0x15, MULTI_T1/T2/O1/O2 0x0F-0x12)는 포팅됨**; 다단 스테핑 로직 미포팅 = 슬라이스3. 슬라이스2와 동형 구조(FSM WELD에 multi 분기, host-test).
+- **weld 슬라이스3 (multi_ctrl) = CODE-COMPLETE 2026-06-17 미머지** (브랜치 `feat/stage-weld-cycle-slice3-multi`, 3커밋 `49ca2c7`→`52a24f2`→`f9c4ac9`, host+build verified, 최종 통합 cpp-reviewer APPROVED). WELD 2단 진폭 스테핑(진입 `limit_mo_out1` → `limit_mo_time1`서 `amp_change` 엣지+`limit_mo_out2` → `limit_mo_time2`서 WELD 종료). 아키텍처 = FSM 내부 상태(`s_multi_stage`/`s_multi_elapsed`, app_reg/주입 불요 — 슬라이스2보다 단순); 진폭 emit 단일 설계(`weld_start`+`amp_change` 같은 `set_amp` hook); 우선순위 multi>energy>시간(기존 exit 게이팅); comp_time 미적용; 언더플로 가드(`weld_mo_amplitude` `<50→0`); 타이밍 액면가 10ms tick(samd20 100ms 절단 미재현). 범위=weld-only(직접 START 스테핑 안 함=§6 deviation). spec/plan=`docs/superpowers/{specs,plans}/2026-06-16-stage-weld-cycle-slice3-multi*.md`.
+- **★ 다음 세션 = 슬라이스3 보드 회귀확인 + 머지** (이 브랜치 체크아웃): ① 직접-초음파(START→~560ms ceiling+ICON_RUN) 무회귀 ② `multi_ctrl=ON` 직접 START가 스테핑 **안 함**(단일 진폭, ceiling 종료) = §6 deviation 확인 ③ work_cnt 0(weld dormant 구조증명) → `--no-ff` 머지 + 태그 `hw-revA_fw-stage-weld3`(host + HW-regression verified; 스테핑 자체 E2E는 슬라이스4). ⚠ 보드는 slice3 미플래시 — 먼저 `env -u STM32_TOOLCHAIN cmake --build fw/build` + 플래시.
 - **기타 신규(HW 불필요)** — SEEK·RESET 효과 / overload 보호. `brainstorming`→spec→plan→구현.
 - **HW-gated** — weld 슬라이스4(TRIGGER+물리 SW_START+실 SOL_DN/센서+안전abort + LOW-1 LCD 클램프) / B-SEAM OSC 물리 구동 + 6b calibration(실 초음파 rig/스코프).
 - 진입 절차 = **§3** (brainstorming → spec → writing-plans → subagent-driven → finishing).
@@ -191,5 +192,5 @@ openocd -f fw/openocd/stm32f410.cfg -c "init" -c "halt" -c "mdb 0x20000a86 8" -c
 
 ---
 
-> **본 문서 갱신 시점**: 2026-06-13 j (Stage C/D 완료 + slice-2 deferred HW 종결 반영)
-> **다음 갱신 시점**: 신규 스테이지 brainstorming/spec 시작 시
+> **본 문서 갱신 시점**: 2026-06-17 (weld 슬라이스3 multi_ctrl CODE-COMPLETE 미머지 반영)
+> **다음 갱신 시점**: 슬라이스3 보드 회귀확인+머지 시 또는 신규 스테이지 brainstorming/spec 시작 시
