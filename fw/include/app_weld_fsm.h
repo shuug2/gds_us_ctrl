@@ -47,7 +47,7 @@ typedef struct {
     uint8_t  sol_dn;       /* solenoid-down request level (1=ON, 0=OFF) */
     uint8_t  weld_start;   /* 1 = WELD entry edge: glue does US_CYCLE START + pot */
     uint8_t  weld_stop;    /* 1 = WELD exit edge: glue does US_CYCLE RUN_RELEASE */
-    uint8_t  amplitude;    /* valid when weld_start: comp_time-corrected DAC 0..127 */
+    uint8_t  amplitude;    /* valid when weld_start or amp_change: DAC 0..127 */
     uint8_t  cycle_done;   /* 1 = CYL2 completion edge: glue does work_cnt++ */
     uint8_t  weld_fault;   /* 1 = WELD backstop abort 엣지: 글루가 fault hook 호출 */
     uint8_t  amp_change;   /* 1 = stage 0→1 전환 엣지: 글루가 set_amp 재호출 (US_CYCLE 유지) */
