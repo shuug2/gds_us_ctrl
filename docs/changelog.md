@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### 2026-06-17 b — SEEK/RESET 효과 brainstorming + spec 확정 (구현 미시작)
+
+SEEK/RESET 명령의 효과(현재 `app_reg_command` no-op) 스테이지 설계. `superpowers:brainstorming` → spec 커밋. 코드 0줄. 브랜치 `feat/stage-seek-reset`(slice3 tip `33b7ae9` 위 stack — slice3 미머지라 docs 연속성 위해; main 분기 시 slice3 docs 누락). spec `1bd3ce8`.
+
+- **범위(사용자 확정)** = 상태머신 + 500ms 타이밍 체인 + 자동해제 + ICON 렌더(**HW 불요**, host-test). **물리 OSC 신호 구동은 hook stub + B-SEAM/6b 이연** — samd20은 M_RESET/M_SEEK active-LOW를 외부 M16으로 보냈으나 STM32가 M16 흡수 → 물리 출력(CTRL_OSC* 미러) 극성 미확인.
+- **아키텍처** = 순수 FSM 분리(신규 `app_seek_reset_fsm` HAL-free host-test + 글루 `app_seek_reset` 10ms tick+hook, weld 패턴).
+- **거동**: RESET→500ms→SEEK 자동 체인→500ms→자동 해제→IDLE(samd20 `main.c:5388-5408`); SEEK 직접은 단발(체인 없음); 타이밍 10ms tick 50=500ms 액면가(samd20 100ms quirk 미재현, weld3 교훈); 양방향 RUN 직교(RUN 중 SEEK/RESET 무시 + SEEK/RESET active 중 START 무시); 분석 §5 ICON 엣지 렌더 갭 동시 해결.
+- **이연(spec §10)**: 물리 OSC 구동(B-SEAM/6b)·물리버튼 레벨-팔로우(슬라이스4)·과부하 복구 시퀀스(overload, 이 FSM 재사용)·에러 표시(에러 머신).
+- **다음** = spec 사용자 리뷰 → writing-plans → subagent-driven(새 세션, 이 브랜치). spec=`docs/superpowers/specs/2026-06-17-stage-seek-reset-design.md`.
+
 ### 2026-06-17 — weld-cycle 슬라이스3 (multi_ctrl 2단 진폭 스테핑) CODE-COMPLETE (host+build verified, 미머지)
 
 samd20 `multi_ctrl` 2단 진폭 스테핑 포팅. WELD 단계에서 진입 시 `limit_mo_out1` → `limit_mo_time1` 경과 후 `limit_mo_out2`로 전환 → `limit_mo_time2`에서 WELD 정상 종료(→HOLD). `superpowers:brainstorming → spec → writing-plans → subagent-driven`(plan 3 Task, Task별 fresh subagent + 2-stage 리뷰[controller spec 대조 + cpp-reviewer]). 브랜치 `feat/stage-weld-cycle-slice3-multi` **미머지**(HW 회귀확인=보드 게이트, spec §10). 빌드 **0-warning(우리 코드, FLASH 41.64%)**, 호스트 **4스위트 PASS**(weld_fsm 21함수 = 기존 12 + multi 9).
