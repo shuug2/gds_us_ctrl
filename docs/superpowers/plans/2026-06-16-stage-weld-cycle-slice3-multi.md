@@ -365,7 +365,7 @@ static uint8_t weld_mo_amplitude(uint8_t mo_out)
             s_f_status_start = 1u;
             if (in->multi_ctrl) {
                 s_multi_stage   = 0u;
-                s_multi_elapsed = 0u;
+                s_multi_elapsed = 1u;  /* 진입=1(0 아님): CYL1→WELD 전이 step 포함, 슬라이스1 span(time2-1) 정합 — spec §3.3 */
                 out->amplitude  = weld_mo_amplitude(in->limit_mo_out1);  /* 1단 (comp 미적용) */
             } else {
                 out->amplitude  = weld_amplitude(in->output_power, s_comp_time);

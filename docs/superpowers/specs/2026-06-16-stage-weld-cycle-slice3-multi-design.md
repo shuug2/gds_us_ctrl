@@ -14,7 +14,7 @@
 
 ### 1.2 In scope (슬라이스 3)
 - **FSM 2단 스테핑 (`app_weld_fsm`)**: `weld_in_t`에 `multi_ctrl`/`limit_mo_out1/2`/`limit_mo_time1/2` 추가. FSM 내부 상태 `s_multi_stage`(0/1)·`s_multi_elapsed`(10ms tick) 추가. `weld_out_t`에 `amp_change`(0→1 전환 1-shot) 엣지 추가, `amplitude` 필드 재사용.
-- **WELD 진입 (multi)**: `s_multi_stage=0`, `s_multi_elapsed=0`, `amplitude=conv(limit_mo_out1)`, 기존 `weld_start` 엣지로 emit(슬라이스1 경로 재사용).
+- **WELD 진입 (multi)**: `s_multi_stage=0`, `s_multi_elapsed=1`(0 아님 — §3.3 span-일관 rationale), `amplitude=conv(limit_mo_out1)`, 기존 `weld_start` 엣지로 emit(슬라이스1 경로 재사용).
 - **WELD step (multi)**:
   - `s_multi_stage==0 && s_multi_elapsed >= limit_mo_time1` → `s_multi_stage=1`, `amplitude=conv(limit_mo_out2)`, `amp_change=1`.
   - `s_multi_elapsed >= limit_mo_time2` → `weld_stop` → HOLD, `s_temp_time=limit_delay_time3`(samd20 `5256`).
@@ -87,8 +87,9 @@ typedef struct {
 
 ### 3.3 WELD 진입 (`f_status_start==0`)
 - 슬라이스1·2 진입 시퀀스 유지하되 **진폭 소스만 multi 분기**:
-  - `multi_ctrl`: `s_multi_stage=0; s_multi_elapsed=0; amplitude = conv(limit_mo_out1);` (comp_time 미적용)
+  - `multi_ctrl`: `s_multi_stage=0; s_multi_elapsed=1; amplitude = conv(limit_mo_out1);` (comp_time 미적용)
   - `!multi_ctrl`: 기존 — `amplitude = conv_with_comp(output_power, comp_time)` (슬라이스1 경로 무수정)
+- ⚠ **`s_multi_elapsed` 진입값 = `1`(0 아님 — 구현 시 확정, 본 spec 정정)**: CYL1→WELD 전이 step에서 `s_run_status`가 이미 WELD로 바뀌므로 weld_start emit은 그 **다음** step이다. 슬라이스1의 초음파-on span(weld_start→weld_stop)은 `limit_delay_time2−1` tick(전이 step에서 `s_temp_time=ldt2` 세팅 → 첫 WELD step 진입부에서 1회 감소). multi도 `elapsed=1`로 시작해야 span = `limit_mo_time2−1` tick으로 **슬라이스1 convention과 일치**(`elapsed=0`이면 1틱 김). host-test는 **총 duration**(`weld_steps==time2`)과 전환 **count/amplitude**를 핀하나, 정상(`time1<time2`) 케이스의 **전환 tick index**(out1 실제 duration=`time1−1`)는 핀하지 않음 — ±1틱(10ms) 정밀도는 슬라이스4 실 초음파 HW에서 확인.
 - `weld_start` 엣지·US_CYCLE START·`s_temp_time`/comp_time 세팅은 기존 그대로. multi 모드에서도 `s_temp_time`은 진입 시 세팅되지만 **종료는 `s_multi_elapsed >= limit_mo_time2`가 담당**(§3.4) — `s_temp_time` 만료 경로는 multi 게이팅으로 차단.
 
 ### 3.4 WELD step (`f_status_start==1`) — 우선순위 체인 (★ 버그 핫스팟)
