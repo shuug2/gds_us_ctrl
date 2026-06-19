@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### 2026-06-19 — weld 슬라이스3(multi) + SEEK/RESET 효과 HW 검증 PASS + main 머지 + 태그
+
+보드 연결 세션. 체크리스트(`docs/superpowers/2026-06-17-board-session-checklist.md`) stack 순서대로 두 미머지 스테이지를 검증·머지. 보드=SERIAL/addr=1/9600/EVEN(USART6=Modbus 점유, mon 비가용 → ICON 육안 + mbpoll STATUS가 주 검증 수단; RS-485=`/dev/cu.usbserial-AB0MLYXA`, ST-LINK=`/dev/cu.usbmodem114303`).
+
+- **① weld slice3 회귀확인 + 머지** (`a209ac1` `--no-ff`, 태그 `hw-revA_fw-stage-weld3`): mbpoll RTU 회귀 전건 PASS — 회귀-1 직접-초음파(START reg28→STATUS reg30 bit0 버스트 `1×7→0`=560ms ceiling 자동정지) + ICON_RUN 육안(ON_TIME=100=1s ceiling으로 4회 깜빡 확대 관찰) / 회귀-2 `EN_MULTI=1` 직접 START도 동일 ceiling(스테핑 없음=§6 deviation) / 회귀-3 work_cnt=0(START 테스트 전·후 = 직접 START가 weld 사이클로 누출 없음) / 회귀-4 FC03 미러 = SWD `g_cfg`@`0x20000a5c` 직독 전건 일치(output_power 55/limit_on_time 56/limit_energy 567/work_cnt 0/comm_addr 1/comm_mode 0=SERIAL/multi 0/ether_ip .70).
+- **② seek-reset HW 4항목** (글루 host 커버리지 0 = 실질 게이트): HW-1 직접-초음파/weld 무회귀(START guard 변경에도 정상 START `1×8→0` + work_cnt 0) / HW-2 자동 체인(RESET 트리거 → ICON_RESET → ICON_SEEK 2단, 6회 반복 육안) / HW-3 SEEK 단발(ICON_SEEK만, 체인 없음, 6회 육안) / HW-4 양방향 RUN 직교 **대조법 검증**(a: 런 중 RESET 주입 → STATUS `111111100000` 무중단 + 체인 없음 ↔ 유휴 RESET=체인 / b: 체인 중 START → STATUS 16-read 전부 `0`=런 안 시작 ↔ 유휴 START=`1×8→0`; + START reg 소진 / work_cnt 0).
+- **③ seek-reset 머지** (`4c536bf` `--no-ff`, 태그 `hw-revA_fw-stage-seekreset`): 물리 OSC(CTRL_OSC*) 효과는 hook stub만 검증 — 실 효과 E2E는 B-SEAM/6b(실 초음파 rig + 스코프) 이연.
+- **⚠ ON_TIME clamp max=100 규명**: `limit_on_time`(=직접런 ceiling)은 100으로 클램프(200 요청 → 100 readback, ceiling 1000ms). 테스트 후 56(560ms) 복원.
+- **⚠ 빌드 함정 규명**: `fw/CMakeLists.txt:90` `file(GLOB src/*.c …)`는 **configure 시점에만** 평가됨 → 새 소스 추가된 브랜치로 전환 후 `cmake --build`(증분)만 돌리면 `app_seek_reset.c`/`*_fsm.c`가 미링크(undefined reference + "dangerous relocation"). **브랜치 전환 후 반드시 `cmake -B build -G Ninja` reconfigure** (seek-reset 첫 빌드 이 함정 적중, reconfigure 즉해결).
+- 머지 후 main: 0-warning, FLASH 42.11%/RAM 16.77%, host 5스위트 PASS. 두 feature 브랜치 삭제. 현재 플래시 이미지=main(재플래시 불요). **Stage 현황: Phase1+2·A·B·LCD·D·C·weld-1·2·3·seek-reset 전부 main.**
+- **다음 = HW-gated deferred만 잔존**: B-SEAM OSC 물리구동·6b signal calibration·weld 슬라이스4(TRIGGER+물리 SW_START+실 SOL_DN+안전abort+config-validation 클램프)·overload(seek-reset FSM 재사용)·weld-START 상호작용(슬라이스4 의식적 결정).
+
 ### 2026-06-17 c — SEEK/RESET 효과 CODE-COMPLETE (host+build verified, 미머지)
 
 SEEK/RESET 명령 효과(기존 `app_reg_command` no-op)를 순수 FSM + 글루로 구현. spec 사용자 리뷰(코드 참조 drift 0) → `superpowers:writing-plans`(plan 3 Task TDD) → `subagent-driven-development`(Task별 fresh subagent + 2-stage 리뷰[spec 대조 + cpp-reviewer] + 최종 통합 리뷰). 브랜치 `feat/stage-seek-reset` **미머지**(HW 회귀 + ICON 육안 = 보드 게이트; slice3 머지 후 stack). 빌드 **0-warning(우리 코드, FLASH 42.1%/RAM 16.8%)**, 호스트 **5스위트 PASS**(기존 4 + `app_seek_reset_fsm` 6 시나리오).
