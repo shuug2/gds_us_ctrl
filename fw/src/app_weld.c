@@ -71,6 +71,11 @@ void app_weld_tick(void)
         .limit_energy      = cfg->limit_energy,
         .limit_out_time    = cfg->limit_out_time,
         .curr_energy       = app_reg_measure()->curr_energy,
+        .multi_ctrl        = cfg->multi_ctrl ? 1u : 0u,
+        .limit_mo_out1     = (uint8_t)cfg->limit_mo_out1,
+        .limit_mo_out2     = (uint8_t)cfg->limit_mo_out2,
+        .limit_mo_time1    = cfg->limit_mo_time1,
+        .limit_mo_time2    = cfg->limit_mo_time2,
     };
     /* one-shot consumed: cleared every tick after the copy above, regardless of
      * whether the core acted on it. The core takes `start` ONLY in WELD_READY,
@@ -89,6 +94,9 @@ void app_weld_tick(void)
     if (out.weld_start) {
         app_weld_hook_set_amp(out.amplitude);   /* raw DAC, NOT set_pot (double-convert) */
         app_reg_command(US_CMD_START, (uint8_t)US_CYCLE);
+    }
+    if (out.amp_change) {
+        app_weld_hook_set_amp(out.amplitude);   /* mid-WELD 2단 진폭 (US_CYCLE 유지, START 아님) */
     }
     if (out.weld_stop) {
         app_reg_command(US_CMD_RUN_RELEASE, (uint8_t)US_CYCLE);
