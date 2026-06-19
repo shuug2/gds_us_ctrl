@@ -1,127 +1,91 @@
-# Handoff: Weld-Cycle Slice 1 (Core FSM, DELAY mode) — ✅ MERGED (host + HW-regression verified)
+# Handoff: 보드 세션 — weld slice3 + seek-reset HW 검증 + 머지 ✅ DONE
 
-**Generated**: 2026-06-14
-**Branch**: `feat/stage-weld-cycle-slice1` — **머지 완료 후 삭제**(main `718678b` `--no-ff`, 태그 `hw-revA_fw-stage-weld1`).
-**Status**: ✅ DONE — main 머지 + 태그 완료. HW 회귀 PASS(FC03 미러=g_cfg / START→~560ms ceiling 자동정지 / work_cnt 0 dormant / ICON_RUN 육안). ⚠ 태그는 **host + HW-regression verified** — 사이클 자체 E2E 아님(슬라이스4). 본 HANDOFF은 머지 완료로 **supersede** — 다음 스테이지(weld 슬라이스2/3/4 또는 신규) 착수 시 덮어씀. 이력 = `docs/changelog.md`(2026-06-14 c) / `docs/superpowers/RESUME.md`(c블록) / 메모리 `project_weld_cycle`.
+**Generated**: 2026-06-19
+**Branch**: `main` (tip `8e4ca4f`) — feature 브랜치 2개(`feat/stage-weld-cycle-slice3-multi`, `feat/stage-seek-reset`) **머지 후 삭제**.
+**Status**: ✅ DONE — CODE-COMPLETE였던 두 스테이지를 보드에서 검증 후 main 머지 + 태그. 코딩된 스테이지는 **전부 main**. 남은 작업 = HW-gated deferred만.
 
-> 이전 HANDOFF(Stage C slice-2)는 머지 완료로 supersede. 이력 = `docs/changelog.md` / `docs/superpowers/RESUME.md` / 메모리 `project_stage_c_modbus`.
+> 이전 HANDOFF(weld-cycle slice1)는 머지 완료로 supersede. 이력 = `docs/changelog.md`(2026-06-19) / `docs/superpowers/RESUME.md`(2026-06-19 블록, 자동 로드) / 메모리 `project_weld_cycle`·`project_seek_reset`. **다음 스테이지 착수 시 본 HANDOFF을 덮어쓸 것.**
 
 ## Goal
 
-samd20 공압 프레스 **weld-cycle FSM**(`READY→CYL1→WELD→HOLD→CYL2→work_cnt++`)의 **DELAY 모드**를 STM32F410에 포팅한다(슬라이스1). HAL-free 순수 FSM 코어 + 글루 분리, WELD가 신규 소스 `US_CYCLE`로 기존 `app_reg` 초음파 게이트를 구동. energy/multi/TRIGGER/실GPIO/안전 = 슬라이스 2~4.
+보드 연결 세션. CODE-COMPLETE 미머지였던 두 스테이지(weld slice3 multi_ctrl, SEEK/RESET 효과)를 실보드에서 검증하고 main에 머지. seek-reset이 slice3 위 stack이라 **머지 순서 고정**: ① slice3 회귀+머지 → ② seek-reset HW 4항목 → ③ seek-reset 머지.
 
 ## Completed
 
-- [x] 브레인스토밍 (제품 결정: 공압 프레스 O / DELAY·TRIGGER 둘 다 / 충실도=혼합)
-- [x] Spec 작성·정정·커밋 → `docs/superpowers/specs/2026-06-14-stage-weld-cycle-slice1-design.md`
-- [x] 구현 계획 (6 tasks, TDD, 전 step 실코드) 작성·커밋 → `docs/superpowers/plans/2026-06-14-stage-weld-cycle-slice1.md`
-- [x] 통합 지점 사전 확인: CMake `file(GLOB src/*.c)`(신규 .c 자동), main.c/app.c 배선 위치, mon/sys_tick/app_lcd/app_config API 시그니처
+- [x] **① weld slice3 회귀확인 + 머지** — 머지 `a209ac1`(`--no-ff`), 태그 `hw-revA_fw-stage-weld3`. 회귀-1 직접-초음파 ceiling(`1×7→0`=560ms)+ICON_RUN / 회귀-2 EN_MULTI=1 직접 START 동일 ceiling(스테핑 없음=§6 deviation) / 회귀-3 work_cnt=0(START 테스트 전·후) / 회귀-4 FC03 미러=SWD `g_cfg` 직독 전건 일치.
+- [x] **② seek-reset HW 4항목** — HW-1 직접-초음파/weld 무회귀(START guard 변경 무영향) / HW-2 자동 체인(RESET→ICON_RESET→ICON_SEEK 육안) / HW-3 SEEK 단발(ICON_SEEK만) / HW-4 양방향 RUN 직교(대조법: 런 중 RESET→STATUS 무중단·체인 없음 / 체인 중 START→STATUS 0·런 시작 안 함).
+- [x] **③ seek-reset 머지** — 머지 `4c536bf`(`--no-ff`), 태그 `hw-revA_fw-stage-seekreset`.
+- [x] 머지 후 main: 0-warning, FLASH 42.11%/RAM 16.77%, host 5스위트 PASS. 핸드오프(RESUME/changelog/메모리) 갱신.
 
-## Done (구현 — 계획서 Task 1~6 전부 완료)
+## Not Yet Done (전부 HW-gated deferred — 실 초음파 rig/스코프 또는 슬라이스4 HW 필요)
 
-- [x] **Task 1**: `app_weld_fsm.{h,c}` 스캐폴드 + `test_app_weld_fsm.c` + Makefile `BIN_WELD` (`aef0885`)
-- [x] **Task 2**: `weld_fsm_step()` 전체(5상태 DELAY) + 완전사이클·타이밍 테스트 (`fba8001`)
-- [x] **Task 3**: comp_time 진폭보정 + **언더플로 가드** + 진폭/엣지/start 테스트 (`d1c680d`)
-- [x] **Task 4**: `US_CYCLE=4` enum + `app_reg.c` ceiling 제외 주석(**comment-only**) + 펌웨어 빌드 (`70992f8`)
-- [x] **Task 5**: 글루 `app_weld.{h,c}` + SOL_DN/**set_amp** hook (`0cda1e4` + 리뷰코멘트 `26913f9`)
-- [x] **Task 6**: 슈퍼루프 배선(main.c init, app.c tick) + 최종 빌드/테스트 (`ba05147`)
-- [x] 최종 cpp-reviewer **APPROVED** + LOW-2 fail-safe fix (`f482af9`)
+- [ ] **B-SEAM OSC 물리 구동**: seek/reset/weld의 실제 `CTRL_OSC*` 출력 (현재 hook stub=mon 로그만). M16 흡수로 극성 미확인 — 실 초음파 rig + 스코프 필요.
+- [ ] **6b signal calibration**: 진폭/주파수/에너지 절대 보정 (벤치는 DISP_POWER=0 무신호 → 누산/진폭 절대 E2E 불가, 로직만 host-test 검증됨).
+- [ ] **weld 슬라이스4**: TRIGGER 모드 + 물리 SW_START + 위치센서 + 실 SOL_DN(PB5) + 안전 abort + **config-validation 클램프**(LCD `app_lcd_input.c:752` LV_OUT_POWER [50,100] / `limit_mo_out`·`limit_energy`·`limit_out_time`). 사이클/스테핑 자체 E2E도 여기서.
+- [ ] **overload 스테이지**: OVLD→RESET→자동 SEEK 복구 — **seek-reset FSM 재사용** 설계됨.
+- [ ] **weld-START 상호작용 결정**: seek-reset START guard가 `app_weld.c` US_CYCLE START도 게이팅 — 현재 weld dormant라 inert, 슬라이스4 물리 SW_START 도입 시 의식적 결정 필요(plan 노트).
 
-## Not Yet Done (보드 대기)
+## Failed Approaches / Gotchas (이번 세션 — 반복 주의)
 
-- [ ] (HW) 보드 회귀확인 — 기존 직접-초음파(패널/Modbus START) 무회귀 + 사이클 READY 휴면(슬라이스1 트리거 없음)
-- [ ] 머지(`--no-ff`) + 태그 `hw-revA_fw-stage-weld1` (⚠ **host-only 태그** — HW 회귀확인 시점 명시; 사이클 자체 E2E는 슬라이스4)
-- [ ] (슬라이스4 must-fix) LOW-1: LCD `LV_OUT_POWER` [50,100] 클램프 — 아래 Edge Cases 참조
-
-## Failed Approaches (반복 금지)
-
-> **START 트리거 "통합" 설계 — 폐기됨.** 세션 중간에 "물리 SW_START1/2 · 패널 START · Modbus START를 **모두 동등한 사이클 트리거**로 통합"하는 안으로 spec을 한 번 고쳤다가(커밋 `98d0708`), 사용자 재확인으로 **되돌렸다**(커밋 `0203c90`). **올바른 설계 = samd20 충실 분리**:
-> - **weld 사이클 = 물리 양수 시작스위치(SW_START1/2)로만** 열림 (`re_start1==0 && re_start2==0 && in_cycle==0`, ref/samd20/main.c:1404-1466). → 물리입력이라 **슬라이스4(HW-gated)**.
-> - **패널 START(KEY_MULTI)·Modbus START = 직접 초음파(hand/comm)** 경로, 사이클 아님. 현 STM32 거동(`app_reg` US_TOUCH/US_COMM + on-time ceiling) **무수정**.
-> - 초음파 ON 경로 2개 공존: (1)직접 (2)사이클. **패널/Modbus START를 사이클로 재라우팅하지 말 것** — 검증된 stage-d2b/c 거동을 깨뜨린다.
-> 결과: **슬라이스1은 프로덕션 트리거가 없다** → FSM은 host 테스트로만 검증, HW는 회귀확인. 사이클 HW E2E는 슬라이스4.
+- **CMake GLOB stale-build (빌드 실패 → reconfigure로 해결)**: seek-reset 브랜치 체크아웃 후 `cmake --build build`(증분)만 돌렸더니 링크 실패:
+  ```
+  undefined reference to `app_seek_reset_tick`
+  (app_seek_reset_tick): Unknown destination type (ARM/Thumb) ... dangerous relocation
+  ```
+  원인 = `fw/CMakeLists.txt:90` `file(GLOB src/*.c …)`는 **configure 시점에만** 평가 → 브랜치가 추가한 새 소스(`app_seek_reset.c`)를 재-glob 안 함. **해결 = `cmake -B build -G Ninja` reconfigure** (즉시 `app_seek_reset.c.obj` 컴파일). **교훈: 새 소스 추가된 브랜치 전환 후엔 무조건 reconfigure.** (새 .c 없이 기존 파일만 수정한 브랜치=slice3는 증분 빌드 OK.)
+- **mbpoll 첫 트랜잭션 CRC 에러**: RS-485 블록/write 첫 호출이 종종 `Invalid CRC`로 실패(라인 settling). → 더미 read 1회로 settle 후 진행. 타임아웃(무응답)과는 다름 — CRC는 응답은 왔는데 프레이밍 깨짐.
+- **ICON 560ms 관찰 불가 → 확대/반복**: 단발 560ms blink은 육안 추적 실패. → ① ON_TIME=100(=1s, **clamp max**)로 ceiling 확대 + 반복 트리거(ON/OFF 깜빡 4~6회) ② RESET/SEEK는 mbpoll STATUS에 안 잡혀(no status bit) **반복 트리거 + 콘솔 마커 + 육안**이 유일 검증.
+- **HW-4 부정(아이콘 안 뜸) 검증 어려움 → 대조법**: "no icon" 단독 관찰은 애매 → [A]유휴(체인/런 발생) ↔ [B]직교(무시) **대조**로 차이를 가시화. STATUS 패턴(런 무중단 `111111100000` / 런 없음 `0000…`)이 객관 증거. (⚠ HW-4(b)는 "START-during-chain에서 런 시작 안 함"을 관찰한 것 — "START가 펌웨어에 도달했고 거부됐다"로 과대주장 금지; CRC-실패 write와 관찰상 동일. 수렴 증거[STATUS+ICON+host-test+구조적 불변성]로 충분.)
 
 ## Key Decisions
 
 | Decision | Rationale |
 |----------|-----------|
-| 신규 모듈 2개 분리(`app_weld_fsm` 코어 + `app_weld` 글루) | 프로젝트 관례: 순수 compute는 HAL-free host-test(app_reg_calc/modbus_core 패턴) |
-| WELD가 `US_CYCLE` 소스로 `app_reg` 게이트 구동 | 진폭 hook·peak 래치·STATUS bit0 재사용; `app_reg_command`는 src를 그대로 저장 → 분기 불필요 |
-| WELD 길이 = `limit_delay_time2`(weld 타이머), on-time ceiling 아님 | ceiling은 직접(TOUCH/COMM) 경로용; US_CYCLE은 ceiling 조건에서 자연 제외 |
-| DELAY 먼저(슬라이스1), TRIGGER 후(슬라이스4) | DELAY=시간기반 host-test 가능; TRIGGER=위치센서 HW 필요 |
-| 충실도 = 혼합 | 거동 samd20 충실 + 명백한 버그만 수정(진폭 언더플로 가드 1건) |
-| 진폭 언더플로 가드 추가 | `(op-50)*255/100`(0..127) - `(7-comp_time)*10`이 저전력+짧은용접에서 uint8 언더플로→큰 진폭(안전 위험) → 0 클램프 |
-| SETUP 게이트 슬라이스4 이연 | STM32에 sys_status 미유지 + 슬라이스1은 사이클이 HW에서 안 돔(무의미) |
-| 시간 단위 10ms/count | samd20 `temp_time--` @ `tick_1ms>=10` (main.c:5313-5334) |
+| 머지 순서 ① slice3 → ② seek-reset 고정 | seek-reset이 slice3 tip `33b7ae9` 위 stack — 순서 뒤집으면 미검증 slice3 코드가 seek-reset 머지에 딸려 들어감 |
+| 재플래시 없이 main 검증 종료 | 머지 후 FLASH 크기(42.11%)=HW-테스트한 브랜치 빌드와 동일 + merge-tree 무충돌 + host PASS → main == 테스트한 코드 (프로젝트 관행) |
+| HW-4 STATUS 측정 + 대조법 | mon 비가용·RESET/SEEK는 status bit 없음 → 측정 가능한 STATUS(런 유무) + ICON 대조 + host-test + 구조적 불변성의 수렴 증거 |
 
 ## Current State
 
-**Working**: 펌웨어 빌드 green(코드 미추가 상태), host 테스트 3 스위트 PASS, 기존 직접-초음파(패널/Modbus START) 정상. main 대비 추가된 것은 docs 6커밋뿐.
+**Working**: main 전부 — Phase1+2·A·B·LCD·D·C·weld-1·2·3·seek-reset. 빌드 0-warning, host 5스위트 PASS. 보드에 main 이미지 플래시됨(재플래시 불요).
 
 **Broken**: 없음.
 
-**Uncommitted Changes**: 없음(working tree clean; untracked `.understand-anything/`·`ref/atmega16/M16_reverse/`는 무관·무시).
+**Uncommitted Changes**: 없음(워킹트리 클린; `.understand-anything/`·`ref/atmega16/M16_reverse/`는 기존 untracked, 무관).
 
 ## Files to Know
 
 | File | Why It Matters |
 |------|----------------|
-| `docs/superpowers/plans/2026-06-14-stage-weld-cycle-slice1.md` | **구현 청사진** — Task별 실코드·명령·기대출력. 이것만 따라가면 됨 |
-| `docs/superpowers/specs/2026-06-14-stage-weld-cycle-slice1-design.md` | 설계 근거(§5.3 트리거 분리, §8 가드, §9 테스트) |
-| `ref/samd20/main.c:1450-1632` | weld-cycle FSM 원본(SYS_RUN 블록) — 포팅 소스 |
-| `ref/samd20/main.c:1404-1466, 5313-5334` | start_key(물리 스위치) + temp_time 10ms 카운트다운 |
-| `fw/src/app_reg.c` | 초음파 게이트(`app_reg_command`/ceiling) — US_CYCLE 통합 대상(Task 4) |
-| `fw/include/app_lcd.h:67` | `us_run_status` enum — `US_CYCLE=4` 추가(Task 4) |
-| `fw/src/app.c` (`app_loop_iter`) / `fw/src/main.c` | 슈퍼루프 tick / init 배선(Task 6) |
-| `fw/test/Makefile`, `fw/test/test_app_reg_calc.c` | host 테스트 harness 패턴(CHECK_EQ) |
+| `docs/superpowers/RESUME.md` | 자동 로드되는 권위 상태 — 2026-06-19 블록이 최신 |
+| `docs/superpowers/2026-06-17-board-session-checklist.md` | 이번 세션 실행 체크리스트(reg 맵·mbpoll 명령·머지 순서) |
+| `fw/CMakeLists.txt` (line 90) | `file(GLOB src/*.c)` — 새 소스 추가 시 reconfigure 함정 |
+| `fw/src/app_seek_reset.c` / `_fsm.c` | seek-reset 글루 + 순수 FSM (이번 머지 산출물) |
+| `fw/src/app_weld_fsm.c` / `app_weld.c` | weld FSM (slice3 multi 2단 스테핑) |
+| `fw/include/app_modbus_core.h` | Modbus 레지스터 맵 (검증 시 사용; 외부 HMI 계약) |
+| `fw/include/app_config.h` | `g_cfg` 구조체 레이아웃 (SWD 직독 디코드용) |
 
-## Code Context
+## Resume Instructions (다음 세션 — 보드 검증 패턴 재사용 시)
 
-**FSM 코어 인터페이스** (Task 1에서 생성 — 계획서에 전문 있음):
-```c
-enum { WELD_READY=0, WELD_CYL1=1, WELD_WELD=2, WELD_HOLD=3, WELD_CYL2=4 };
-#define WELD_COMP_FULL 7u
-typedef struct { uint8_t start, run_mode; uint16_t limit_delay_time1, limit_delay_time2,
-                 limit_delay_time3; uint8_t output_power; } weld_in_t;
-typedef struct { uint8_t run_status, sol_dn, weld_start, weld_stop, amplitude, cycle_done; } weld_out_t;
-void weld_fsm_init(void);
-void weld_fsm_step(const weld_in_t *in, weld_out_t *out);  /* 10ms마다 1회 */
-uint8_t weld_fsm_status(void);
-```
+보드=**SERIAL/addr=1/9600/EVEN**(USART6=Modbus 점유 → mon 비가용). RS-485=`/dev/cu.usbserial-AB0MLYXA`, ST-LINK=`/dev/cu.usbmodem114303`.
 
-**글루 → 기존 API 연결** (Task 5):
-```c
-/* out.weld_start */ app_weld_hook_set_amp(out.amplitude); app_reg_command(US_CMD_START, (uint8_t)US_CYCLE);  /* set_amp=raw DAC, NOT set_pot(이중변환) */
-/* out.weld_stop  */ app_reg_command(US_CMD_RUN_RELEASE, (uint8_t)US_CYCLE);
-/* out.cycle_done */ cfg->work_cnt++; app_config_save_all(cfg); app_lcd_set_work_cnt(cfg->work_cnt);
-```
-확인된 시그니처: `app_reg_command(us_cmd_t, uint8_t)`, `app_lcd_cfg()→app_config_t*`, `app_lcd_set_work_cnt(uint32_t)`, `app_config_save_all(const app_config_t*)`, `sys_tick_get_ms()`, `mon_printf(...)`(무가드). ⚠ 진폭은 신규 `app_weld_hook_set_amp(uint8_t dac)`(raw DAC 직접) — 기존 `app_lcd_hook_set_pot(uint8_t output_power)`은 인자를 output_power로 받아 내부에서 `(x-50)*255/100`을 적용하므로 보정된 DAC를 넘기면 이중 변환(op=100→127→196). spec §6 참조.
-
-**비자명 로직**: `app_reg_command(START, US_CYCLE)`는 코드 변경 없이 동작 — START 케이스가 `us_run_status = src`로 저장하고 swallow_start 체크는 `src==US_TOUCH`만. ceiling은 `(rs==US_TOUCH)||(rs==US_COMM)`라 US_CYCLE 자연 제외. **enum에 US_CYCLE 추가만 필요**.
-
-## Resume Instructions (보드 연결 세션 — 회귀확인 후 머지)
-
-구현은 끝났다(8 커밋, cpp-reviewer APPROVED). 남은 건 HW 회귀확인 + 머지뿐.
-1. `cd /Users/tknoh/dev/work/gds_us_ctrl && git checkout feat/stage-weld-cycle-slice1`
-2. 사전 점검:
+1. 브랜치 체크아웃 후 빌드(⚠ 새 소스 있으면 reconfigure 먼저):
    ```bash
-   env -u STM32_TOOLCHAIN cmake -S fw -B fw/build -G Ninja && env -u STM32_TOOLCHAIN cmake --build fw/build   # 0-warning(우리 코드)
-   make -C fw/test test                                                                                       # 4 스위트 PASS
+   cd fw && env -u STM32_TOOLCHAIN cmake -B build -G Ninja && env -u STM32_TOOLCHAIN cmake --build build
+   env -u STM32_TOOLCHAIN cmake --build build --target flash
    ```
-3. 플래시 → mon(`/dev/cu.usbserial-AB0MLYXA`)로 **회귀확인**(슬라이스1은 프로덕션 트리거 없음 → 사이클 안 돎이 정상, 속지 말 것):
-   - 부팅 후 `[weld]` SOL_DN/set_amp 로그 **없음**(READY 휴면 확인).
-   - 기존 직접-초음파 무회귀: 패널 RUN press → ICON_RUN + on-time ceiling 정상 / Modbus START도 동일(stage-d2b·c 거동 유지).
-4. 통과 시 `superpowers:finishing-a-development-branch` → 머지(`--no-ff`) + 태그 `hw-revA_fw-stage-weld1`(⚠ host+HW-regression 검증 시점 명시) → changelog/RESUME/NEXT_STEPS/memory 갱신.
-5. **사이클 동작 자체의 HW E2E(상태 시퀀스·work_cnt 증가·SOL_DN 구동)는 슬라이스4** — 물리 SW_START + 실 SOL_DN/센서 필요. 슬라이스1은 보드로 사이클 검증 불가(host-test가 전부).
+   - Expected: `Verified OK` + 0-warning. 실패(`undefined reference`)면 → reconfigure 빠뜨림.
+2. 통신 확인: `mbpoll -m rtu -a 1 -b 9600 -P even -t 4 -r 30 -c 1 -1 /dev/cu.usbserial-AB0MLYXA`
+   - Expected: `[30]: 0`(STATUS idle). 첫 `Invalid CRC`면 1회 더(settling).
+3. SWD config 직독: `openocd -f openocd/stm32f410.cfg -c "init" -c "halt" -c "mdw 0x20000a5c 16" -c "resume" -c "shutdown"`
+4. 직접-초음파 회귀: START `-r 28 … 1` → STATUS `-r 30` 버스트 10회 → `1…1 0…0`(560ms ceiling).
 
 ## Edge Cases & Warnings
 
-- **START 재통합 금지** (위 Failed Approaches). 패널/Modbus START는 무수정.
-- **부트 워밍업 상호작용**: app_reg는 부트 후 ~4s `main_state!=0` 동안 START 무시. 슬라이스1은 트리거 없어 무관이나, 슬라이스4 물리 트리거 도입 시 워밍업 중 사이클→WELD의 US_CYCLE START가 무시될 수 있음(계획서 self-review 메모).
-- **CMake GLOB**: 신규 .c 추가 후 반드시 `cmake -S fw -B fw/build` **재구성**(GLOB은 configure 시점 평가).
+- **레지스터 맵**(mbpoll `-r` = addr+1): RESET=`-r 26`(0x19) / SEEK=`-r 27`(0x1A) / START=`-r 28`(0x1B) / STOP=`-r 29`(0x1C) / STATUS=`-r 30`(0x1D, bit0=초음파 on) / WORK_CNTL=`-r 2` / OUT_POWER=`-r 7` / ON_TIME=`-r 8`. ⚠ DISP_ENERGY=`-r 6`(0x05), 0x16 아님(=EN_SAFTY).
+- **ON_TIME(=직접런 ceiling) clamp max=100**(1000ms). 테스트로 바꿨으면 56(560ms) 복원 필수.
+- **FC06 write는 FRAM에 영속** — 테스트용 변경(EN_MULTI 등)은 반드시 원복. (이번 세션은 ON_TIME=56·EN_MULTI=0 복원 완료.)
+- **mbpoll 함수명 zsh alias 충돌**: `rd`/`gap` 등은 zsh alias → 함수 정의 시 parse error. `mbread`/`mbspin`/`mbwrite` 등 비충돌 이름 사용.
+- **물리 OSC 효과는 미검증**(hook stub만) — seek/reset/weld의 실제 주파수 거동은 B-SEAM/6b까지 미확인.
+- **ether_ip=192.168.1.70**: 이전 DHCP 리스 잔존(FRAM), 무해. SERIAL 모드라 미사용. (DHCP→static 영속은 메모리 `project_eth_dhcp_static_persist` 참조.)
 - **빌드 env**: `$STM32_TOOLCHAIN` stale → `env -u STM32_TOOLCHAIN` 필수.
-- **슬라이스1 HW 한계**: 프로덕션 트리거 없음 → 보드에서 사이클은 절대 안 돎(READY 휴면). 사이클 동작 검증은 host 테스트가 전부. 속지 말 것 — "보드에서 사이클 안 보임"은 정상.
-- **work_cnt 런타임**: 슬라이스1은 work_cnt 증가 **로직**만 확정(PC HMI 미해결 #7 설계 종결); 실제 증가는 슬라이스4 물리 트리거 후. PC HMI 연계 = 메모리 `project_pc_hmi_spinoff`.
-- **⚠ 슬라이스4 MUST-FIX (cpp-review LOW-1) — 진폭 언더플로**: `weld_amplitude`의 `(uint16_t)(output_power - 50u)`는 `output_power<50`이면 unsigned 언더플로 → 거대 진폭(안전 위험). Modbus 경로는 `app_modbus.c`에서 `[50,100]` 클램프하나 **LCD 패널 경로 `app_lcd_input.c:752` `LV_OUT_POWER`는 클램프 없음**(기존 직접 set_pot `app_lcd.c:28`도 동일 pre-existing 노출). 슬라이스1은 **dormant**(프로덕션 트리거 없음 + hook 로그만) → 무수정 OK. **슬라이스4에서 물리 SW_START + 실 I2C_POT 연결 시 HIGH 격상** → 슬라이스4 진입 시 `app_lcd_input.c:752`에 Modbus와 동일한 `if (data16 < 50u) data16 = 50u;` 클램프 미러. (samd20도 여기서 클램프 안 함 = 충실; 그래서 슬라이스1은 추가 가드 없이 둠.)
-- **cpp-review LOW-2 (반영됨)**: `weld_fsm_step` default fault-path(정상 도달 불가)에서 `s_sol_dn=0` fail-safe — 슬라이스4 실 SOL_DN GPIO 연결 시 fault 시 솔레노이드 잔류 방지.
-- **글루 tick 게이트 슬라이스4 메모(cpp-review M1)**: `app_weld.c` 10ms 게이트가 `s_prev_ms = now`(누적 슬립)이라 weld 단계가 길어지면 dwell이 누적 지연 — 슬라이스1 무해(액추에이터 없음), 슬라이스4 실 공압 dwell엔 `s_prev_ms += WELD_TICK_MS`로 변경 권장(코드에 주석 있음).
