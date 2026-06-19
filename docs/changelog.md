@@ -2,6 +2,31 @@
 
 ## [Unreleased]
 
+### 2026-06-17 c — SEEK/RESET 효과 CODE-COMPLETE (host+build verified, 미머지)
+
+SEEK/RESET 명령 효과(기존 `app_reg_command` no-op)를 순수 FSM + 글루로 구현. spec 사용자 리뷰(코드 참조 drift 0) → `superpowers:writing-plans`(plan 3 Task TDD) → `subagent-driven-development`(Task별 fresh subagent + 2-stage 리뷰[spec 대조 + cpp-reviewer] + 최종 통합 리뷰). 브랜치 `feat/stage-seek-reset` **미머지**(HW 회귀 + ICON 육안 = 보드 게이트; slice3 머지 후 stack). 빌드 **0-warning(우리 코드, FLASH 42.1%/RAM 16.8%)**, 호스트 **5스위트 PASS**(기존 4 + `app_seek_reset_fsm` 6 시나리오).
+
+- **거동(samd20 충실)**: RESET→500ms→SEEK 자동 체인→500ms→자동 해제→IDLE(`ref/samd20/main.c:5388-5408`); SEEK 직접은 단발(체인 없음); 타이밍 10ms tick `SR_TICKS=50`=500ms 액면가(samd20 100ms quirk 미재현, weld3 교훈; 진입 elapsed=0→`>=50` 전이→signal span 50tick).
+- **양방향 RUN 직교**: RUN 중 SEEK/RESET 무시(FSM `run_active`) + SEEK/RESET active 중 START 무시(`app_reg_command` START guard에 `app_seek_reset_active()` read-only 조회). 두 가드 상호보강 **구조적 불변성** — `us_run_status`는 START case에서만 non-IDLE이 되는데 그게 guard로 막혀 run_active mid-sequence 전이 경로 부재.
+- **분석 §5 ICON 엣지 갭 해결**: reset/seek_icon on/off 1-shot 엣지 → `ICON_RESET`(0x1150)/`ICON_SEEK`(0x1151) VP write(`app_lcd_icon` 기존 헬퍼). 물리 OSC 신호 구동은 **hook stub(mon 로그) + B-SEAM 이연**.
+- **산출물**: `app_seek_reset_fsm.{h,c}`(HAL-free FSM, 포화 가드) / `app_seek_reset.{h,c}`(글루: 10ms tick, cmd 1-shot 래치, run_active 주입, icon 엣지→hook+`app_lcd_icon` 라우팅) / `app_reg.c`(no-op→`app_seek_reset_request` 위임 + default 분리 + START guard **swallow-safe** 직교) / `app.c`·`main.c` 배선 / host-test 6(체인/SEEK단발/RUN직교/busy/ICON엣지/타이밍경계).
+- **커밋 3**: `0dddba3`(인터페이스+스캐폴드+host-test 배선)→`6410c5f`(FSM 전이 로직+host-test 6)→`8186325`(글루+위임/swallow-safe guard+배선).
+- **⚠ swallow-safe guard**(advisor 핵심 회귀 위험 — HW-verified RUN-path): `if (app_seek_reset_active()!=0) break;`를 swallow-consume **뒤**+`us_run_status=src` **앞** 별도 블록으로 — if 조건에 `&&` 합산 시 swallow consume까지 스킵되는 비대칭 버그. 정상경로(active=0) byte-equivalent, `app_reg_tick` 무변경.
+- **리뷰**: Task별 spec✅ + cpp-reviewer APPROVED-WITH-COMMENTS(0 Crit/High), **최종 통합 cpp APPROVED-WITH-COMMENTS(0 Crit/High/Med — 코드 레벨 머지 blocker 없음)**. cpp Minor 반영: 포화가드 근거 주석, 1-iter stale run_active 주석, warm-up 미게이팅 주석. main.c re-indent 원복(CLAUDE.md "요청 부분만").
+- **⚠ 글루 host 커버리지 0**: FSM 코어만 host-test; 글루(10ms 게이트·icon→hook→LCD·run_active 조회·START 역직교)는 cpp-review + HW 위임(spec §7) → **spec §9 HW 4항목이 실질 게이트**.
+- **다음 = 보드 세션 HW 4항목**: ① 직접-초음파 무회귀 ② RESET→ICON_RESET→(500ms)→ICON_SEEK→(500ms)→소등 자동 체인 시각 ③ SEEK 단발 ④ RUN↔SEEK/RESET 양방향 무시 → `--no-ff` 머지 + 태그 `hw-revA_fw-stage-seekreset`(slice3 머지 후). 물리 OSC E2E는 B-SEAM/6b.
+- **이연**: 물리 OSC 구동(B-SEAM/6b)·물리버튼 레벨팔로우(슬라이스4)·과부하 복구(overload, 이 FSM 재사용)·에러 표시(에러 머신)·weld-START 상호작용(슬라이스4 물리 SW_START 시 의식적 결정)·1-iter stale(B-SEAM)·warm-up 미게이팅(samd20 충실).
+
+### 2026-06-17 b — SEEK/RESET 효과 brainstorming + spec 확정 (구현 미시작)
+
+SEEK/RESET 명령의 효과(현재 `app_reg_command` no-op) 스테이지 설계. `superpowers:brainstorming` → spec 커밋. 코드 0줄. 브랜치 `feat/stage-seek-reset`(slice3 tip `33b7ae9` 위 stack — slice3 미머지라 docs 연속성 위해; main 분기 시 slice3 docs 누락). spec `1bd3ce8`.
+
+- **범위(사용자 확정)** = 상태머신 + 500ms 타이밍 체인 + 자동해제 + ICON 렌더(**HW 불요**, host-test). **물리 OSC 신호 구동은 hook stub + B-SEAM/6b 이연** — samd20은 M_RESET/M_SEEK active-LOW를 외부 M16으로 보냈으나 STM32가 M16 흡수 → 물리 출력(CTRL_OSC* 미러) 극성 미확인.
+- **아키텍처** = 순수 FSM 분리(신규 `app_seek_reset_fsm` HAL-free host-test + 글루 `app_seek_reset` 10ms tick+hook, weld 패턴).
+- **거동**: RESET→500ms→SEEK 자동 체인→500ms→자동 해제→IDLE(samd20 `main.c:5388-5408`); SEEK 직접은 단발(체인 없음); 타이밍 10ms tick 50=500ms 액면가(samd20 100ms quirk 미재현, weld3 교훈); 양방향 RUN 직교(RUN 중 SEEK/RESET 무시 + SEEK/RESET active 중 START 무시); 분석 §5 ICON 엣지 렌더 갭 동시 해결.
+- **이연(spec §10)**: 물리 OSC 구동(B-SEAM/6b)·물리버튼 레벨-팔로우(슬라이스4)·과부하 복구 시퀀스(overload, 이 FSM 재사용)·에러 표시(에러 머신).
+- **다음** = spec 사용자 리뷰 → writing-plans → subagent-driven(새 세션, 이 브랜치). spec=`docs/superpowers/specs/2026-06-17-stage-seek-reset-design.md`.
+
 ### 2026-06-17 — weld-cycle 슬라이스3 (multi_ctrl 2단 진폭 스테핑) CODE-COMPLETE (host+build verified, 미머지)
 
 samd20 `multi_ctrl` 2단 진폭 스테핑 포팅. WELD 단계에서 진입 시 `limit_mo_out1` → `limit_mo_time1` 경과 후 `limit_mo_out2`로 전환 → `limit_mo_time2`에서 WELD 정상 종료(→HOLD). `superpowers:brainstorming → spec → writing-plans → subagent-driven`(plan 3 Task, Task별 fresh subagent + 2-stage 리뷰[controller spec 대조 + cpp-reviewer]). 브랜치 `feat/stage-weld-cycle-slice3-multi` **미머지**(HW 회귀확인=보드 게이트, spec §10). 빌드 **0-warning(우리 코드, FLASH 41.64%)**, 호스트 **4스위트 PASS**(weld_fsm 21함수 = 기존 12 + multi 9).
