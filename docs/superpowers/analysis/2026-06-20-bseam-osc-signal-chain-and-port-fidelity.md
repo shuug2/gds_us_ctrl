@@ -1,6 +1,6 @@
 # B-SEAM OSC — 신호 체인 · 명령선 · 포팅 충실도 (2026-06-20 분석 세션)
 
-> **요약**: HW 비의존 분석 세션(코드 0줄, HW 측정 0건). B-SEAM(OSC 출력단)이 풀렸을 때 MCU가 무엇을 하는지, legacy M16 동작이 STM32로 제대로 포팅됐는지를 1차 소스(`ref/atmega16/m16_conv_v001.c` + disasm 분석 + STM32 코드)로 교차 검토했다. **핵심 결론 4건**: ① **출력단은 2조각 모두 미구동 stub** — OSC 채널 구동(**B-SEAM**) + 진폭 pot 실구동(**F2**, U4 칩 정체); 둘 다 `mon_printf` 로그만. ② 옛 IPC 명령 3선 **PA4=START / PA5=SEEK / PA6=RESET**(+PA7/PC4=IPC 아님)는 STM32에서 내부 `us_cmd`로 소멸, 처리부는 이식 완료. ③ M16은 "선(wire)"이 아니라 **프로세서** — "미러"는 명령핀→출력핀 통과가 아니라 *내부 상태 플래그 → OSC 핀* 매핑(finding ④: OSC 3선 = 명령 3선 active-LOW 레벨 미러, 가설). ④ **M16 처리코어 포팅 충실도 = 높음** — STM32가 disasm을 권위로 삼아 v001이 틀린 3곳(`×6` vs `>>6`, lookup `<`, warmup 부팅1회 vs per-START)을 모두 비껴감. 미검증은 전부 코드 버그가 아니라 절대값/물리출력(6b·B-SEAM·F2 게이트). **다음 세션 = 사용자 오프라인 검토 반영 → HW 있으면 측정+설계, 없으면 B-SEAM/F2 spec 선행.**
+> **요약**: HW 비의존 분석 세션(코드 0줄, HW 측정 0건). B-SEAM(OSC 출력단)이 풀렸을 때 MCU가 무엇을 하는지, legacy M16 동작이 STM32로 제대로 포팅됐는지를 1차 소스(`ref/atmega16/m16_conv_v001.c` + disasm 분석 + STM32 코드)로 교차 검토했다. **핵심 결론 4건**: ① **출력단은 2조각 모두 미구동 stub** — OSC 채널 구동(**B-SEAM**) + 진폭 pot 실구동(**F2**, U4 칩 정체); 둘 다 `mon_printf` 로그만. ② 옛 IPC 명령 3선 **PA4=START / PA5=SEEK / PA6=RESET**(+PA7/PC4=IPC 아님)는 STM32에서 내부 `us_cmd`로 소멸, 처리부는 이식 완료. ③ M16은 "선(wire)"이 아니라 **프로세서** — "미러"는 명령핀→출력핀 통과가 아니라 *내부 상태 플래그 → OSC 핀* 매핑(finding ④: OSC 3선 = 명령 3선 active-LOW 레벨 미러, 가설). ④ **M16 처리코어 포팅 충실도 = 높음** — STM32가 disasm을 권위로 삼아 v001이 틀린 3곳(`×6` vs `>>6`, lookup `<`, warmup 부팅1회 vs per-START)을 모두 비껴감. 미검증은 전부 코드 버그가 아니라 절대값/물리출력(6b·B-SEAM·F2 게이트). ⑤ **(2026-06-20 후속, 사용자 HW 진실 + SAMD20 검증) B4 해소 — PB1 = SAMD20 소비전류**(M16 PA1은 미연결): SAMD20는 전류표시(curr_amp)·전력(curr_power=curr_amp×2.2)·에너지(curr_energy=acc/500)를 전부 PA02(=PB1)에서 파생하나, **STM32는 현재 PB1을 read-and-discard하고 이 3값을 ch0(reg_scale)에서 뽑음** = source·공식 불일치. `curr_amp`=소비전류(ampere), 진폭 아님. **이 PB1 재구성 = 6b 스테이지 본체** (§4b). **다음 세션 = 사용자 오프라인 검토 반영 → HW 있으면 측정+설계, 없으면 B-SEAM/F2/6b spec 선행.**
 >
 > **산출물**: 검토용 Artifact(claude.ai) — 신호 체인 다이어그램 + 측정 절차 7단계 + 포팅 충실도(OSC 핀/처리코어) + 명령선/프로세서 정리. URL은 §7. (scratchpad HTML 원본은 세션 한정 소멸; 본 .md가 repo 영속본.)
 
@@ -14,7 +14,7 @@
 |------|-----------|------|
 | 채널 ON/OFF | `CTRL_OSC0..4` = PB2/PB10/PB12/PB13/PB14 (active-LOW) | **B-SEAM** (미구동 stub) |
 | 진폭(파워) | I2C_POT `@0x28` (I2C1, FRAM과 공유) | **F2** (미구동 stub) |
-| 피드백 읽기 | ADC ch0(전류/전력) · ch1=`ADC_OSC`/PB1(발진 모니터) | 읽기 동작 / 절대보정=6b |
+| 피드백 읽기 | ch0=PB0(M16 PA0, 레귤레이션 피드백) · ch1=PB1(**SAMD20 소비전류**; "OSC" 라벨 stale, §4b) | ch0 사용 / **ch1 현재 read-and-discard** / 절대보정=6b |
 | SEEK / RESET | 공진 탐색 / 초기화 신호 (옛 M_SEEK·M_RESET 자리) | hook stub |
 
 **⚠ 출력단 전체가 미구동**: `app_reg.c`는 "drives NO OSC GPIO"(compute-only). `app_lcd_hook_set_pot`(app_lcd.c:24)·`app_weld_hook_set_amp`(app_weld.c:36)는 **`mon_printf` 로그만**. I2C1 버스는 FRAM(FM24C16B) 전용으로만 실구동. 즉 두뇌·상태머신·계기판·명령 라우팅은 다 돌지만, **실출력 = ① B-SEAM(OSC 채널) + ② F2(진폭 pot) 둘 다 미이식.**
@@ -77,6 +77,35 @@
 
 **★ v001 틀렸고 STM32가 disasm 따른 3곳**: (1) ×6 vs `>>6` (disasm에 시프트 0건, `0x1AC2 ldi r30,0x06`+`0x2158` 곱셈) (2) lookup `<` (C2 `0x202A` cp→brcs) (3) warmup 부팅1회 (finding ① `@0x041E`/`@0x137C`; `reg_ramp_level`은 검증 테이블 레퍼런스로만 보존, 출력 경로 제거).
 
+## 4b. B4 해소 — PB1 = SAMD20 소비전류 (전류·전력·에너지 source 정정)
+
+**사용자 HW 진실 (2026-06-20)**: M16 PA1(ADC1)은 **물리 미연결**(B4 의심 확정 — M16 ch1은 플로팅 읽음 → 레귤레이션 미사용과 일치). 통합 보드에서 **STM32 PB1 = 옛 SAMD20 PA02 회로 = 소비전류**. PB0(ch0)는 M16 PA0 그대로(레귤레이션 피드백, 현 구현 OK — 사용자 확인).
+
+**SAMD20 전류/전력/에너지 = PA02(=PB1) 단일 소스** (`ref/samd20/main.c` `cal_real_val`, `ADC_CURR`=PIN0=PA02):
+
+```
+temp     = average(buf[ADC_CURR], ADC_SAMPLE)   // min/max 1개씩 제거 평균
+temp_val = temp*4;  temp_val = temp_val/10 + cal_val
+curr_amp   = (temp_val > 51) ? temp_val-37 : 0  // 임계51/오프셋-37 ("OFFSET 15mA") = 소비전류(mA)
+curr_power = curr_amp * 22 / 10                  // 전력 = 전류 × 2.2
+acc_energy += curr_power (1ms);  curr_energy = acc_energy / 500
+```
+(SAMD20 ADC 2채널: PIN0=PA02=`ADC_CURR`=소비전류 / PIN11=`ADC_OUT_LV`=`curr_lv` 출력레벨 — PIN11은 STM32 미이식.)
+
+**STM32 현재 불일치** (`app_reg.c`):
+
+| 값 | SAMD20 (PB1) | STM32 현재 | 판정 |
+|---|---|---|---|
+| curr_amp | PB1 전류 (×4 /10+cal, thr51/off37) | `ch0_avg` (PB0) | ❌ source |
+| curr_power | `curr_amp × 2.2` | `reg_scale(ch0)` = ×6 lookup | ❌ source·공식 |
+| curr_energy | `acc/500` (1ms) | `acc/250` (2ms) | ⚠ 구조 OK / 입력 틀림 |
+
+→ STM32는 **PB1(실 전류)을 읽어 버리고**, 전류/전력/에너지를 ch0(M16 레귤레이션 피드백)에서 뽑음.
+
+**정정 2건**: (1) `curr_amp` = **소비전류(ampere/mA), 진폭 아님** — 오프셋 "15mA"·`curr_amp×2.2=전력`이 명백; "bar=amplitude(curr_amp)" 해석은 SAMD20 기준 부정확(LCD bar=소비전류). (2) PB1 펌웨어 라벨 `ADC1_CH_OSC`/주석 = stale.
+
+**= 6b 스테이지의 본체**: curr_amp/power/energy를 PB1에서 SAMD20 공식으로 재구성 + ch0(PB0)는 레귤레이션/OSC 전용 분리. 보정상수(`cal_val`, `×4`, `/10`, `×2.2`, thr51/off37, `/500↔/250`)는 STM32 3.3V/12bit 도메인이라 실 rig 6b 게이트. weld 에너지가 "구조=host-test, 절대=6b"였던 그 6b 조각. **펌웨어 변경 = 6b 스테이지 spec부터 (지금 코드 무변경).**
+
 ## 5. 측정 절차 (HW 세션용, 스코프 + SWD)
 
 **안전**: ① 부팅 시 OSC off 극성 확인(과거 버그) ② **PB12/PB13 출력 구동 금지**(M16 입력핀 → contention) ③ 최소 진폭+짧은 on-time부터 ④ **스코프 프로빙 자체** — 파워 구동단 고전압·비접지 가능 → GND 클립 전 전압/절연 확인(차동/절연 프로브).
@@ -86,8 +115,8 @@
 3. RUN 트리거 → 어느 핀 토글? active 레벨/지속시간(ceiling 560ms?)
 4. output_power 스윕(50→100) → I2C_POT(@0x28) 트랜잭션 + OSC 패턴 변화? (불변=enable+pot 단순 / 변함=패턴 매핑) **+ F2: U4 칩 정체·I2C write 확인**
 5. PB12/PB13 외부 구동 여부 → 피드백 입력 vs 출력
-6. SEEK/RESET 물리 핀 + 거동; 스윕이 ADC_OSC(PB1)에 보이면 보드-side, 안 보이면 MCU 생성 필요. ⚠ 실 트랜스듀서/혼 필요(공진=음향 부하 의존)
-7. ADC 도메인 실측(PB0/PB1 전압 범위) → 6b 보정 입력
+6. SEEK/RESET 물리 핀 + 거동 (⚠ PB1은 더 이상 OSC 모니터 아님=소비전류 §4b → 스윕은 OSC 핀/트랜스듀서에서 직접 관측). ⚠ 실 트랜스듀서/혼 필요(공진=음향 부하 의존)
+7. ADC 도메인 실측: PB0(레귤레이션 피드백) + **PB1(소비전류 §4b)** 전압 범위 → 6b 보정(curr_amp/power/energy 공식 상수 확정)
 
 **최단 경로**: 동작 원본(M16) 보드가 있으면 OSC 커넥터를 같은 절차로 스코프 → gold-standard 매핑/극성(net-to-channel은 AVR 기계어에 없음).
 
@@ -96,7 +125,7 @@
 - **B-SEAM**: 계산된 레벨/명령 상태가 어느 OSC 핀으로, 어떤 극성/패턴으로 가는가 + PB12/PB13 방향. 출력=binary 명령미러(finding ④)인지 레벨패턴인지.
 - **F2**: U4 I2C_POT 칩 정체 → 진폭 pot 실구동 구현. (실출력 = B-SEAM + F2)
 - **SEEK/RESET 스윕 주체**: 보드-side(MCU 1신호) vs MCU 생성 — 코드 규모 좌우.
-- **6b**: ×6 등 절대 보정(M16 2.56V ↔ STM32 3.3V/12bit), energy divisor `REG_ENERGY_DIV=250`.
+- **6b**: ×6 등 절대 보정(M16 2.56V ↔ STM32 3.3V/12bit), energy divisor `REG_ENERGY_DIV=250`. **+ §4b: 전류/전력/에너지를 PB1(소비전류)에서 SAMD20 공식으로 재구성** (curr_amp 전류·power ×2.2·energy acc/divisor; cal_val·thr51/off37 실측). = 6b 스테이지 본체.
 
 ## 7. 다음 세션 진입
 
