@@ -1,91 +1,100 @@
-# Handoff: 보드 세션 — weld slice3 + seek-reset HW 검증 + 머지 ✅ DONE
+# Handoff: 다음 세션 — 남은 작업(전부 HW-gated) 진입 가이드
 
-**Generated**: 2026-06-19
-**Branch**: `main` (tip `8e4ca4f`) — feature 브랜치 2개(`feat/stage-weld-cycle-slice3-multi`, `feat/stage-seek-reset`) **머지 후 삭제**.
-**Status**: ✅ DONE — CODE-COMPLETE였던 두 스테이지를 보드에서 검증 후 main 머지 + 태그. 코딩된 스테이지는 **전부 main**. 남은 작업 = HW-gated deferred만.
+**Generated**: 2026-06-20
+**Branch**: `main` (tip `1fa5938`) — origin과 완전 동기화 (`git status` = `## main...origin/main`).
+**Status**: 🟢 깨끗한 체크포인트 — 진행 중인 작업 없음. 코딩된 스테이지는 **전부 main + origin에 푸시 완료**. 남은 작업은 **전부 HW-gated**(실 초음파 rig/스코프 또는 물리 입력 필요).
 
-> 이전 HANDOFF(weld-cycle slice1)는 머지 완료로 supersede. 이력 = `docs/changelog.md`(2026-06-19) / `docs/superpowers/RESUME.md`(2026-06-19 블록, 자동 로드) / 메모리 `project_weld_cycle`·`project_seek_reset`. **다음 스테이지 착수 시 본 HANDOFF을 덮어쓸 것.**
+> 이전 HANDOFF(보드 세션 weld3+seek-reset 검증)는 완료로 supersede. 이력 = `docs/changelog.md`(2026-06-19) / `docs/superpowers/RESUME.md`(2026-06-19 블록, 자동 로드).
+
+## ⚠ 가장 먼저 알아야 할 것 — git 히스토리 재작성됨 (2026-06-20)
+
+`git filter-repo`로 **전체 282커밋의 author 이메일을 `nogari@gmail.com`으로 재작성**했다(GitHub `shuug2` 계정 연결용). 결과:
+
+- **모든 커밋 해시가 바뀜.** 옛 문서(RESUME/changelog/메모리/이 HANDOFF의 이전 버전)에 적힌 해시(`f6a7eee`, `4c536bf`, `a209ac1`, `2e5297f` 등)는 **더 이상 존재하지 않음**. `git show <옛해시>` 하면 "Not a valid object name". 내용·커밋 메시지·트리는 동일, SHA만 새로 계산됨.
+- **안정 레퍼런스 = 태그.** 해시 대신 태그로 참조할 것:
+
+| 태그 | 새 커밋 | 내용 |
+|---|---|---|
+| `hw-revA_fw-stage-seekreset` | `34367b1` | seek-reset 머지 (최신 기능) |
+| `hw-revA_fw-stage-weld3` | `d2669a1` | weld multi 스테핑 머지 |
+| `hw-revA_fw-stage-weld2` / `-weld1` | (서버 동기) | weld energy / DELAY |
+| `hw-revA_fw-stage-c2b` / `-c1` | | Modbus TCP / RTU |
+| `hw-revA_fw-stage-d2b` / `-d2` / `-d` / `-lcd` / `-b` / `-a` | | 이전 스테이지 |
+
+- 옛 문서에서 해시가 안 맞아도 **당황 말 것** — `git log --oneline`로 현재 해시 확인, 또는 태그/커밋 메시지로 매칭.
+- origin은 filter-repo가 한 번 제거 → SSH로 재추가됨: `origin = git@github.com:shuug2/gds_us_ctrl.git`. push는 SSH 인증(키 등록됨, `Hi shuug2!` 확인).
 
 ## Goal
 
-보드 연결 세션. CODE-COMPLETE 미머지였던 두 스테이지(weld slice3 multi_ctrl, SEEK/RESET 효과)를 실보드에서 검증하고 main에 머지. seek-reset이 slice3 위 stack이라 **머지 순서 고정**: ① slice3 회귀+머지 → ② seek-reset HW 4항목 → ③ seek-reset 머지.
+기존 SAMD20 + ATmega16 기능을 STM32F410RBT 단일 MCU로 통합. **코드/host-test로 가능한 계층은 전부 완료**(LCD·레귤레이션·Modbus RTU+TCP·weld 1~3·seek-reset). 남은 것은 **실 출력/물리 효과 계층** — 실 초음파 rig·가변전압·스코프·물리 입력이 있어야 검증 가능.
 
-## Completed
+## Completed (전부 main + origin)
 
-- [x] **① weld slice3 회귀확인 + 머지** — 머지 `a209ac1`(`--no-ff`), 태그 `hw-revA_fw-stage-weld3`. 회귀-1 직접-초음파 ceiling(`1×7→0`=560ms)+ICON_RUN / 회귀-2 EN_MULTI=1 직접 START 동일 ceiling(스테핑 없음=§6 deviation) / 회귀-3 work_cnt=0(START 테스트 전·후) / 회귀-4 FC03 미러=SWD `g_cfg` 직독 전건 일치.
-- [x] **② seek-reset HW 4항목** — HW-1 직접-초음파/weld 무회귀(START guard 변경 무영향) / HW-2 자동 체인(RESET→ICON_RESET→ICON_SEEK 육안) / HW-3 SEEK 단발(ICON_SEEK만) / HW-4 양방향 RUN 직교(대조법: 런 중 RESET→STATUS 무중단·체인 없음 / 체인 중 START→STATUS 0·런 시작 안 함).
-- [x] **③ seek-reset 머지** — 머지 `4c536bf`(`--no-ff`), 태그 `hw-revA_fw-stage-seekreset`.
-- [x] 머지 후 main: 0-warning, FLASH 42.11%/RAM 16.77%, host 5스위트 PASS. 핸드오프(RESUME/changelog/메모리) 갱신.
+- [x] Phase 1+2 · Stage A · B · LCD full port · Stage D(ATmega16 흡수: 레귤레이션·상태머신·RUN 게이트·m1)
+- [x] Stage C: Modbus RTU + TCP(static/DHCP)
+- [x] weld-cycle 슬라이스1(DELAY) · 2(energy_ctrl exit) · 3(multi_ctrl 2단 진폭)
+- [x] SEEK/RESET 효과 (순수 FSM + 글루, ICON, 양방향 RUN 직교)
+- [x] git 히스토리 author 재작성 + origin(SSH) 푸시 (main `1fa5938` + 태그 12개)
 
-## Not Yet Done (전부 HW-gated deferred — 실 초음파 rig/스코프 또는 슬라이스4 HW 필요)
+## Not Yet Done — 남은 작업 (전부 HW-gated, spec 미작성 → brainstorming부터)
 
-- [ ] **B-SEAM OSC 물리 구동**: seek/reset/weld의 실제 `CTRL_OSC*` 출력 (현재 hook stub=mon 로그만). M16 흡수로 극성 미확인 — 실 초음파 rig + 스코프 필요.
-- [ ] **6b signal calibration**: 진폭/주파수/에너지 절대 보정 (벤치는 DISP_POWER=0 무신호 → 누산/진폭 절대 E2E 불가, 로직만 host-test 검증됨).
-- [ ] **weld 슬라이스4**: TRIGGER 모드 + 물리 SW_START + 위치센서 + 실 SOL_DN(PB5) + 안전 abort + **config-validation 클램프**(LCD `app_lcd_input.c:752` LV_OUT_POWER [50,100] / `limit_mo_out`·`limit_energy`·`limit_out_time`). 사이클/스테핑 자체 E2E도 여기서.
-- [ ] **overload 스테이지**: OVLD→RESET→자동 SEEK 복구 — **seek-reset FSM 재사용** 설계됨.
-- [ ] **weld-START 상호작용 결정**: seek-reset START guard가 `app_weld.c` US_CYCLE START도 게이팅 — 현재 weld dormant라 inert, 슬라이스4 물리 SW_START 도입 시 의식적 결정 필요(plan 노트).
+우선순위/의존성 순. **slice4 외에는 아직 spec 없음** → 각각 `superpowers:brainstorming → spec → writing-plans → subagent-driven` 거칠 것.
 
-## Failed Approaches / Gotchas (이번 세션 — 반복 주의)
+1. **weld 슬라이스4** (사이클 자체 E2E의 핵심): TRIGGER 모드 + **물리 SW_START1/2** + 위치센서 + 실 SOL_DN(PB5) GPIO + 안전 abort + **config-validation 클램프**. ⚠ **must-fix(slice1~3 누적 LOW)**: LCD `app_lcd_input.c:752` `LV_OUT_POWER` [50,100] 클램프(Modbus는 클램프하나 LCD 경로 누락 → 진폭 언더플로) · `limit_mo_out`/`limit_energy`/`limit_out_time` config-validation. samd20 참조 `ref/samd20/main.c:1404-1466`(물리 start switch). **weld-START 상호작용 결정**: seek-reset START guard가 US_CYCLE START도 게이팅 — slice4 물리 트리거 도입 시 의식적 결정(현재 weld dormant라 inert). 슬라이스1~3 거동의 실 사이클/스테핑 E2E도 여기서.
+2. **B-SEAM OSC 물리 구동**: seek/reset/weld의 실제 `CTRL_OSC*` 주파수 출력 (현재 전부 hook stub=mon 로그만). M16 흡수로 출력 극성 미확인 → 실 초음파 rig + 스코프 필요. 메모리 `project_m16_regulation_verified`(B-SEAM = OSC output binding이 핵심 blocker).
+3. **6b signal calibration**: 진폭/주파수/에너지 **절대 보정** (벤치는 DISP_POWER=0 무신호 → 누산/진폭 절대값 검증 불가; 로직은 host-test로만 검증됨). divisor `REG_ENERGY_DIV=250` 등 실 rig에서 확정.
+4. **overload 스테이지**: OVLD(PC0 입력)→RESET→자동 SEEK 복구 — **seek-reset FSM 재사용** 설계됨. samd20 overload 시퀀스 포팅.
 
-- **CMake GLOB stale-build (빌드 실패 → reconfigure로 해결)**: seek-reset 브랜치 체크아웃 후 `cmake --build build`(증분)만 돌렸더니 링크 실패:
-  ```
-  undefined reference to `app_seek_reset_tick`
-  (app_seek_reset_tick): Unknown destination type (ARM/Thumb) ... dangerous relocation
-  ```
-  원인 = `fw/CMakeLists.txt:90` `file(GLOB src/*.c …)`는 **configure 시점에만** 평가 → 브랜치가 추가한 새 소스(`app_seek_reset.c`)를 재-glob 안 함. **해결 = `cmake -B build -G Ninja` reconfigure** (즉시 `app_seek_reset.c.obj` 컴파일). **교훈: 새 소스 추가된 브랜치 전환 후엔 무조건 reconfigure.** (새 .c 없이 기존 파일만 수정한 브랜치=slice3는 증분 빌드 OK.)
-- **mbpoll 첫 트랜잭션 CRC 에러**: RS-485 블록/write 첫 호출이 종종 `Invalid CRC`로 실패(라인 settling). → 더미 read 1회로 settle 후 진행. 타임아웃(무응답)과는 다름 — CRC는 응답은 왔는데 프레이밍 깨짐.
-- **ICON 560ms 관찰 불가 → 확대/반복**: 단발 560ms blink은 육안 추적 실패. → ① ON_TIME=100(=1s, **clamp max**)로 ceiling 확대 + 반복 트리거(ON/OFF 깜빡 4~6회) ② RESET/SEEK는 mbpoll STATUS에 안 잡혀(no status bit) **반복 트리거 + 콘솔 마커 + 육안**이 유일 검증.
-- **HW-4 부정(아이콘 안 뜸) 검증 어려움 → 대조법**: "no icon" 단독 관찰은 애매 → [A]유휴(체인/런 발생) ↔ [B]직교(무시) **대조**로 차이를 가시화. STATUS 패턴(런 무중단 `111111100000` / 런 없음 `0000…`)이 객관 증거. (⚠ HW-4(b)는 "START-during-chain에서 런 시작 안 함"을 관찰한 것 — "START가 펌웨어에 도달했고 거부됐다"로 과대주장 금지; CRC-실패 write와 관찰상 동일. 수렴 증거[STATUS+ICON+host-test+구조적 불변성]로 충분.)
+## Failed Approaches / 반복 주의 (이전 세션 교훈)
 
-## Key Decisions
-
-| Decision | Rationale |
-|----------|-----------|
-| 머지 순서 ① slice3 → ② seek-reset 고정 | seek-reset이 slice3 tip `33b7ae9` 위 stack — 순서 뒤집으면 미검증 slice3 코드가 seek-reset 머지에 딸려 들어감 |
-| 재플래시 없이 main 검증 종료 | 머지 후 FLASH 크기(42.11%)=HW-테스트한 브랜치 빌드와 동일 + merge-tree 무충돌 + host PASS → main == 테스트한 코드 (프로젝트 관행) |
-| HW-4 STATUS 측정 + 대조법 | mon 비가용·RESET/SEEK는 status bit 없음 → 측정 가능한 STATUS(런 유무) + ICON 대조 + host-test + 구조적 불변성의 수렴 증거 |
+- **CMake GLOB stale-build**: `fw/CMakeLists.txt:90` `file(GLOB src/*.c)`는 configure 시점에만 평가 → 새 소스 추가된 브랜치 전환 후 `cmake --build`(증분)만 돌리면 새 `.c` 미링크(`undefined reference` + "dangerous relocation"). **브랜치 전환/소스 추가 후 반드시 `cmake -B build -G Ninja` reconfigure.**
+- **START 트리거 통합 금지**(weld): 물리 SW_START=사이클 / 패널·Modbus START=직접 초음파 — **분리 유지**. 과거 통합했다 되돌림. slice4에서 재라우팅 금지.
+- **mbpoll 첫 트랜잭션 CRC**: RS-485 첫 호출이 종종 `Invalid CRC`(라인 settling) → 더미 read 1회 후 진행. 함수명은 zsh alias 피해 `mbread`/`mbspin`/`mbwrite` 사용.
+- **ICON/짧은 transient 검증**: 560ms blink은 육안 추적 난망 → ON_TIME 확대(clamp max=100=1s) + 반복 트리거 + 콘솔 마커. STATUS bit 없는 RESET/SEEK는 **대조법**([A]유휴=발생 ↔ [B]직교=무시)으로 차이 가시화.
 
 ## Current State
 
-**Working**: main 전부 — Phase1+2·A·B·LCD·D·C·weld-1·2·3·seek-reset. 빌드 0-warning, host 5스위트 PASS. 보드에 main 이미지 플래시됨(재플래시 불요).
+**Working**: main 전부 빌드 0-warning(FLASH 42.11%/RAM 16.77%), host **5스위트 PASS**(reg_calc/modbus_core/tcp_frame/weld_fsm/seek_reset_fsm). origin 동기화 완료.
 
 **Broken**: 없음.
 
-**Uncommitted Changes**: 없음(워킹트리 클린; `.understand-anything/`·`ref/atmega16/M16_reverse/`는 기존 untracked, 무관).
+**Uncommitted**: 없음(`.understand-anything/`·`ref/atmega16/M16_reverse/` 기존 untracked, 무관). ⚠ `git stash list`에 옛 auto-stash 1개 잔존 가능(checkout 시 생성, 불필요하면 `git stash drop`).
 
 ## Files to Know
 
 | File | Why It Matters |
 |------|----------------|
-| `docs/superpowers/RESUME.md` | 자동 로드되는 권위 상태 — 2026-06-19 블록이 최신 |
-| `docs/superpowers/2026-06-17-board-session-checklist.md` | 이번 세션 실행 체크리스트(reg 맵·mbpoll 명령·머지 순서) |
-| `fw/CMakeLists.txt` (line 90) | `file(GLOB src/*.c)` — 새 소스 추가 시 reconfigure 함정 |
-| `fw/src/app_seek_reset.c` / `_fsm.c` | seek-reset 글루 + 순수 FSM (이번 머지 산출물) |
-| `fw/src/app_weld_fsm.c` / `app_weld.c` | weld FSM (slice3 multi 2단 스테핑) |
-| `fw/include/app_modbus_core.h` | Modbus 레지스터 맵 (검증 시 사용; 외부 HMI 계약) |
-| `fw/include/app_config.h` | `g_cfg` 구조체 레이아웃 (SWD 직독 디코드용) |
+| `docs/superpowers/RESUME.md` | 자동 로드 권위 상태 — 2026-06-19 블록 최신 (단 해시는 재작성 전 값) |
+| `docs/NEXT_STEPS.md` | CLAUDE.md 지정 first-load 문서 — ⚠ **stale(2026-06-17 b)**, slice3/seek-reset 미머지로 표기됨. 갱신 필요 |
+| `ref/samd20/main.c` | 포팅 소스 원본 (slice4 물리 start `1404-1466`, overload 등) |
+| `fw/include/app_modbus_core.h` | Modbus 레지스터 맵 (검증·외부 HMI 계약) |
+| `fw/include/app_config.h` | `g_cfg`@`0x20000a5c` 구조체 (SWD 직독 디코드) |
+| `fw/src/app_seek_reset.c` | overload가 재사용할 FSM/글루 |
 
-## Resume Instructions (다음 세션 — 보드 검증 패턴 재사용 시)
+## Resume Instructions (다음 세션 시작)
 
-보드=**SERIAL/addr=1/9600/EVEN**(USART6=Modbus 점유 → mon 비가용). RS-485=`/dev/cu.usbserial-AB0MLYXA`, ST-LINK=`/dev/cu.usbmodem114303`.
+1. `docs/NEXT_STEPS.md` + `docs/superpowers/RESUME.md`(자동 로드) 읽기. ⚠ 거기 해시는 **재작성 전** 값 — 현재 해시는 `git log --oneline`로 확인.
+2. 현 상태 확인: `git status`(=`## main...origin/main` 동기) / `git log --oneline -5` / `git tag`.
+3. **HW 있으면** → 남은 작업 1~4 중 선택. 보드 검증 패턴(아래 보드 절) 재사용.
+4. **HW 없으면** → slice4/overload **brainstorming + spec**만 선행 가능(설계는 코드 없이). 단 절대 검증은 HW 세션으로.
 
-1. 브랜치 체크아웃 후 빌드(⚠ 새 소스 있으면 reconfigure 먼저):
-   ```bash
-   cd fw && env -u STM32_TOOLCHAIN cmake -B build -G Ninja && env -u STM32_TOOLCHAIN cmake --build build
-   env -u STM32_TOOLCHAIN cmake --build build --target flash
-   ```
-   - Expected: `Verified OK` + 0-warning. 실패(`undefined reference`)면 → reconfigure 빠뜨림.
-2. 통신 확인: `mbpoll -m rtu -a 1 -b 9600 -P even -t 4 -r 30 -c 1 -1 /dev/cu.usbserial-AB0MLYXA`
-   - Expected: `[30]: 0`(STATUS idle). 첫 `Invalid CRC`면 1회 더(settling).
-3. SWD config 직독: `openocd -f openocd/stm32f410.cfg -c "init" -c "halt" -c "mdw 0x20000a5c 16" -c "resume" -c "shutdown"`
-4. 직접-초음파 회귀: START `-r 28 … 1` → STATUS `-r 30` 버스트 10회 → `1…1 0…0`(560ms ceiling).
+### 보드 검증 절 (HW 세션용)
 
-## Edge Cases & Warnings
+보드 기본 = **SERIAL/addr=1/9600/EVEN**(USART6=Modbus 점유 → mon 비가용). RS-485=`/dev/cu.usbserial-AB0MLYXA`, ST-LINK=`/dev/cu.usbmodem114303`.
+```bash
+cd fw && env -u STM32_TOOLCHAIN cmake -B build -G Ninja && env -u STM32_TOOLCHAIN cmake --build build   # ⚠ 새 소스면 reconfigure 필수
+env -u STM32_TOOLCHAIN cmake --build build --target flash
+# 통신: mbpoll -m rtu -a 1 -b 9600 -P even -t 4 -r 30 -c 1 -1 /dev/cu.usbserial-AB0MLYXA   (첫 Invalid CRC면 1회 더)
+# SWD config: openocd -f openocd/stm32f410.cfg -c "init" -c "halt" -c "mdw 0x20000a5c 16" -c "resume" -c "shutdown"
+```
+- 레지스터(mbpoll `-r`=addr+1): RESET=26 / SEEK=27 / START=28 / STOP=29 / STATUS=30(bit0=초음파on) / WORK_CNTL=2 / OUT_POWER=7 / ON_TIME=8. ⚠ DISP_ENERGY=6(0x05).
+- **ON_TIME(직접런 ceiling) clamp max=100**(1000ms). 테스트로 바꿨으면 56 복원(FC06=FRAM 영속).
 
-- **레지스터 맵**(mbpoll `-r` = addr+1): RESET=`-r 26`(0x19) / SEEK=`-r 27`(0x1A) / START=`-r 28`(0x1B) / STOP=`-r 29`(0x1C) / STATUS=`-r 30`(0x1D, bit0=초음파 on) / WORK_CNTL=`-r 2` / OUT_POWER=`-r 7` / ON_TIME=`-r 8`. ⚠ DISP_ENERGY=`-r 6`(0x05), 0x16 아님(=EN_SAFTY).
-- **ON_TIME(=직접런 ceiling) clamp max=100**(1000ms). 테스트로 바꿨으면 56(560ms) 복원 필수.
-- **FC06 write는 FRAM에 영속** — 테스트용 변경(EN_MULTI 등)은 반드시 원복. (이번 세션은 ON_TIME=56·EN_MULTI=0 복원 완료.)
-- **mbpoll 함수명 zsh alias 충돌**: `rd`/`gap` 등은 zsh alias → 함수 정의 시 parse error. `mbread`/`mbspin`/`mbwrite` 등 비충돌 이름 사용.
-- **물리 OSC 효과는 미검증**(hook stub만) — seek/reset/weld의 실제 주파수 거동은 B-SEAM/6b까지 미확인.
-- **ether_ip=192.168.1.70**: 이전 DHCP 리스 잔존(FRAM), 무해. SERIAL 모드라 미사용. (DHCP→static 영속은 메모리 `project_eth_dhcp_static_persist` 참조.)
+## Warnings
+
+- **옛 해시 신뢰 금지** — filter-repo 재작성으로 모든 SHA 변경(위 §). 태그/메시지로 참조.
+- **GitHub 이메일 인증 (사용자 액션, 미완료)**: 커밋이 shuug2 프로필로 연결되려면 `nogari@gmail.com`을 shuug2 계정 Settings → Emails에 등록·인증해야 함(소급 적용). 인증 전에도 코드·히스토리는 정상 푸시됨.
+- **push = SSH 전용**: `origin = git@github.com:shuug2/gds_us_ctrl.git`. HTTPS 자격증명 없음. 에이전트 샌드박스 환경에선 push 인증 불가 → 사람 터미널에서.
+- **물리 OSC 효과 전부 미검증**(hook stub만) — seek/reset/weld 실제 주파수 거동은 B-SEAM/6b까지 미확인.
 - **빌드 env**: `$STM32_TOOLCHAIN` stale → `env -u STM32_TOOLCHAIN` 필수.
+- **ether_ip=192.168.1.70**: 옛 DHCP 리스 잔존(FRAM), 무해. SERIAL 모드라 미사용.
