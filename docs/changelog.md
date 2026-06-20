@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### 2026-06-20 — 핀맵 정정(PA0=FREQ_IN, PB4=CON_USOUT) + SAMD20→STM32 레거시 IO 대응표(부록 D) 신설
+
+문서 전용 세션 (코드 무변경, 빌드 무영향). 사용자 HW 확정 정보로 SAMD20→STM32 IO 매핑을 1차 소스(`ref/samd20/.../user_board.h` + `ref/samd20/main.c` 실사용)와 대조 검증·반영.
+
+- **PA0 정정**: `US_PWM_OUT(초음파 PWM 출력)` → **`FREQ_IN`(출력 초음파 주파수 측정, TIM5_CH1 입력 캡처)**. SAMD20 `PB15/FREQ_IN`(TC0 입력캡처 `main.c:175`) 흡수. PA0는 PWM 출력이 아니라 주파수 측정 **입력**으로 확정(B-SEAM OSC 구동=GPIO 바이너리와 정합). STM32 펌웨어는 PA0 미사용 → 코드 영향 없음.
+- **PB4 정정**: `CON_UVOUT(UV 출력)` → **`CON_USOUT`(초음파 출력 게이트)**. SAMD20 `PA09/B_USOUT`(run/stop 연동 `main.c:4186/4304`) 흡수. "US OUT" 네이밍 정정.
+- **부록 D 신설** (`pinmap.md`): SAMD20→STM32 레거시 IO 대응표 **12쌍** 확정 — START/RESET/EMSW·SEEK/BUZZER/KEY1·2/OVLD/USOUT/SOL_DN/FREQ_IN + 센서 2쌍(`PA10→PA12 SENS_UP`, `PA11→PA11 SENS_DN`). 방향 정합 전건 일치(입력7/출력4).
+- **⚠ PB00 이중역할 기록**: SAMD20 PB00 = `SW_EMSW`/`B_SEEK` mode-dependent(`main.c:1189-1198`); STM32 PC11=CON_ESTOP은 EMSW만 흡수 → MULTI/HAND SEEK 버튼 입력 경로 누락(통합 시 결정 필요).
+- **동기화**: `pinmap.md`(본문+상단 정정 섹션+부록 D), `requirements.md`(F2.2), `fw_analysis.md`(Q7), `fw/cube/gds_usctrl.ioc`(GPIO_Label 2건 → `FREQ_IN`/`CON_USOUT`). 참고: `.ioc`에 TIM5 PWM 모드 블록은 원래 없음(`S_TIM5_CH1` 신호 할당만) → 주파수 측정 구현 시 드라이버에서 Input Capture 설정. historical 스냅샷은 보존.
+
 ### 2026-06-19 — weld 슬라이스3(multi) + SEEK/RESET 효과 HW 검증 PASS + main 머지 + 태그
 
 보드 연결 세션. 체크리스트(`docs/superpowers/2026-06-17-board-session-checklist.md`) stack 순서대로 두 미머지 스테이지를 검증·머지. 보드=SERIAL/addr=1/9600/EVEN(USART6=Modbus 점유, mon 비가용 → ICON 육안 + mbpoll STATUS가 주 검증 수단; RS-485=`/dev/cu.usbserial-AB0MLYXA`, ST-LINK=`/dev/cu.usbmodem114303`).

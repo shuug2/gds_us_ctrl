@@ -36,6 +36,8 @@
 - **OSC 구동 = binary run/seek/reset active-LOW 미러** (8단 thermometer 패턴 아님 = V26 dead 7-seg). 진폭은 별도 I2C_POT(open Q F2 = U4 칩 정체).
 - **overload**: 입력 PB13(active HIGH) → 내부 처리(seek-reset FSM 복구 재사용, 초음파 정지/ERR/LCD) → 출력 PB3 릴레이. 옛 M_OVLD IPC(M16 PC0→SAMD20 PB10) 소멸(PB10=CTRL_OSC1 재용도).
 - **heartbeat**: PB3 → PB8(빈 GPIO; 대안 PB9/PB15/PC0-3). ⚠ "mega16 PA7"(→PB13) ≠ "STM32 자신 PA7"(=ETH_MOSI).
+- **PA0 = FREQ_IN (출력 초음파 주파수 측정, 입력 캡처)** ← SAMD20 **PB15/FREQ_IN** (TC0 입력 캡처 `main.c:175`). 기존 "US_PWM_OUT / 초음파 PWM 출력"은 오기 — PA0는 PWM 출력이 아니라 주파수 측정 **입력**, STM32 TIM5_CH1 입력 캡처로 흡수. (사용자 HW 확정 2026-06-20)
+- **PB4 = CON_USOUT (초음파 출력 게이트)** ← SAMD20 **PA09/B_USOUT**. "CON_UVOUT / UV 출력" 오기 → US OUT 정정. (사용자 HW 확정 2026-06-20)
 
 ---
 
@@ -124,11 +126,11 @@
 |-----|----------|--------|------|
 | PA2 | BUZZER | TIM9_CH1 (PWM) | 부저 PWM 출력 |
 
-### TIM5_CH1 — 초음파 PWM 출력
+### TIM5_CH1 — 출력 초음파 주파수 측정 (입력 캡처)
 
 | Pin | Net Name | Signal | 설명 |
 |-----|----------|--------|------|
-| PA0 | US_PWM_OUT | TIM5_CH1 (PWM) | 초음파 PWM 출력 (WKUP 겸용) |
+| PA0 | FREQ_IN | TIM5_CH1 (Input Capture) | **출력 초음파 주파수 측정** 입력 (SAMD20 **PB15/FREQ_IN** 흡수 — SAMD20는 TC0 입력 캡처로 측정 `main.c:175 tc_get_capture_value`; STM32는 TIM5_CH1 캡처로 흡수). ⚠ 기존 "US_PWM_OUT / 초음파 PWM 출력"은 **오기 정정** (2026-06-20) — PA0는 PWM 출력이 아니라 주파수 측정 **입력**. WKUP 겸용 핀 |
 
 ### GPIO Output — 초음파 발진회로 제어 (외부 제어 신호 출력)
 
@@ -160,7 +162,7 @@
 | Pin | Net Name | 설명 |
 |-----|----------|------|
 | PB3 | CON_OVLD | 과부하 출력 = 외부 **릴레이 제어 신호 (active HIGH)**. ⚠ 현재 Phase2 heartbeat 임시 점유 → heartbeat **PB8** 이전 후 복원 (2026-06-20) |
-| PB4 | CON_UVOUT | UV 출력 |
+| PB4 | CON_USOUT | **초음파 출력 게이트** (SAMD20 **PA09/B_USOUT** 흡수 — run/stop 연동 ON/OFF, `main.c:4186/4304`). ⚠ "CON_UVOUT / UV 출력" 오기 → **CON_USOUT (US OUT)** 정정 (2026-06-20) |
 | PB5 | CON_SOL_DN | 솔레노이드 하강 출력 |
 | PB8 | (heartbeat) | **신규 heartbeat 핀** (PB3에서 이전, 빈 GPIO; 2026-06-20 결정) |
 
@@ -188,7 +190,7 @@
 | I2C1 | PB6/PB7 | EEPROM |
 | ADC1 | PB0(출력세기 피드백, vestigial)/PB1(**소비전류**, 2026-06-20 정정) | 아날로그 입력 2채널 |
 | TIM9_CH1 | PA2 | 부저 PWM |
-| TIM5_CH1 | PA0 | 초음파 PWM 출력 |
+| TIM5_CH1 | PA0 | **출력 초음파 주파수 측정** (입력 캡처, FREQ_IN ← SAMD20 PB15) |
 | TIM11 | — | 내부 타이머 (용도 TBD) |
 | RTC | — | 실시간 클럭 (LSI 32 kHz) |
 | SWD | PA13/PA14 | 디버그/플래시 |
@@ -217,7 +219,7 @@ USB 48 MHz ← PLLQ
 | 항목 | 비고 |
 |------|------|
 | TIM11 | **확정 — 1 kHz IRQ 시스템 틱**. Phase 2에서 활성 (PSC=95, ARR=999, NVIC priority 5). HW 검증 완료 (Chunk 12) |
-| PA0 (TIM5_CH1) | Net Name **`US_PWM_OUT` 추가 완료** (`.ioc` 반영) |
+| PA0 (TIM5_CH1) | **FREQ_IN = 출력 초음파 주파수 측정 입력 캡처** (SAMD20 PB15 흡수, 2026-06-20). `.ioc` GPIO_Label 정정 완료(FREQ_IN). TIM5는 `.ioc`에 PWM 모드 블록 없음(`S_TIM5_CH1` 신호 할당만) → 구현 시 드라이버에서 Input Capture 설정 |
 | CTRL_OSC active level | **확정 (2026-06-20)**: 출력 3채널 PB2/PB10/PB14 = **active-LOW** binary 미러(SEEK/RESET/RUN). PB12/PB13=입력(출력 아님). |
 | ADC1 IN9 (PB1) | **= SAMD20 소비전류**(2026-06-20 정정, 옛 "발진 모니터" 아님). 채널 활성 + 6b 보정 필요 |
 
@@ -257,7 +259,7 @@ USB 48 MHz ← PLLQ
 | Q4 | 7-segment 디스플레이 처리 | **삭제** — DGUS LCD가 모든 표시 흡수 |
 | Q5 | `disp_led_pattern` (0x00–0xFF) 의미 | **단순 표시 출력** (외부 비트 출력 아님 → Q4 삭제로 같이 폐기) |
 | Q6 | SAMD20 `I2C_POT` 정체 | **외부 디지털 포텐셔미터 칩** (I2C 마스터 그대로 사용) |
-| Q7 | PA0 (TIM5_CH1) Net Name | **`US_PWM_OUT` 추가 완료** |
+| Q7 | PA0 (TIM5_CH1) Net Name | **FREQ_IN — 출력 초음파 주파수 측정 (입력 캡처)**, SAMD20 PB15 흡수. "US_PWM_OUT" 오기 정정 (2026-06-20) |
 | Q8 | CTRL_OSC0~4 정체 | **외부 제어 신호 출력** |
 
 ## 부록 C — 구현 시점 재확인 (회로도/실측 필요)
@@ -267,3 +269,37 @@ USB 48 MHz ← PLLQ
 | Q8b | CTRL_OSC0~4 **방향·극성·매핑** | **대부분 해소 (2026-06-20, disasm+HW)**: PB2/PB10/PB14=출력 active-LOW(SEEK/RESET/RUN binary 미러), PB13=과부하 입력, **PB12(PC4)만 미확정**. 극성 sanity만 보드 실측 |
 | Q10 | ADC1 IN9 (PB1) `.ioc`에 채널 추가 | Phase 1 CubeMX 보정 + Stage D ADC 흡수 시 |
 | Q11 | ADC1 IN8 (PB0) = mega16 PA0 = **출력세기 피드백** | **확정 (2026-05-25)**. ⚠ **2026-06-20**: 레거시 양쪽 vestigial(M16 dead 7seg/SAMD20 curr_lv 주석) → 통합 역할 미결정. **IN9(PB1)=SAMD20 소비전류 확정**(B4 해소, 옛 "ch1 발진모니터" 아님) |
+
+---
+
+## 부록 D — SAMD20 → STM32 레거시 IO 대응표 (사용자 HW 확정, 2026-06-20)
+
+> 통합 전 **SAMD20**(`ref/samd20/`)의 커넥터/패널 IO가 STM32F410 핀으로 옮겨간 대응. (참고: 초음파 발진 제어 OSC 출력 3채널은 **ATmega16** 출신 — 본문 §"GPIO Output — 초음파 발진회로 제어" 표 참조, 별개.)
+> 출처: SAMD20 측 `ref/samd20/ASF/common2/boards/user_board/user_board.h` (매크로) + `ref/samd20/main.c` (실사용/방향) / STM32 측 본 pinmap 본문.
+
+| # | SAMD20 핀 | 레거시 매크로 (기능) | 방향 | STM32 핀 | pinmap Net | 비고 |
+|---|-----------|---------------------|------|----------|-----------|------|
+| 1 | PB02 | `B_START` 시작 버튼 | IN | PA15 | CON_START | — |
+| 2 | PB01 | `B_RESET` 리셋 버튼 | IN | PC10 | CON_RESET | — |
+| 3 | PB00 | `SW_EMSW` 비상정지 / `B_SEEK` SEEK 버튼 | IN | PC11 | CON_ESTOP | ⚠ 이중역할 (아래) |
+| 4 | PB30 | `BUZZER` 부저 | OUT (PWM) | PA2 | BUZZER (TIM9_CH1) | — |
+| 5 | PB06 | `SW_START1` 양손 시작1 | IN | PC12 | CON_KEY1 | — |
+| 6 | PB07 | `SW_START2` 양손 시작2 | IN | PB11 | CON_KEY2 | — |
+| 7 | PA08 | `B_OVLD` 과부하 출력(릴레이) | OUT | PB3 | CON_OVLD | — |
+| 8 | PA09 | `B_USOUT` 초음파 출력 게이트 | OUT | PB4 | CON_USOUT | `main.c:4186/4304` run/stop 연동 |
+| 9 | PB14 | `SOL_DN` 솔레노이드 하강 | OUT | PB5 | CON_SOL_DN | — |
+| 10 | PB15 | `FREQ_IN` 출력 초음파 주파수 측정 | IN (캡처) | PA0 | FREQ_IN (TIM5_CH1 IC) | SAMD20 TC0 입력캡처 `main.c:175` |
+| 11 | PA10 | `SENSE_UP` 센서 상승 감지 | IN | PA12 | CON_SENS_UP | `main.c:1202` |
+| 12 | PA11 | `SENSE_DN` 센서 하강 감지 | IN | PA11 | CON_SENS_DN | 동일 핀번호, `main.c:1203` |
+
+**방향 정합**: 입력 7 (START/RESET/EMSW·SEEK/KEY1/KEY2/FREQ/SENS×2) ↔ STM32 입력, 출력 4 (BUZZER/OVLD/USOUT/SOL_DN) ↔ STM32 출력. 전부 일치.
+
+### ⚠ #3 PB00 이중역할 (mode-dependent)
+SAMD20 `user_board.h`에서 PB00이 `SW_EMSW`와 `B_SEEK`로 **이중 정의**, `main.c:1189-1198`이 `sys_mode`로 시분할:
+- `SYS_MULTI` / `SYS_HAND` 모드 → PB00 = `B_SEEK` (SEEK 버튼), `SW_EMSW`는 0(비활성)
+- 그 외 모드 → PB00 = `SW_EMSW` (비상정지)
+
+STM32 `PC11 = CON_ESTOP`은 **EMSW 역할만** 흡수 → MULTI/HAND 모드의 **SEEK 버튼 입력 경로 누락**. 통합 시 `sys_mode` 분기 또는 별도 핀 결정 필요. (STM32의 SEEK *출력* PB2/CTRL_OSC0 = 발진보드로 나가는 명령 출력으로 별개.)
+
+### 미포함 (폐지)
+패널 버튼 `SW_UP/DOWN/MODE/SET`(PA04~07), `SW_CNT_RESET`(PB05)는 **DGUS LCD 터치로 흡수**되어 물리핀 폐지. 7-segment(`FND_*`)도 폐지(§부록 B Q4).

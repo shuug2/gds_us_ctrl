@@ -365,7 +365,7 @@ uint8_t ether_ip[4], ether_nm[4], ether_gw[4];
 | Q4 | 7-segment 디스플레이 = **삭제** (DGUS LCD가 모든 표시 흡수). ATmega16 `disp_led_pattern` / 7-seg PORTB·PORTD 출력 폐기 |
 | Q5 | `disp_led_pattern` = **단순 표시 출력** → Q4 삭제 결정으로 같이 폐기 |
 | Q6 | `I2C_POT` = **외부 디지털 포텐셔미터 칩**. 신규 보드도 I2C 마스터로 동일하게 제어 (`i2c_adc_*` 함수 그대로 포팅) |
-| Q7 | PA0 Net Name = **`US_PWM_OUT`** (`.ioc` 반영 완료) |
+| Q7 | PA0 = **FREQ_IN (출력 초음파 주파수 측정, TIM5_CH1 입력 캡처)** — SAMD20 PB15 흡수. "US_PWM_OUT(PWM 출력)" 오기 정정 (2026-06-20, `.ioc` 라벨 포함) |
 | Q8 | `CTRL_OSC0~4` = **외부 발진회로 제어 신호 출력** 확정 |
 | Q9 | TIM11 = **1 ms 시스템 틱** |
 
