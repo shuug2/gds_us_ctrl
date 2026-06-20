@@ -12,6 +12,8 @@
 #include "freq_ic.h"
 #include "dgus_lcd.h"
 
+#include "io.h"
+
 extern void usart6_init(void);   /* drivers/usart.c */
 extern void tim11_init(void);    /* drivers/tim.c */
 extern void board_init(void);    /* src/board.c */
@@ -26,6 +28,7 @@ int main(void) {
     tim11_init();      /* 1 kHz IRQ enabled, base not started yet */
     board_init();      /* GPIO out + 3 confirmed OSC channels idle-HIGH (off) */
     freq_ic_init();    /* FREQ_IN(PA0/TIM5_CH1) 입력캡처 — HW only, sys_tick 불요 */
+    io_init();         /* 커넥터/패널 GPIO (입력 pull-up / 출력 idle off) */
     dgus_init();       /* Stage A: DGUS 프로토콜 레이어 상태 클리어 */
     app_init();        /* sys_tick start, mon banner */
     app_reg_init();    /* Stage D: ADC1 + regulation state (needs sys_tick up) */
