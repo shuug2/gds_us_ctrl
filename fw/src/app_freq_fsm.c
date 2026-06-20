@@ -49,6 +49,11 @@ uint16_t freq_fsm_compute(int16_t cal_val)
     if (s_batch_seq == s_last_seen_seq) {
         return 0u;                   /* 직전 호출 이후 새 batch 없음 = 무신호 */
     }
+    /* benign race (single ISR writer / this lone reader): if on_capture completes
+     * a batch between these reads, we may observe seq=N but sum of N+1 (or skip one
+     * batch). Worst case = one batch's value reported a tick early/late — always a
+     * valid recent average, never torn (32-bit aligned reads atomic on Cortex-M4).
+     * Harmless for a frequency display; no critical section needed. (Task 1 review MINOR-2) */
     s_last_seen_seq = s_batch_seq;
     uint32_t sum = s_latched_sum;
     if (sum == 0u) {
