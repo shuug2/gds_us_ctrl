@@ -1,8 +1,10 @@
 # Handoff: 다음 세션 — 남은 작업(전부 HW-gated) 진입 가이드
 
-**Generated**: 2026-06-20
-**Branch**: `main` (tip `1fa5938`) — origin과 완전 동기화 (`git status` = `## main...origin/main`).
-**Status**: 🟢 깨끗한 체크포인트 — 진행 중인 작업 없음. 코딩된 스테이지는 **전부 main + origin에 푸시 완료**. 남은 작업은 **전부 HW-gated**(실 초음파 rig/스코프 또는 물리 입력 필요).
+**Generated**: 2026-06-20 (B-SEAM OSC 분석 세션 갱신)
+**Branch**: `main` — 코드 무변경, docs만 갱신 (현재 해시는 `git log --oneline`; 안정 레퍼런스=태그). push는 사람 터미널(SSH).
+**Status**: 🟢 깨끗한 체크포인트 — 진행 중 코드 작업 없음. 코딩된 스테이지는 **전부 main + origin**. 남은 작업은 **전부 HW-gated**.
+
+> **⏳ 사용자 오프라인 검토 대기 (다음 세션 반영)**: B-SEAM 출력단 분석을 정리함 — **`docs/superpowers/analysis/2026-06-20-bseam-osc-signal-chain-and-port-fidelity.md`**(repo 영속) + 검토용 Artifact `https://claude.ai/code/artifact/ce2570b9-4e50-4ad8-bfab-8c3d2edec2b1`. 사용자가 오프라인 검토 후 피드백 예정 → **다음 세션은 그 피드백을 먼저 반영한 뒤 B-SEAM/F2 spec 작성**. 핵심: 출력단=**B-SEAM(OSC 채널)+F2(진폭 pot, U4 정체)** 둘 다 현재 hook 로그 stub(⚠ "진폭 동작중"은 정정됨); M16 처리코어는 disasm 권위로 충실 포팅 확인(v001 오류 3곳 비껴감); 명령선 PA4/5/6=START/SEEK/RESET. B-SEAM은 검증 아니라 measure→설계→코드→검증.
 
 > 이전 HANDOFF(보드 세션 weld3+seek-reset 검증)는 완료로 supersede. 이력 = `docs/changelog.md`(2026-06-19) / `docs/superpowers/RESUME.md`(2026-06-19 블록, 자동 로드).
 
