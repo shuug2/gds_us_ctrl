@@ -10,6 +10,7 @@
 #include "app_reg_calc.h"
 #include "app_seek_reset.h"   /* app_seek_reset_request, app_seek_reset_active */
 #include "adc1.h"
+#include "io.h"
 #include "sys_tick.h"
 #include "app_freq_fsm.h"
 #ifdef REG_TRACE
@@ -49,6 +50,7 @@ typedef struct {
     uint32_t prev_ramp_ms;           /* 10 ms warm-up cadence gate */
 
     uint8_t  us_run_status;          /* slice 2b: US_IDLE/REMOTE/TOUCH/COMM (FSM owns) */
+    uint8_t  us_out_on;              /* USOUT 마지막 구동 레벨 (전이 감지) */
     uint16_t max_power;              /* running peak of sel during the active run */
     uint16_t last_power;             /* peak latched on stop (us_off, samd20 4180) */
     uint16_t max_amp;                /* running peak of curr_amp during the run */
@@ -70,6 +72,11 @@ typedef struct {
 
 static reg_state_t   g_reg;
 static lcd_measure_t g_measure;
+
+void app_reg_hook_us_output(bool on)
+{
+    io_usout(on);                    /* PB4 active-HIGH = 초음파 출력 enable */
+}
 
 /* 자동 정지 공통 (on-time ceiling / energy-reached / OVTIME): 피크 래치 + IDLE.
  * TOUCH 런은 V30 데이터=0 release 페어링 위해 swallow_start 무장 (수동
@@ -260,6 +267,11 @@ static void reg_publish_measure(uint32_t now, int16_t freq_cal_val)
     g_measure.last_freq = g_reg.last_freq;
     g_measure.us_run_status = g_reg.us_run_status;
     g_measure.error_status  = g_reg.error_status;   /* OVTIME 등 fault → LCD/Modbus */
+    /* USOUT: run 활성(idle 아님)에 출력 enable. 전이에만 hook 구동 (active 재사용). */
+    if (active != g_reg.us_out_on) {
+        g_reg.us_out_on = active;
+        app_reg_hook_us_output(active != 0u);
+    }
 }
 
 void app_reg_tick(const reg_run_limits_t *lim)
