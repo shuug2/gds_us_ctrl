@@ -134,6 +134,20 @@ acc_energy += curr_power (1ms);  curr_energy = acc_energy / 500
 
 **PA7(= STM32 PB13, board-mapping "CTRL_OSC3")은 OSC 출력이 아니라 과부하 sense 입력.** → §3 PB12/PB13 B-OSC-MAP 중 **OSC3(PB13)=overload 입력으로 확정**, STM32 출력 구동 금지(현 board.c 미설정 정당). **OSC2(PC4/PB12)는 여전히 미확정**(`sbis 0x13,4 @0x1072`로 읽힘, 용도 미디코드 — 사용자 보류).
 
+### overload 스테이지 설계 (STM32 통합, 사용자 결정 2026-06-20)
+
+레거시 `외부fault → M16 PA7 → M16 검출(디바운스) → M16 PC0(M_OVLD) → SAMD20 → 응답`을 **STM32 한 MCU로 통합**. **M_OVLD IPC(M16 PC0 → SAMD20 PB10) 소멸**(PB10은 CTRL_OSC1/RESET로 재용도, pinmap 부록A) — STM32가 입력을 **직접 읽어 내부 처리**. ⚠ "mega16 PA7"(→STM32 **PB13**) ≠ "STM32 자신의 PA7"(=ETH_MOSI SPI1) — 다른 핀.
+
+| 핀 | 역할 | 결정 (사용자 2026-06-20) |
+|---|---|---|
+| **PB13** (← mega16 PA7) | 과부하 sense **입력** | **active HIGH** (HIGH=overload). ⚠ pinmap "CTRL_OSC3"는 오라벨 |
+| **PB3** CON_OVLD | 과부하 **출력** = 외부 **릴레이 제어 신호** | **필요**(확정), STM32 구동, active HIGH(릴레이 assert) |
+| heartbeat | Phase2 임시(현 PB3 점유) | **빈 GPIO로 이전 → PB8**(대안 PB9/PB15/PC0-3; 보드 test-point로 최종) |
+
+**통합 처리 체인**: PB13 입력 디바운스(M16 ×5) → overload flag → 내부 응답(SAMD20 로직: 초음파 정지 `sig_run_status=OFF` + `SYS_ERROR`/`error_status|=ERR_OVLD` + LCD "OVER LOAD" + 복구 사용자 RESET→자동 SEEK = **seek-reset FSM 재사용**) → **PB3/CON_OVLD 출력 어서트(릴레이)**.
+- 입력/검출/응답/출력 로직 = host-test 가능. 극성(active HIGH 확정)·실 fault·릴레이 동작 = HW 게이트.
+- ⚠ **pinmap 정정 필요**: PB13=과부하 입력(OSC3 아님), PB3=CON_OVLD 릴레이 출력, heartbeat PB3→PB8.
+
 ### PA0/SENS_OUT = 양 레거시 MCU 모두 vestigial
 
 - **M16**: PA0 → reg_scale → 21단 lookup → 디스플레이 패턴 → PORTD 7-seg(V26 dead) = 출력세기 바그래프 표시 연산(제어/OSC 아님; §4 §4b와 일관).
@@ -162,7 +176,7 @@ v001 누락/오류 누적: ×6(`>>6` 오기)·lookup `<`·warmup·**ADMUX REFS=1
 
 - **B-SEAM**: **3 출력 채널 매핑 확정 (사용자 HW, §2)** — RUN→PB14(OSC4) / SEEK→PB2(OSC0) / RESET→PB10(OSC1), active-LOW binary 미러(패턴 아님). 코딩 = 내부 run/seek/reset → 이 3핀 active-LOW. **3채널 매핑은 더 이상 측정 게이트 아님.**
 - **OSC3/PB13 = 과부하 입력 (PA7, §4c 해소)** — OSC 출력 아님, 출력 구동 금지. **OSC2/PB12(PC4)만 미확정**(별도 입력, 용도 미디코드).
-- **OVLD 극성**: PA7 HIGH=fault인데 풀업 idle HIGH → 정상시 외부 LOW 유지 가설, 보드 실측 확정 (§4c).
+- **overload (사용자 결정 2026-06-20, §4c)**: 입력 PB13(←PA7) **active HIGH**=fault / 출력 PB3 CON_OVLD = 외부 **릴레이 제어**(필요, active HIGH) / heartbeat PB3→**PB8** 이전 / 통합 직접처리(M_OVLD IPC 소멸, seek-reset FSM 복구 재사용). 실 fault·릴레이·극성 sanity만 HW.
 - **ch0(PA0/출력세기) 통합 역할 미결정**: 레거시 양쪽 vestigial(§4c) → curr_lv 표시 부활 / 유지 / 기타 결정 필요.
 - 실 스코프 폴라리티/부하 sanity (3채널).
 - **F2**: U4 I2C_POT 칩 정체 → 진폭 pot 실구동 구현. (실출력 = B-SEAM + F2)
