@@ -13,6 +13,7 @@
 #include "app_modbus.h"
 #include "app_eth.h"
 #include "i2c1.h"    /* i2c1_err_count / i2c1_unstick_events — 부팅·1s 관측 로그 */
+#include "app_buzzer.h"
 
 void app_init(void)
 {
@@ -138,4 +139,7 @@ void app_loop_iter(void)
             }
         }
     }
+
+    /* 7. 부저 — 10ms gate. 비블로킹 timed-beep 진행 (트리거는 overload/입력 슬라이스). */
+    app_buzzer_tick();
 }
