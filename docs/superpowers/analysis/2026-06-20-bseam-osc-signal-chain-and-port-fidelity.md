@@ -1,6 +1,6 @@
 # B-SEAM OSC — 신호 체인 · 명령선 · 포팅 충실도 (2026-06-20 분석 세션)
 
-> **요약**: HW 비의존 분석 세션(코드 0줄, HW 측정 0건). B-SEAM(OSC 출력단)이 풀렸을 때 MCU가 무엇을 하는지, legacy M16 동작이 STM32로 제대로 포팅됐는지를 1차 소스(`ref/atmega16/m16_conv_v001.c` + disasm 분석 + STM32 코드)로 교차 검토했다. **핵심 결론 4건**: ① **출력단은 2조각 모두 미구동 stub** — OSC 채널 구동(**B-SEAM**) + 진폭 pot 실구동(**F2**, U4 칩 정체); 둘 다 `mon_printf` 로그만. ② 옛 IPC 명령 3선 **PA4=START / PA5=SEEK / PA6=RESET**(+PA7/PC4=IPC 아님)는 STM32에서 내부 `us_cmd`로 소멸, 처리부는 이식 완료. ③ M16은 "선(wire)"이 아니라 **프로세서** — "미러"는 명령핀→출력핀 통과가 아니라 *내부 상태 플래그 → OSC 핀* 매핑(finding ④: OSC 3선 = 명령 3선 active-LOW 레벨 미러, 가설). ④ **M16 처리코어 포팅 충실도 = 높음** — STM32가 disasm을 권위로 삼아 v001이 틀린 3곳(`×6` vs `>>6`, lookup `<`, warmup 부팅1회 vs per-START)을 모두 비껴감. 미검증은 전부 코드 버그가 아니라 절대값/물리출력(6b·B-SEAM·F2 게이트). ⑤ **(2026-06-20 후속, 사용자 HW 진실 + SAMD20 검증) B4 해소 — PB1 = SAMD20 소비전류**(M16 PA1은 미연결): SAMD20는 전류표시(curr_amp)·전력(curr_power=curr_amp×2.2)·에너지(curr_energy=acc/500)를 전부 PA02(=PB1)에서 파생하나, **STM32는 현재 PB1을 read-and-discard하고 이 3값을 ch0(reg_scale)에서 뽑음** = source·공식 불일치. `curr_amp`=소비전류(ampere), 진폭 아님. **이 PB1 재구성 = 6b 스테이지 본체** (§4b). **다음 세션 = 사용자 오프라인 검토 반영 → HW 있으면 측정+설계, 없으면 B-SEAM/F2/6b spec 선행.**
+> **요약**: HW 비의존 분석 세션(코드 0줄, HW 측정 0건). B-SEAM(OSC 출력단)이 풀렸을 때 MCU가 무엇을 하는지, legacy M16 동작이 STM32로 제대로 포팅됐는지를 1차 소스(`ref/atmega16/m16_conv_v001.c` + disasm 분석 + STM32 코드)로 교차 검토했다. **핵심 결론 4건**: ① **출력단은 2조각 모두 미구동 stub** — OSC 채널 구동(**B-SEAM**) + 진폭 pot 실구동(**F2**, U4 칩 정체); 둘 다 `mon_printf` 로그만. ② 옛 IPC 명령 3선 **PA4=START / PA5=SEEK / PA6=RESET**(+PA7/PC4=IPC 아님)는 STM32에서 내부 `us_cmd`로 소멸, 처리부는 이식 완료. ③ M16은 "선(wire)"이 아니라 **프로세서** — "미러"는 명령핀→출력핀 통과가 아니라 *내부 상태 플래그 → OSC 핀* 매핑(finding ④: OSC 3선 = 명령 3선 active-LOW 레벨 미러, 가설). ④ **M16 처리코어 포팅 충실도 = 높음** — STM32가 disasm을 권위로 삼아 v001이 틀린 3곳(`×6` vs `>>6`, lookup `<`, warmup 부팅1회 vs per-START)을 모두 비껴감. 미검증은 전부 코드 버그가 아니라 절대값/물리출력(6b·B-SEAM·F2 게이트). ⑤ **(2026-06-20 후속, 사용자 HW 진실 + SAMD20 검증) B4 해소 — PB1 = SAMD20 소비전류**(M16 PA1은 미연결): SAMD20는 전류표시(curr_amp)·전력(curr_power=curr_amp×2.2)·에너지(curr_energy=acc/500)를 전부 PA02(=PB1)에서 파생하나, **STM32는 현재 PB1을 read-and-discard하고 이 3값을 ch0(reg_scale)에서 뽑음** = source·공식 불일치. `curr_amp`=소비전류(ampere), 진폭 아님. **이 PB1 재구성 = 6b 스테이지 본체** (§4b). ⑥ **(사용자 HW 확정) OSC 3 출력 채널 매핑 = RUN→PC7/PB14, SEEK→PB1/PB2, RESET→PB0/PB10, 전부 active-LOW binary 미러** (finding ④ 확정; v001 변수명 또 오라벨 — `g_run_flag`=실제 RESET). **B-SEAM 3채널 분은 측정 게이트 아님 → 코딩 가능**(내부 run/seek/reset → active-LOW). 남은 미지 = PB12/PB13(OSC2/OSC3) 방향·F2(진폭)·스코프 sanity. **다음 세션 = 사용자 오프라인 검토 반영 → HW 있으면 측정+설계, 없으면 B-SEAM(3채널)/F2/6b spec 선행.**
 >
 > **산출물**: 검토용 Artifact(claude.ai) — 신호 체인 다이어그램 + 측정 절차 7단계 + 포팅 충실도(OSC 핀/처리코어) + 명령선/프로세서 정리. URL은 §7. (scratchpad HTML 원본은 세션 한정 소멸; 본 .md가 repo 영속본.)
 
@@ -42,7 +42,7 @@
        (진폭 I2C_POT = F2 stub)
 ```
 
-**3↔3 대응**: 명령 3개(START/SEEK/RESET) ↔ 출력 3채널(PB0/PB1/PC7). finding ④ = OSC 3선이 명령 3선의 active-LOW 레벨 미러일 공산(가설, 측정 확정). STM32 처리부는 이식 완료(START→`app_reg` RUN 게이트 슬2b HW✓ / SEEK·RESET→`app_seek_reset` 500ms 체인 host+HW✓); 남은 건 출력 와이어업(B-SEAM + F2).
+**3↔3 대응 (사용자 HW 확정 2026-06-20 — finding ④ 가설→확정)**: **RUN→PC7(OSC4→PB14) / SEEK→PB1(OSC0→PB2) / RESET→PB0(OSC1→PB10), 전부 active-LOW.** OSC 구동 = binary run/seek/reset 미러(thermometer 패턴 아님 — 그건 dead 7-seg). ⚠ **v001 변수명 또 오라벨**: `g_run_flag`(0x0196→PB0)=실제 **RESET**(run 아님!), `g_blink_state`(0x0189→PC7)=실제 **RUN**, `g_blink_active`(0x018A→PB1)=**SEEK**. 확정 근거=사용자 HW + active-LOW disasm(C6). STM32 처리부는 이식 완료(START→`app_reg` RUN 게이트 슬2b HW✓ / SEEK·RESET→`app_seek_reset` 500ms 체인 host+HW✓); 남은 건 출력 와이어업 = **PB14/PB2/PB10을 내부 run/seek/reset 상태에서 active-LOW 구동**(B-SEAM) + F2(진폭).
 
 **⚠ 참조 C 함정**: `m16_conv_v001.c`는 PINA.4만(디스플레이 타이밍 문맥), PA5/PA6 read 0건. 명령 디스패처(`app_0x06d2`/`app_0x0c70`)는 disasm에만 → 명령 의미론 권위 = 참조 C 아님, **disasm**.
 
@@ -52,9 +52,9 @@
 
 | M16 | →STM32 | M16 방향/idle | M16 런타임 | STM32 |
 |---|---|---|---|---|
-| PB1 | PB2 OSC0 | 출력 idle HIGH | active-LOW `g_blink_active` (v001:462) | init ✓ / 런타임 ✗ |
-| PB0 | PB10 OSC1 | 출력 idle HIGH | active-LOW **`g_run_flag`** (v001:469) | init ✓ / 런타임 ✗ |
-| PC7 | PB14 OSC4 | 출력 idle HIGH | active-LOW `g_blink_state` (v001:455) | init ✓ / 런타임 ✗ |
+| PB1 | PB2 OSC0 | 출력 idle HIGH | active-LOW **SEEK** (0x018A; v001 `g_blink_active`=오라벨) | init ✓ / 런타임 ✗ |
+| PB0 | PB10 OSC1 | 출력 idle HIGH | active-LOW **RESET** (0x0196; v001 `g_run_flag`=오라벨, run 아님!) | init ✓ / 런타임 ✗ |
+| PC7 | PB14 OSC4 | 출력 idle HIGH | active-LOW **RUN** (0x0189; v001 `g_blink_state`=오라벨) | init ✓ / 런타임 ✗ |
 | PC4 | PB12 OSC2 | 입력+풀업 | 코드상 안 읽힘 | 미설정(풀업 미복제) |
 | PA7 | PB13 OSC3 | 입력+풀업 | 코드상 안 읽힘 | 미설정(풀업 미복제) |
 
@@ -80,6 +80,8 @@
 ## 4b. B4 해소 — PB1 = SAMD20 소비전류 (전류·전력·에너지 source 정정)
 
 **사용자 HW 진실 (2026-06-20)**: M16 PA1(ADC1)은 **물리 미연결**(B4 의심 확정 — M16 ch1은 플로팅 읽음 → 레귤레이션 미사용과 일치). 통합 보드에서 **STM32 PB1 = 옛 SAMD20 PA02 회로 = 소비전류**. PB0(ch0)는 M16 PA0 그대로(레귤레이션 피드백, 현 구현 OK — 사용자 확인).
+
+> ⚠ **핀 라벨 중복 주의** (혼동 빈발): **"STM32 PB1"** = 소비전류 ADC 입력(ADC1_IN9, ← SAMD20 PA02) ≠ **"M16 PB1"** = SEEK 출력(→ STM32 **PB2**/OSC0, §2). 둘은 서로 다른 핀이며 우연히 같은 "PB1" 라벨을 공유. 본 문서는 M16→STM32 화살표(예 `M16 PB1→PB2`)로 구분.
 
 **SAMD20 전류/전력/에너지 = PA02(=PB1) 단일 소스** (`ref/samd20/main.c` `cal_real_val`, `ADC_CURR`=PIN0=PA02):
 
@@ -122,7 +124,7 @@ acc_energy += curr_power (1ms);  curr_energy = acc_energy / 500
 
 ## 6. HW로 확정할 미해소 (코드 충실도와 별개)
 
-- **B-SEAM**: 계산된 레벨/명령 상태가 어느 OSC 핀으로, 어떤 극성/패턴으로 가는가 + PB12/PB13 방향. 출력=binary 명령미러(finding ④)인지 레벨패턴인지.
+- **B-SEAM**: **3 출력 채널 매핑 확정 (사용자 HW, §2)** — RUN→PB14(OSC4) / SEEK→PB2(OSC0) / RESET→PB10(OSC1), active-LOW binary 미러(패턴 아님). 코딩 = 내부 run/seek/reset → 이 3핀 active-LOW. 남은 측정 = PB12/PB13(OSC2/OSC3 ← PC4/PA7) 방향 + 실 스코프 폴라리티/부하 sanity. **3채널 매핑은 더 이상 측정 게이트 아님.**
 - **F2**: U4 I2C_POT 칩 정체 → 진폭 pot 실구동 구현. (실출력 = B-SEAM + F2)
 - **SEEK/RESET 스윕 주체**: 보드-side(MCU 1신호) vs MCU 생성 — 코드 규모 좌우.
 - **6b**: ×6 등 절대 보정(M16 2.56V ↔ STM32 3.3V/12bit), energy divisor `REG_ENERGY_DIV=250`. **+ §4b: 전류/전력/에너지를 PB1(소비전류)에서 SAMD20 공식으로 재구성** (curr_amp 전류·power ×2.2·energy acc/divisor; cal_val·thr51/off37 실측). = 6b 스테이지 본체.
