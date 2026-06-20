@@ -19,7 +19,12 @@ void app_buzzer_init(void)
 
 void app_buzzer_beep_ms(uint16_t ms)
 {
-    buzzer_fsm_beep((uint16_t)(ms / BUZZER_TICK_MS));
+    /* ms=0 → no-op; 0<ms<10 은 최소 1 tick으로 클램프 (10ms 미만 묵음 방지, 리뷰 M-2). */
+    uint16_t ticks = (uint16_t)(ms / BUZZER_TICK_MS);
+    if ((ms != 0u) && (ticks == 0u)) {
+        ticks = 1u;
+    }
+    buzzer_fsm_beep(ticks);
 }
 
 void app_buzzer_tick(void)
