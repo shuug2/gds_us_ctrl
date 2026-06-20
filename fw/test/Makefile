@@ -12,8 +12,9 @@ BIN_SR  := /tmp/gds_test_app_seek_reset_fsm
 BIN_POT := /tmp/gds_test_i2c_pot
 BIN_CFG := /tmp/gds_test_app_config
 BIN_FQ  := /tmp/gds_test_app_freq_fsm
+BIN_BZ  := /tmp/gds_test_app_buzzer_fsm
 
-test: $(BIN_REG) $(BIN_MB) $(BIN_TCP) $(BIN_WELD) $(BIN_SR) $(BIN_POT) $(BIN_CFG) $(BIN_FQ)
+test: $(BIN_REG) $(BIN_MB) $(BIN_TCP) $(BIN_WELD) $(BIN_SR) $(BIN_POT) $(BIN_CFG) $(BIN_FQ) $(BIN_BZ)
 	$(BIN_REG)
 	$(BIN_MB)
 	$(BIN_TCP)
@@ -22,6 +23,7 @@ test: $(BIN_REG) $(BIN_MB) $(BIN_TCP) $(BIN_WELD) $(BIN_SR) $(BIN_POT) $(BIN_CFG
 	$(BIN_POT)
 	$(BIN_CFG)
 	$(BIN_FQ)
+	$(BIN_BZ)
 
 $(BIN_REG): test_app_reg_calc.c ../src/app_reg_calc.c ../include/app_reg_calc.h
 	$(CC) $(CFLAGS) $(INC) -o $@ test_app_reg_calc.c ../src/app_reg_calc.c
@@ -50,7 +52,10 @@ $(BIN_CFG): test_app_config.c mock_fram.c mock_fram.h ../src/app_config.c ../inc
 $(BIN_FQ): test_app_freq_fsm.c ../src/app_freq_fsm.c ../include/app_freq_fsm.h
 	$(CC) $(CFLAGS) $(INC) -o $@ test_app_freq_fsm.c ../src/app_freq_fsm.c
 
+$(BIN_BZ): test_app_buzzer_fsm.c ../src/app_buzzer_fsm.c ../include/app_buzzer_fsm.h
+	$(CC) $(CFLAGS) $(INC) -o $@ test_app_buzzer_fsm.c ../src/app_buzzer_fsm.c
+
 clean:
-	rm -f $(BIN_REG) $(BIN_MB) $(BIN_TCP) $(BIN_WELD) $(BIN_SR) $(BIN_POT) $(BIN_CFG) $(BIN_FQ)
+	rm -f $(BIN_REG) $(BIN_MB) $(BIN_TCP) $(BIN_WELD) $(BIN_SR) $(BIN_POT) $(BIN_CFG) $(BIN_FQ) $(BIN_BZ)
 
 .PHONY: test clean
