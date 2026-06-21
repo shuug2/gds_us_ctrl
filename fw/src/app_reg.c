@@ -9,6 +9,7 @@
 #include "app_reg.h"
 #include "app_reg_calc.h"
 #include "app_seek_reset.h"   /* app_seek_reset_request, app_seek_reset_active */
+#include "app_overload.h"   /* app_overload_active (START 차단) */
 #include "adc1.h"
 #include "io.h"
 #include "sys_tick.h"
@@ -140,6 +141,11 @@ void app_reg_command(us_cmd_t cmd, uint8_t src)
              * (samd20 SYS_ERROR가 START 무시). swallow consume 뒤 별도 break로
              * 둬서 위 비대칭(swallow 스킵)을 피함 (seek_reset 가드와 동일 패턴). */
             if (g_reg.error_status != 0u) {
+                break;
+            }
+            /* 과부하 활성 중 START 차단 (SAMD20 SYS_ERROR가 START 막음).
+             * seek_reset_active와 동일 직교 — 별도 break (swallow consume 뒤). */
+            if (app_overload_active() != 0u) {
                 break;
             }
             g_reg.us_run_status = src;   /* US_TOUCH or US_COMM */
