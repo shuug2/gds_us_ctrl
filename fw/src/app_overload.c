@@ -43,21 +43,8 @@ void app_overload_tick(void)
     s_active = (uint8_t)((ev & OVLD_EV_ACTIVE) != 0u);
 
     if ((ev & OVLD_EV_ASSERT) != 0u) {
-        /* 현재 활성 run을 force-stop. us_run_status는 단일값이라 현재 소스를
-         * RUN_RELEASE에 넘기면 source-matched 정지가 발화한다. ⚠ 여기서 읽는
-         * app_reg_measure()->us_run_status는 app_reg_tick(step3)에서 발행되는
-         * 미러라 overload_tick(2.55)보다 1-iter lag — 과부하 ≥50ms(×5 디바운스)
-         * steady-state에선 run이 안정 active라 항상 정지하지만, assert와 같은
-         * 10ms iter에 START가 들어오면 stale IDLE을 읽어 즉시 정지를 놓치고
-         * (edge-only라 재시도 없음) 그 run은 on-time ceiling(~560ms)까지 돈다.
-         * 단 아래 io_ovld_relay(true)는 이 if 밖 무조건 발화라 릴레이 컷오프는
-         * 이 레이스와 무관(릴레이가 실 초음파를 끊으면 escaped run은 cosmetic —
-         * HW로 확정). 신규 app_reg API 불필요(advisor). ⚠ weld 기계 사이클
-         * abort는 별개 — weld 물리트리거 dormant라 현재 무관 (슬라이스 E/weld4). */
-        uint8_t src = app_reg_measure()->us_run_status;
-        if (src != (uint8_t)US_IDLE) {
-            app_reg_command(US_CMD_RUN_RELEASE, src);
-        }
+        /* assert 1-shot: 릴레이/에러 ON + 부저 + 점멸 타이머 리셋. force-stop은
+         * 아래 active 레벨 블록이 담당(매 tick 재시도). */
         io_ovld_relay(true);
         app_lcd_set_overload(true);
         s_blink_ms = now;
@@ -65,8 +52,20 @@ void app_overload_tick(void)
     }
 
     if (s_active != 0u) {
-        /* 부저 점멸: active 동안 OVLD_BLINK_MS마다 one-shot beep 재-arm
-         * (SAMD20 mode_blink 점멸 재현). */
+        /* force-stop을 active 레벨에서 매 tick 재시도. app_reg_measure()->
+         * us_run_status는 app_reg_tick(step3) 발행 미러라 overload_tick(2.55)보다
+         * 1-iter lag — assert와 같은 10ms iter에 START가 들어오면 assert 시점엔
+         * stale IDLE이라 즉시정지를 놓치지만, 다음 active tick엔 미러가 갱신돼
+         * 잡힌다(레이스 노출 ≤1 tick≈10ms). idempotent: 한번 IDLE되면 src=IDLE이라
+         * no-op이고, START는 active 동안 app_reg guard(app_overload_active)가 차단해
+         * 새 run이 없다. ⚠ PB3 릴레이는 dry-contact 상태신호일 뿐 초음파를 끊지
+         * 않으므로(사용자 HW 확정) 펌웨어 정지가 load-bearing — 이 재시도가 필요.
+         * weld 기계 사이클 abort는 별개(weld 물리트리거 dormant, 슬라이스 E/weld4). */
+        uint8_t src = app_reg_measure()->us_run_status;
+        if (src != (uint8_t)US_IDLE) {
+            app_reg_command(US_CMD_RUN_RELEASE, src);
+        }
+        /* 부저 점멸: OVLD_BLINK_MS마다 one-shot beep 재-arm (SAMD20 mode_blink). */
         if ((uint32_t)(now - s_blink_ms) >= OVLD_BLINK_MS) {
             s_blink_ms = now;
             app_buzzer_beep_ms(OVLD_BEEP_MS);
