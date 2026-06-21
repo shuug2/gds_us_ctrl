@@ -1,5 +1,9 @@
 # 물리 IO 레이어 — 슬라이스 C (Overload 과부하 응답) 구현 플랜
 
+> **✅ STATUS (2026-06-21): COMPLETE (미머지, HW 게이트).** 전 6 Task를 subagent-driven으로 구현 + Task별 2단계 리뷰(spec→cpp) + 최종 통합 cpp-reviewer **APPROVE (0 Crit/High)**. 빌드 0-warning(FLASH 43.13%/RAM 16.85%), host **7스위트 PASS**. 코드 커밋: Task1 `b0d6a52` / Task2 `c15cdca` / Task3 `d2e0eb9` / Task4 `d03a0d5` / Task5 `0670ebd`.
+> **플랜 외 후속 fix(사용자 HW 확정 PB3=dry-contact 상태신호→펌웨어 정지 load-bearing):** force-stop 1-iter stale 레이스를 active-level 재시도 `44d64f9` + de-assert hardening `0bf084c`로 **완전 차단**(각각 cpp 재리뷰 APPROVE). 잔여 0.
+> **다음 = 보드 세션 HW 검증(Task 6 Step 4 체크리스트) → A→B→C 의존순 머지.** 진입점=root `HANDOFF.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** PB13(과부하 입력, active-HIGH)을 ×5 디바운스해 과부하 감지 시 초음파를 정지하고 ERR_OVLD/ICON_OL·릴레이(PB3)·부저 점멸로 알리며, 고장 해소 시 자동 RESET→SEEK 공진 재튜닝을 트리거한다.
@@ -60,7 +64,7 @@
 - Test: `fw/test/test_app_overload_fsm.c`
 - Modify: `fw/test/Makefile`
 
-- [ ] **Step 1: 실패 테스트 작성 — `fw/test/test_app_overload_fsm.c`**
+- [x] **Step 1: 실패 테스트 작성 — `fw/test/test_app_overload_fsm.c`**
 
 ```c
 /* fw/test/test_app_overload_fsm.c — host unit tests, 순수 과부하 디바운스 FSM.
@@ -154,7 +158,7 @@ int main(void)
 }
 ```
 
-- [ ] **Step 2: `fw/test/Makefile`에 타깃 추가**
+- [x] **Step 2: `fw/test/Makefile`에 타깃 추가**
 
 `BIN_BZ  := /tmp/gds_test_app_buzzer_fsm` 줄 다음에 추가:
 ```make
@@ -169,12 +173,12 @@ $(BIN_OL): test_app_overload_fsm.c ../src/app_overload_fsm.c ../include/app_over
 
 > NOTE: 이 브랜치(slice A 기반)의 host 스위트 = reg_calc/modbus_core/tcp_frame/weld_fsm/seek_reset_fsm/**buzzer_fsm**(slice A) — freq_fsm은 slice B 소속이라 **없음**. overload_fsm 추가로 **7스위트**.
 
-- [ ] **Step 3: 테스트 실패 확인**
+- [x] **Step 3: 테스트 실패 확인**
 
 Run: `make -C fw/test test`
 Expected: FAIL — `app_overload_fsm.h` 없음 / `overload_fsm_*` 미정의 (컴파일 에러).
 
-- [ ] **Step 4: `fw/include/app_overload_fsm.h` 작성**
+- [x] **Step 4: `fw/include/app_overload_fsm.h` 작성**
 
 ```c
 /* fw/include/app_overload_fsm.h — 순수 과부하 디바운스 FSM (HAL-free, host-test).
@@ -193,7 +197,7 @@ void    overload_fsm_init(void);
 uint8_t overload_fsm_step(uint8_t raw);  /* raw: 1=fault(PB13 HIGH). OVLD_EV_* 비트마스크 */
 ```
 
-- [ ] **Step 5: `fw/src/app_overload_fsm.c` 작성**
+- [x] **Step 5: `fw/src/app_overload_fsm.c` 작성**
 
 ```c
 /* fw/src/app_overload_fsm.c — 순수 과부하 디바운스 FSM. */
@@ -235,12 +239,12 @@ uint8_t overload_fsm_step(uint8_t raw)
 }
 ```
 
-- [ ] **Step 6: 테스트 통과 확인**
+- [x] **Step 6: 테스트 통과 확인**
 
 Run: `make -C fw/test test`
 Expected: `app_overload_fsm: all tests passed` + 기존 6스위트 전부 통과.
 
-- [ ] **Step 7: 커밋**
+- [x] **Step 7: 커밋**
 
 ```bash
 git add fw/include/app_overload_fsm.h fw/src/app_overload_fsm.c fw/test/test_app_overload_fsm.c fw/test/Makefile
@@ -260,7 +264,7 @@ git commit -m "feat(overload): 순수 ×5 디바운스 FSM + host-test (app_over
 
 설명: 글루(app_overload)가 LCD를 직접 건드리지 않도록, ERR_OVLD/ICON_OL/페이지를 LCD 모듈이 소유하는 접근자로 캡슐화. 기존 RESET-키 클리어 시퀀스(`app_lcd_input.c` RESET 핸들러)와 `run_page_for_mode`(이 파일 static)를 재사용. **ERR_OVLD 비트만 `|=`/`&= ~`** (weld의 ERR_OVTIME 비트 클로버 금지 — advisor).
 
-- [ ] **Step 1: `fw/include/app_lcd.h`에 선언 추가**
+- [x] **Step 1: `fw/include/app_lcd.h`에 선언 추가**
 
 `void app_lcd_show_error(uint8_t error_code);` 줄 근처(함수 선언부)에 추가:
 ```c
@@ -270,7 +274,7 @@ void app_lcd_set_overload(bool on);
 ```
 (`app_lcd.h`에 `#include <stdbool.h>`가 없으면 추가.)
 
-- [ ] **Step 2: `fw/src/app_lcd_input.c`에 정의 추가**
+- [x] **Step 2: `fw/src/app_lcd_input.c`에 정의 추가**
 
 파일에 `#include <stdbool.h>`가 없으면 추가. `run_page_for_mode` 정의 아래(또는 RESET 핸들러 근처 적당한 곳)에 추가:
 ```c
@@ -297,17 +301,17 @@ void app_lcd_set_overload(bool on)
 ```
 (이 파일은 이미 `ERR_OVLD`(=1u), `run_page_for_mode`, `app_lcd_state`, `app_lcd_show_error`, `ICON_OL`, `dgus_write_u16`/`dgus_set_page`를 사용/포함 중 — 신규 include 불필요, stdbool 제외.)
 
-- [ ] **Step 3: 빌드 (증분; 신규 .c 아님)**
+- [x] **Step 3: 빌드 (증분; 신규 .c 아님)**
 
 Run: `cd fw && env -u STM32_TOOLCHAIN cmake --build build 2>&1 | tail -10`
 Expected: 0 warning(우리 코드), elf 생성. `run_page_for_mode`가 더 이상 "unused static" 경고 없이 참조됨(이전엔 RESET/E-stop 경로만 사용).
 
-- [ ] **Step 4: host-test 회귀**
+- [x] **Step 4: host-test 회귀**
 
 Run: `make -C fw/test test`
 Expected: 7스위트 전부 통과 (LCD 레이어는 host-test 비대상).
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add fw/include/app_lcd.h fw/src/app_lcd_input.c
@@ -326,7 +330,7 @@ git commit -m "feat(overload): app_lcd_set_overload 접근자 (ERR_OVLD/ICON_OL/
 - Create: `fw/include/app_overload.h`, `fw/src/app_overload.c`
 - Modify: `fw/src/main.c`, `fw/src/app.c`
 
-- [ ] **Step 1: `fw/include/app_overload.h` 작성**
+- [x] **Step 1: `fw/include/app_overload.h` 작성**
 
 ```c
 /* fw/include/app_overload.h — 과부하 글루 (10ms tick).
@@ -341,7 +345,7 @@ void    app_overload_tick(void);     /* 슈퍼루프 10ms gate */
 uint8_t app_overload_active(void);   /* 1 = 과부하 활성 (START 차단 / STATUS 비트) */
 ```
 
-- [ ] **Step 2: `fw/src/app_overload.c` 작성**
+- [x] **Step 2: `fw/src/app_overload.c` 작성**
 
 ```c
 /* fw/src/app_overload.c — 과부하 응답 글루.
@@ -424,7 +428,7 @@ void app_overload_tick(void)
 }
 ```
 
-- [ ] **Step 3: `fw/src/main.c`에 init 추가**
+- [x] **Step 3: `fw/src/main.c`에 init 추가**
 
 include 추가 (다른 app_* include 옆):
 ```c
@@ -435,7 +439,7 @@ include 추가 (다른 app_* include 옆):
     app_overload_init();    /* 과부하 글루 (needs io_init + sys_tick up) */
 ```
 
-- [ ] **Step 4: `fw/src/app.c` 슈퍼루프에 tick 추가**
+- [x] **Step 4: `fw/src/app.c` 슈퍼루프에 tick 추가**
 
 include 추가:
 ```c
@@ -448,7 +452,7 @@ include 추가:
     app_overload_tick();
 ```
 
-- [ ] **Step 5: reconfigure + 빌드**
+- [x] **Step 5: reconfigure + 빌드**
 
 Run:
 ```bash
@@ -456,12 +460,12 @@ cd fw && env -u STM32_TOOLCHAIN cmake -B build -G Ninja && env -u STM32_TOOLCHAI
 ```
 Expected: 새 `app_overload.c`/`app_overload_fsm.c` 링크, 0 warning(우리 코드), elf 생성, FLASH/RAM 출력.
 
-- [ ] **Step 6: host-test 회귀**
+- [x] **Step 6: host-test 회귀**
 
 Run: `make -C fw/test test`
 Expected: 7스위트 전부 통과.
 
-- [ ] **Step 7: 커밋**
+- [x] **Step 7: 커밋**
 
 ```bash
 git add fw/include/app_overload.h fw/src/app_overload.c fw/src/main.c fw/src/app.c
@@ -482,14 +486,14 @@ git commit -m "feat(overload): app_overload 글루 + force-stop/릴레이/부저
 
 설명: SAMD20는 SYS_ERROR 상태가 START를 막음. STM32엔 그 게이트가 없어 force-stop 후 us_run_status=IDLE이라 즉시 재-START 가능 → 과부하 활성 중 차단 필요. 기존 `app_seek_reset_active()` 직교 guard와 동일 패턴(swallow consume 뒤, us_run_status 설정 앞, **별도 break** — advisor: if 조건 합치면 swallow 비대칭).
 
-- [ ] **Step 1: include 추가**
+- [x] **Step 1: include 추가**
 
 `fw/src/app_reg.c`의 include부(`#include "app_seek_reset.h"` 근처)에 추가:
 ```c
 #include "app_overload.h"   /* app_overload_active (START 차단) */
 ```
 
-- [ ] **Step 2: START case에 overload guard 추가**
+- [x] **Step 2: START case에 overload guard 추가**
 
 `app_reg_command`의 US_CMD_START case에서, 기존
 ```c
@@ -506,17 +510,17 @@ git commit -m "feat(overload): app_overload 글루 + force-stop/릴레이/부저
             }
 ```
 
-- [ ] **Step 3: 빌드**
+- [x] **Step 3: 빌드**
 
 Run: `cd fw && env -u STM32_TOOLCHAIN cmake --build build 2>&1 | tail -10`
 Expected: 0 warning, elf 생성.
 
-- [ ] **Step 4: host-test 회귀**
+- [x] **Step 4: host-test 회귀**
 
 Run: `make -C fw/test test`
 Expected: 7스위트 통과 (app_reg.c는 host-test 비대상).
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add fw/src/app_reg.c
@@ -533,14 +537,14 @@ git commit -m "feat(overload): app_reg START guard에 과부하 차단 추가
 **Files:**
 - Modify: `fw/src/app_modbus.c`
 
-- [ ] **Step 1: include 추가**
+- [x] **Step 1: include 추가**
 
 `fw/src/app_modbus.c`의 include부에 추가:
 ```c
 #include "app_overload.h"   /* app_overload_active (STATUS OVLD 비트) */
 ```
 
-- [ ] **Step 2: STATUS 레지스터에 OVLD 비트 OR**
+- [x] **Step 2: STATUS 레지스터에 OVLD 비트 OR**
 
 기존 라인:
 ```c
@@ -552,17 +556,17 @@ git commit -m "feat(overload): app_reg START guard에 과부하 차단 추가
                                        | (app_overload_active() ? MB_STATUS_OVLD : 0u));
 ```
 
-- [ ] **Step 3: 빌드**
+- [x] **Step 3: 빌드**
 
 Run: `cd fw && env -u STM32_TOOLCHAIN cmake --build build 2>&1 | tail -10`
 Expected: 0 warning, elf 생성.
 
-- [ ] **Step 4: host-test 회귀**
+- [x] **Step 4: host-test 회귀**
 
 Run: `make -C fw/test test`
 Expected: 7스위트 통과 (app_modbus.c는 host-test 비대상; app_modbus_core 순수 코어 무영향).
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add fw/src/app_modbus.c
@@ -575,7 +579,7 @@ git commit -m "feat(overload): Modbus STATUS OVLD 비트 (MB_STATUS_OVLD=0x04)"
 
 **Files:** (변경 없음 — 검증 전용)
 
-- [ ] **Step 1: 클린 빌드**
+- [x] **Step 1: 클린 빌드**
 
 Run:
 ```bash
@@ -583,16 +587,16 @@ cd fw && env -u STM32_TOOLCHAIN cmake -B build -G Ninja && env -u STM32_TOOLCHAI
 ```
 Expected: 0 warning(우리 코드), FLASH/RAM 출력, elf 생성.
 
-- [ ] **Step 2: 전체 host-test**
+- [x] **Step 2: 전체 host-test**
 
 Run: `make -C fw/test test`
 Expected: 7스위트(reg_calc/modbus_core/tcp_frame/weld_fsm/seek_reset_fsm/buzzer_fsm/**overload_fsm**) 전부 통과.
 
-- [ ] **Step 3: cpp-reviewer 리뷰**
+- [x] **Step 3: cpp-reviewer 리뷰**
 
 슬라이스 C 전체 diff(`git diff <슬라이스시작>..HEAD`)를 cpp-reviewer로 리뷰. 중점: force-stop의 현재-소스 RUN_RELEASE가 모든 라이브 run 정지하는지, edge(stop/복구) vs level(릴레이/에러/부저) 수명 정확성, START guard 직교(swallow 대칭), ERR_OVLD 비트만 조작(weld OVTIME 보존), app_overload_active() 동시성(10ms tick 단일 라이터). CRITICAL/HIGH 0 확인.
 
-- [ ] **Step 4: HW 검증 체크리스트 기록 (보드 세션용)**
+- [x] **Step 4: HW 검증 체크리스트 기록 (보드 세션용)**
 
 ⚠ slice A 의존(PB13 read / PB3 relay / 부저) — A·C 함께 검증. 3가지 "비슷한" 결과를 구분(slice B 교훈):
 - **① assert (PB13 HIGH ×5)**: 신호인가/스위치로 PB13 HIGH → 초음파 즉시 정지(LCD/Modbus run→idle, STATUS bit0→0) + LCD "OVER LOAD"/ICON_OL + 릴레이(PB3) ON(멀티미터/LED) + 부저 점멸 + Modbus STATUS OVLD(0x04)=1. **②와 구분**: 정지/에러/릴레이/STATUS가 동시에.
@@ -602,7 +606,7 @@ Expected: 7스위트(reg_calc/modbus_core/tcp_frame/weld_fsm/seek_reset_fsm/buzz
 - **⑤ 극성 sanity**: PB13 active-HIGH·PB3 릴레이 active-HIGH 실측(spec §6 미해결 항목). 정상 시 PB13 LOW 유지 확인(fail-safe 가설).
 - **⑥ 회귀**: 직접-초음파 ceiling(~560ms)·ICON_RUN·DISP_* 미러 무회귀; 과부하 없을 때 STATUS OVLD=0.
 
-- [ ] **Step 5: 완료 + 다음 안내**
+- [x] **Step 5: 완료 + 다음 안내**
 
 리뷰 반영분 커밋 후 HW 게이트. 메모리 `[[project-physical-io-layer]]` 갱신(슬라이스 C CODE-COMPLETE). 다음 = 슬라이스 D(물리명령+E-stop) 또는 A/B/C 묶음 HW 세션. HANDOFF 갱신.
 
