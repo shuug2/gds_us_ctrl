@@ -10,6 +10,7 @@
 #include "app_reg.h"
 #include "app_weld.h"
 #include "app_seek_reset.h"
+#include "app_overload.h"
 #include "app_modbus.h"
 #include "app_eth.h"
 #include "i2c1.h"    /* i2c1_err_count / i2c1_unstick_events — 부팅·1s 관측 로그 */
@@ -94,6 +95,10 @@ void app_loop_iter(void)
      * app_reg_tick 앞에 둬서 이번 iter publish에 반영. 슬라이스1은 프로덕션
      * 트리거 없음 -> READY 휴면(회귀 영향 없음). */
     app_weld_tick();
+
+    /* 2.55 과부하 — 10 ms. assert면 force-stop(이번 iter reg publish 반영) +
+     * deassert면 자동복구 요청(다음 줄 seek_reset_tick이 같은 iter에 처리). */
+    app_overload_tick();
 
     /* 2.6 SEEK/RESET FSM — 10 ms cadence. run_active(us_run_status)를 읽어 RUN
      * 직교; ICON/hook만 emit (app_reg에 명령 안 보냄)이라 reg_tick 앞/뒤 무관 —
