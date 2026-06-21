@@ -43,8 +43,8 @@
 #define MB_REG_STOP         0x1Cu   /* command: consume-and-clear */
 #define MB_REG_STATUS       0x1Du
 
-/* STATUS bits (samd20 modbus.h). ESTOP/OVLD/OVTIME/OUTERR stay 0 this slice
- * (overload/weld machinery deferred — spec §3.1). */
+/* STATUS bits (samd20 modbus.h). OVLD set by app_overload (슬라이스 C);
+ * ESTOP/OVTIME/OUTERR stay 0 (estop/weld machinery deferred — spec §3.1). */
 #define MB_STATUS_US      0x01u
 #define MB_STATUS_ESTOP   0x02u
 #define MB_STATUS_OVLD    0x04u

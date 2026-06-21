@@ -84,7 +84,8 @@ static void mirror_live(void)
     g_mb.holding[MB_REG_EN_SAFTY]    = cfg->f_safty;
     /* STATUS bit0 = run active (spec §3.1: us_run_status != US_IDLE).
      * OVTIME = app_reg가 publish한 energy 모드 직접런 과대시간 fault
-     * (2026-06-28-ovtime spec). OVLD = 과부하 슬라이스. ESTOP/OUTERR는 estop/6b. */
+     * (2026-06-28-ovtime spec). OVLD = app_overload_active() 라이브 반영
+     * (슬라이스 C). ESTOP/OUTERR는 estop/6b 슬라이스. */
     uint16_t status = running ? MB_STATUS_US : 0u;
     if (m->error_status & ERR_OVTIME) {
         status |= MB_STATUS_OVTIME;
