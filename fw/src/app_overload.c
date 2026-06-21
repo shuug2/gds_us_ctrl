@@ -44,9 +44,16 @@ void app_overload_tick(void)
 
     if ((ev & OVLD_EV_ASSERT) != 0u) {
         /* 현재 활성 run을 force-stop. us_run_status는 단일값이라 현재 소스를
-         * RUN_RELEASE에 넘기면 source-matched 정지가 항상 발화 (TOUCH/COMM/CYCLE
-         * 게이트). 신규 app_reg API 불필요 (advisor). ⚠ weld 기계 사이클 abort는
-         * 별개 — weld 물리트리거 dormant라 현재 무관 (슬라이스 E/weld4). */
+         * RUN_RELEASE에 넘기면 source-matched 정지가 발화한다. ⚠ 여기서 읽는
+         * app_reg_measure()->us_run_status는 app_reg_tick(step3)에서 발행되는
+         * 미러라 overload_tick(2.55)보다 1-iter lag — 과부하 ≥50ms(×5 디바운스)
+         * steady-state에선 run이 안정 active라 항상 정지하지만, assert와 같은
+         * 10ms iter에 START가 들어오면 stale IDLE을 읽어 즉시 정지를 놓치고
+         * (edge-only라 재시도 없음) 그 run은 on-time ceiling(~560ms)까지 돈다.
+         * 단 아래 io_ovld_relay(true)는 이 if 밖 무조건 발화라 릴레이 컷오프는
+         * 이 레이스와 무관(릴레이가 실 초음파를 끊으면 escaped run은 cosmetic —
+         * HW로 확정). 신규 app_reg API 불필요(advisor). ⚠ weld 기계 사이클
+         * abort는 별개 — weld 물리트리거 dormant라 현재 무관 (슬라이스 E/weld4). */
         uint8_t src = app_reg_measure()->us_run_status;
         if (src != (uint8_t)US_IDLE) {
             app_reg_command(US_CMD_RUN_RELEASE, src);
