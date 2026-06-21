@@ -22,6 +22,7 @@ typedef struct {
     uint8_t  energy_ctrl;     /* 1 = energy 모드 (on-time ceiling 대체) */
     uint32_t limit_energy;    /* 에너지-도달 정상정지 임계 (curr_energy 비교) */
     uint16_t limit_out_time;  /* OVTIME 한계 = 초 (0 = OVTIME off) */
+    int16_t  freq_cal_val;    /* FREQ_IN 표시 보정 → freq_fsm_compute (slice-B) */
 } reg_run_limits_t;
 
 /* Superloop regulation step; gates internally on sys_tick_get_ms() deltas:
