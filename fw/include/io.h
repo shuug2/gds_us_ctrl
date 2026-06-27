@@ -16,6 +16,7 @@ uint8_t io_read_key2(void);         /* PB11  active-LOW */
 uint8_t io_read_sens_up(void);      /* PA12  active-LOW */
 uint8_t io_read_sens_dn(void);      /* PA11  active-LOW */
 uint8_t io_read_overload(void);     /* PB13  active-HIGH */
+uint8_t io_read_usfb(void);         /* PB12  active-HIGH (초음파 출력 피드백: 출력 중 H) */
 
 /* 출력 (논리 on/off; 폴라리티 io.c 내부 적용) */
 void io_usout(bool on);             /* PB4  active-HIGH */

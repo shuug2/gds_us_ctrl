@@ -13,6 +13,7 @@
 #include "app_input.h"      /* app_estop_active (START 차단, E-stop) */
 #include "adc1.h"
 #include "io.h"
+#include "board.h"          /* board_osc4 (PB14 OSC4 발진 게이트) */
 #include "sys_tick.h"
 #include "app_freq_fsm.h"
 #ifdef REG_TRACE
@@ -85,6 +86,7 @@ static lcd_measure_t g_measure;
 void app_reg_hook_us_output(bool on)
 {
     io_usout(on);                    /* PB4 active-HIGH = 초음파 출력 enable */
+    board_osc4(on);                  /* PB14 OSC4 active-LOW = 초음파 출력 중 LOW */
 }
 
 /* 자동 정지 공통 (on-time ceiling / energy-reached / OVTIME): 피크 래치 + IDLE.

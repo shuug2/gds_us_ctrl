@@ -21,7 +21,8 @@ void app_init(void)
 {
     app_config_t *cfg = app_lcd_cfg();   /* config owned by the LCD subsystem */
 
-    sys_tick_init();
+    /* sys_tick_init()은 main()으로 hoist됨 — OSC 부팅 초기화(app_init 전 실행)가
+     * sys_tick_get_ms()를 필요로 하기 때문. */
     mon_init();
     mon_writeln("[boot] gds_us_ctrl stage-b ready");
 

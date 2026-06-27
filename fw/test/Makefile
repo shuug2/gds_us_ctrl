@@ -15,10 +15,12 @@ BIN_FQ  := /tmp/gds_test_app_freq_fsm
 BIN_BZ  := /tmp/gds_test_app_buzzer_fsm
 BIN_OL  := /tmp/gds_test_app_overload_fsm
 BIN_IN  := /tmp/gds_test_app_input_fsm
+BIN_OSC := /tmp/gds_test_app_osc_init_fsm
 BIN_OL  := /tmp/gds_test_app_overload_fsm
 BIN_IN  := /tmp/gds_test_app_input_fsm
+BIN_OSC := /tmp/gds_test_app_osc_init_fsm
 
-test: $(BIN_REG) $(BIN_MB) $(BIN_TCP) $(BIN_WELD) $(BIN_SR) $(BIN_POT) $(BIN_CFG) $(BIN_FQ) $(BIN_BZ) $(BIN_OL) $(BIN_IN)
+test: $(BIN_REG) $(BIN_MB) $(BIN_TCP) $(BIN_WELD) $(BIN_SR) $(BIN_POT) $(BIN_CFG) $(BIN_FQ) $(BIN_BZ) $(BIN_OL) $(BIN_IN) $(BIN_OSC)
 	$(BIN_REG)
 	$(BIN_MB)
 	$(BIN_TCP)
@@ -30,6 +32,7 @@ test: $(BIN_REG) $(BIN_MB) $(BIN_TCP) $(BIN_WELD) $(BIN_SR) $(BIN_POT) $(BIN_CFG
 	$(BIN_BZ)
 	$(BIN_OL)
 	$(BIN_IN)
+	$(BIN_OSC)
 
 $(BIN_REG): test_app_reg_calc.c ../src/app_reg_calc.c ../include/app_reg_calc.h
 	$(CC) $(CFLAGS) $(INC) -o $@ test_app_reg_calc.c ../src/app_reg_calc.c
@@ -67,13 +70,19 @@ $(BIN_OL): test_app_overload_fsm.c ../src/app_overload_fsm.c ../include/app_over
 $(BIN_IN): test_app_input_fsm.c ../src/app_input_fsm.c ../include/app_input_fsm.h
 	$(CC) $(CFLAGS) $(INC) -o $@ test_app_input_fsm.c ../src/app_input_fsm.c
 
+$(BIN_OSC): test_app_osc_init_fsm.c ../src/app_osc_init_fsm.c ../include/app_osc_init_fsm.h
+	$(CC) $(CFLAGS) $(INC) -o $@ test_app_osc_init_fsm.c ../src/app_osc_init_fsm.c
+
 $(BIN_OL): test_app_overload_fsm.c ../src/app_overload_fsm.c ../include/app_overload_fsm.h
 	$(CC) $(CFLAGS) $(INC) -o $@ test_app_overload_fsm.c ../src/app_overload_fsm.c
 
 $(BIN_IN): test_app_input_fsm.c ../src/app_input_fsm.c ../include/app_input_fsm.h
 	$(CC) $(CFLAGS) $(INC) -o $@ test_app_input_fsm.c ../src/app_input_fsm.c
 
+$(BIN_OSC): test_app_osc_init_fsm.c ../src/app_osc_init_fsm.c ../include/app_osc_init_fsm.h
+	$(CC) $(CFLAGS) $(INC) -o $@ test_app_osc_init_fsm.c ../src/app_osc_init_fsm.c
+
 clean:
-	rm -f $(BIN_REG) $(BIN_MB) $(BIN_TCP) $(BIN_WELD) $(BIN_SR) $(BIN_POT) $(BIN_CFG) $(BIN_FQ) $(BIN_BZ) $(BIN_OL) $(BIN_IN)
+	rm -f $(BIN_REG) $(BIN_MB) $(BIN_TCP) $(BIN_WELD) $(BIN_SR) $(BIN_POT) $(BIN_CFG) $(BIN_FQ) $(BIN_BZ) $(BIN_OL) $(BIN_IN) $(BIN_OSC)
 
 .PHONY: test clean

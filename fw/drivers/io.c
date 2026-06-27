@@ -16,8 +16,10 @@
 #define KEY2_PIN        GPIO_PIN_11
 #define OVLD_IN_PORT    GPIOB
 #define OVLD_IN_PIN     GPIO_PIN_13
-#define RESET_PORT      GPIOC
-#define RESET_PIN       GPIO_PIN_10
+#define USFB_PORT       GPIOB
+#define USFB_PIN        GPIO_PIN_12     /* 초음파 출력 피드백: 출력 중 L->H (active-HIGH) */
+#define PANEL_RESET_PORT      GPIOC
+#define PANEL_RESET_PIN       GPIO_PIN_10   /* 패널 RESET 버튼 입력 (board_reset PB10 출력과 구분) */
 #define ESTOP_PORT      GPIOC
 #define ESTOP_PIN       GPIO_PIN_11
 #define KEY1_PORT       GPIOC
@@ -54,12 +56,13 @@ void io_init(void)
     in_pu.Pin = SENS_UP_PIN; HAL_GPIO_Init(SENS_UP_PORT, &in_pu);
     in_pu.Pin = SENS_DN_PIN; HAL_GPIO_Init(SENS_DN_PORT, &in_pu);
     in_pu.Pin = KEY2_PIN;    HAL_GPIO_Init(KEY2_PORT,    &in_pu);
-    in_pu.Pin = RESET_PIN;   HAL_GPIO_Init(RESET_PORT,   &in_pu);
+    in_pu.Pin = PANEL_RESET_PIN;   HAL_GPIO_Init(PANEL_RESET_PORT,   &in_pu);
     in_pu.Pin = ESTOP_PIN;   HAL_GPIO_Init(ESTOP_PORT,   &in_pu);  /* 폴라리티는 호출측 model_type 분기 */
     in_pu.Pin = KEY1_PIN;    HAL_GPIO_Init(KEY1_PORT,    &in_pu);
 
-    /* 입력 active-HIGH overload (pull-down → idle LOW) */
+    /* 입력 active-HIGH (pull-down → idle LOW): overload sense + 초음파 출력 피드백 */
     in_pd.Pin = OVLD_IN_PIN; HAL_GPIO_Init(OVLD_IN_PORT, &in_pd);
+    in_pd.Pin = USFB_PIN;    HAL_GPIO_Init(USFB_PORT,    &in_pd);
 
     /* 출력 idle = inactive (레벨 먼저 세팅 후 출력 전환 — boot glitch 회피) */
     HAL_GPIO_WritePin(BUZZER_PORT,   BUZZER_PIN,   GPIO_PIN_RESET);  /* active-H off */
@@ -73,13 +76,14 @@ void io_init(void)
 }
 
 uint8_t io_read_start(void)      { return (uint8_t)HAL_GPIO_ReadPin(START_PORT,   START_PIN);   }
-uint8_t io_read_reset(void)      { return (uint8_t)HAL_GPIO_ReadPin(RESET_PORT,   RESET_PIN);   }
+uint8_t io_read_reset(void)      { return (uint8_t)HAL_GPIO_ReadPin(PANEL_RESET_PORT,   PANEL_RESET_PIN);   }
 uint8_t io_read_estop_seek(void) { return (uint8_t)HAL_GPIO_ReadPin(ESTOP_PORT,   ESTOP_PIN);   }
 uint8_t io_read_key1(void)       { return (uint8_t)HAL_GPIO_ReadPin(KEY1_PORT,    KEY1_PIN);    }
 uint8_t io_read_key2(void)       { return (uint8_t)HAL_GPIO_ReadPin(KEY2_PORT,    KEY2_PIN);    }
 uint8_t io_read_sens_up(void)    { return (uint8_t)HAL_GPIO_ReadPin(SENS_UP_PORT, SENS_UP_PIN); }
 uint8_t io_read_sens_dn(void)    { return (uint8_t)HAL_GPIO_ReadPin(SENS_DN_PORT, SENS_DN_PIN); }
 uint8_t io_read_overload(void)   { return (uint8_t)HAL_GPIO_ReadPin(OVLD_IN_PORT, OVLD_IN_PIN); }
+uint8_t io_read_usfb(void)       { return (uint8_t)HAL_GPIO_ReadPin(USFB_PORT,    USFB_PIN);    }
 
 void io_usout(bool on)      { HAL_GPIO_WritePin(USOUT_PORT,    USOUT_PIN,    on ? GPIO_PIN_SET : GPIO_PIN_RESET); }
 void io_ovld_relay(bool on) { HAL_GPIO_WritePin(OVLD_RLY_PORT, OVLD_RLY_PIN, on ? GPIO_PIN_SET : GPIO_PIN_RESET); }
