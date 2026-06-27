@@ -125,6 +125,51 @@ static void test_concurrent_start_reset(void)
     CHECK_EQ(o.reset_press, 1u);
 }
 
+/* 모드전환 stale-edge 회피 — 최종리뷰 M1.
+ * std↔hand/multi 전환 시 _bak 교차동기로 spurious edge 억제를 잠금.
+ * 시나리오 1: std→hand/multi PC11 HIGH → seek_press=0, estop_active=0.
+ * 시나리오 2: std→hand/multi PC11 LOW → seek_press=0 (std branch가 s_seek_bak 동기).
+ * 시나리오 3: hand/multi→std PC11 HIGH → estop_enter=1, estop_active=1 (의도된 진입). */
+static void test_model_switch_no_stale_edge(void)
+{
+    input_out_t o;
+
+    /* --- 시나리오 1: std→hand/multi, PC11 HIGH 유지 --- */
+    input_fsm_init();
+    input_in_t in = { .start = 1u, .reset = 1u, .estop_seek = 1u, .model_type = 2u };
+    o = input_fsm_step(&in);                     /* std: EMSW HIGH → enter+active */
+    CHECK_EQ(o.estop_active, 1u);
+    CHECK_EQ(o.estop_enter, 1u);
+    o = input_fsm_step(&in);                     /* std: EMSW HIGH 유지 → 재진입 없음 */
+    CHECK_EQ(o.estop_active, 1u);
+    CHECK_EQ(o.estop_enter, 0u);
+    in.model_type = 1u;                          /* hand/multi로 전환, PC11 HIGH 유지 */
+    o = input_fsm_step(&in);
+    CHECK_EQ(o.seek_press, 0u);                  /* spurious SEEK 없음 */
+    CHECK_EQ(o.estop_active, 0u);                /* hand/multi에선 EMSW 비활성 */
+
+    /* --- 시나리오 2: std→hand/multi, PC11 LOW --- */
+    input_fsm_init();
+    in.start = 1u; in.reset = 1u; in.estop_seek = 0u; in.model_type = 2u;
+    o = input_fsm_step(&in);                     /* std: EMSW LOW → estop_active=0 */
+    CHECK_EQ(o.estop_active, 0u);
+    in.model_type = 1u;                          /* hand/multi로 전환, PC11 LOW */
+    o = input_fsm_step(&in);
+    CHECK_EQ(o.seek_press, 0u);                  /* std branch가 s_seek_bak=0 동기 → edge 없음 */
+    CHECK_EQ(o.estop_active, 0u);
+
+    /* --- 시나리오 3: hand/multi→std, PC11 HIGH (의도된 E-stop 진입) --- */
+    input_fsm_init();
+    in.start = 1u; in.reset = 1u; in.estop_seek = 1u; in.model_type = 0u;
+    o = input_fsm_step(&in);                     /* hand/multi: PC11 HIGH → EMSW 비활성 */
+    CHECK_EQ(o.estop_active, 0u);
+    CHECK_EQ(o.seek_press, 0u);
+    in.model_type = 2u;                          /* std로 전환, PC11 HIGH */
+    o = input_fsm_step(&in);
+    CHECK_EQ(o.estop_enter, 1u);                 /* std 진입 시 HIGH → E-stop 진입 */
+    CHECK_EQ(o.estop_active, 1u);
+}
+
 int main(void)
 {
     test_idle_no_event();
@@ -135,6 +180,7 @@ int main(void)
     test_no_seek_in_std();
     test_no_estop_in_hand_multi();
     test_concurrent_start_reset();
+    test_model_switch_no_stale_edge();
     if (failures) { printf("app_input_fsm: %d FAIL\n", failures); return 1; }
     printf("app_input_fsm: all tests passed\n");
     return 0;
