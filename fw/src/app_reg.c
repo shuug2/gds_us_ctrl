@@ -10,6 +10,7 @@
 #include "app_reg_calc.h"
 #include "app_seek_reset.h"   /* app_seek_reset_request, app_seek_reset_active */
 #include "app_overload.h"   /* app_overload_active (START 차단) */
+#include "app_input.h"      /* app_estop_active (START 차단, E-stop) */
 #include "adc1.h"
 #include "io.h"
 #include "sys_tick.h"
@@ -146,6 +147,11 @@ void app_reg_command(us_cmd_t cmd, uint8_t src)
             /* 과부하 활성 중 START 차단 (SAMD20 SYS_ERROR가 START 막음).
              * seek_reset_active와 동일 직교 — 별도 break (swallow consume 뒤). */
             if (app_overload_active() != 0u) {
+                break;
+            }
+            /* E-stop 활성 중 START 차단 (SAMD20 SYS_ESTOP). overload와 동일 직교 —
+             * 별도 break (swallow 대칭 보존). 레벨 기반(E-stop 떼면 자동 해제). */
+            if (app_estop_active() != 0u) {
                 break;
             }
             g_reg.us_run_status = src;   /* US_TOUCH or US_COMM */
@@ -300,21 +306,19 @@ void app_reg_tick(const reg_run_limits_t *lim)
     }
 
     /* Run on-time ceiling (limit_on_time x10 ms, 0 = off, panel-editable).
-     * COMM runs: samd20-faithful (main.c:5296 applies it to COMM/REMOTE in
-     * SYS_HAND; 2026-06-10 analysis doc authority — REMOTE ceiling lands with
-     * the REMOTE slice, NOT covered here). TOUCH runs: intentional
-     * STM32 safety addition — the V30 RUN button's data=0 quirk can lose the
-     * release edge (infinite run); the M16 itself also force-cleared the run
-     * flag on an internal countdown (g_018F, Timer1 ISR @0x0572).
-     * samd20's multi_ctrl/energy_ctrl run branches (main.c:5234..) belong to
-     * the weld-cycle machine — deferred, spec §8. */
+     * TOUCH/COMM/REMOTE 모두 대상 (REMOTE = 물리 B_START, 슬라이스 D 추가).
+     * 단 swallow_start(아래)는 TOUCH 전용: V30 RUN 버튼 data=0 quirk 대응이며,
+     * 물리 B_START의 release 엣지는 신뢰성 있어 불필요. */
     {
         /* 런 자동 종료. energy 모드면 에너지-도달 정상정지 + OVTIME이 on-time
          * ceiling을 대체(legacy main.c:5270 분기); 비-energy면 기존 ceiling.
-         * 조건이 TOUCH/COMM만 포함하므로 US_CYCLE(weld WELD)은 자연 제외(spec §5.2).
+         * US_CYCLE(weld-cycle WELD)은 의도적으로 ceiling 대상 아님: WELD 길이는
+         * weld-cycle FSM의 limit_delay_time2가 지배(app_weld) — 아래 조건이
+         * TOUCH/COMM/REMOTE만 포함하므로 자연 제외 (spec §5.2).
          * limit_*은 매 call cfg에서 주입(M1) — 패널 편집 즉시 반영(mid-run 포함). */
         uint8_t rs = g_reg.us_run_status;
-        if ((rs == (uint8_t)US_TOUCH) || (rs == (uint8_t)US_COMM)) {
+        if ((rs == (uint8_t)US_TOUCH) || (rs == (uint8_t)US_COMM) ||
+            (rs == (uint8_t)US_REMOTE)) {
             uint32_t elapsed = (uint32_t)(now - g_reg.run_start_ms);
             if (lim->energy_ctrl != 0u) {
                 reg_energy_outcome_t oc = reg_energy_termination(
