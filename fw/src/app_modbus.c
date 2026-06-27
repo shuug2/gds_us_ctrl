@@ -17,6 +17,7 @@
 #include "app_lcd.h"      /* app_lcd_cfg/app_lcd_measure/hooks/us enum */
 #include "app_reg.h"
 #include "app_overload.h"   /* app_overload_active (STATUS OVLD 비트) */
+#include "app_input.h"      /* app_estop_active (STATUS ESTOP 비트) */
 #include "app_config.h"
 #include "dgus_lcd.h"     /* DISP_*_EN echo (samd20 send_lcd_data_var) */
 #include "mon.h"
@@ -85,13 +86,16 @@ static void mirror_live(void)
     /* STATUS bit0 = run active (spec §3.1: us_run_status != US_IDLE).
      * OVTIME = app_reg가 publish한 energy 모드 직접런 과대시간 fault
      * (2026-06-28-ovtime spec). OVLD = app_overload_active() 라이브 반영
-     * (슬라이스 C). ESTOP/OUTERR는 estop/6b 슬라이스. */
+     * (슬라이스 C). ESTOP = app_estop_active() (슬라이스 D). OUTERR는 6b. */
     uint16_t status = running ? MB_STATUS_US : 0u;
     if (m->error_status & ERR_OVTIME) {
         status |= MB_STATUS_OVTIME;
     }
     if (app_overload_active() != 0u) {
         status |= MB_STATUS_OVLD;
+    }
+    if (app_estop_active() != 0u) {
+        status |= MB_STATUS_ESTOP;
     }
     g_mb.holding[MB_REG_STATUS]      = status;
 }
