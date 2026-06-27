@@ -34,6 +34,13 @@
 #define REG_RAMP_MS      10u   /* M16 Timer1 0xFFB1 ~10.1 ms warm-up cadence (cad-C8) */
 #define RAMP_DONE_COUNT  401u  /* counter >= 401 (0x191) -> state 0 (verified §2.1) */
 #define ON_TIME_UNIT_MS  10u   /* limit_on_time unit: x10 ms (samd20 main.c:769) */
+/* Absolute on-time SAFETY ceiling. Fires for ANY active ultrasonic run
+ * (TOUCH/COMM/REMOTE/CYCLE) in ANY mode, independent of limit_on_time (works
+ * even when limit_on_time==0), NOT panel-editable. Transducer runaway backstop
+ * (lost release edge, stuck remote command). User decision 2026-06-27:
+ * unconditional, all sources incl. weld. */
+#define ON_TIME_SAFETY_MS  30000u   /* 30 s */
+#define MODEL_TYPE_HAND    0u       /* model_type/sys_mode: 0=hand (limit_on_time gate) */
 
 #ifdef REG_TRACE
 #define REG_TRACE_MS     500u  /* slow trace cadence so the mon log stays readable */
@@ -305,17 +312,34 @@ void app_reg_tick(const reg_run_limits_t *lim)
         }
     }
 
-    /* Run on-time ceiling (limit_on_time x10 ms, 0 = off, panel-editable).
-     * TOUCH/COMM/REMOTE 모두 대상 (REMOTE = 물리 B_START, 슬라이스 D 추가).
-     * 단 swallow_start(아래)는 TOUCH 전용: V30 RUN 버튼 data=0 quirk 대응이며,
-     * 물리 B_START의 release 엣지는 신뢰성 있어 불필요. */
+    /* (1) Absolute on-time SAFETY ceiling — ON_TIME_SAFETY_MS (30 s). Fires for
+     * ANY active ultrasonic run (TOUCH/COMM/REMOTE/CYCLE) in ANY mode,
+     * independent of limit_on_time (fires even when limit_on_time==0), NOT
+     * panel-editable. Transducer runaway backstop. run_start_ms is stamped at
+     * every START edge (incl. US_CYCLE via app_weld), so the 30 s base is valid
+     * for all sources. User decision 2026-06-27: unconditional, all incl. weld. */
     {
-        /* 런 자동 종료. energy 모드면 에너지-도달 정상정지 + OVTIME이 on-time
-         * ceiling을 대체(legacy main.c:5270 분기); 비-energy면 기존 ceiling.
-         * US_CYCLE(weld-cycle WELD)은 의도적으로 ceiling 대상 아님: WELD 길이는
-         * weld-cycle FSM의 limit_delay_time2가 지배(app_weld) — 아래 조건이
-         * TOUCH/COMM/REMOTE만 포함하므로 자연 제외 (spec §5.2).
-         * limit_*은 매 call cfg에서 주입(M1) — 패널 편집 즉시 반영(mid-run 포함). */
+        uint8_t rs = g_reg.us_run_status;
+        if ((rs == (uint8_t)US_TOUCH) || (rs == (uint8_t)US_COMM) ||
+            (rs == (uint8_t)US_REMOTE) || (rs == (uint8_t)US_CYCLE)) {
+            if ((uint32_t)(now - g_reg.run_start_ms) >= ON_TIME_SAFETY_MS) {
+                reg_stop_run(rs);
+#ifdef REG_TRACE
+                mon_printf("[reg] 30s safety ceiling -> stop\r\n");
+#endif
+            }
+        }
+    }
+
+    /* (2) 런 자동 종료 — energy 모드면 에너지-도달 정상정지 + OVTIME이 운영
+     * ceiling을 대체 (ovtime, legacy main.c:5270 분기; REMOTE는 slice-D가 소스
+     * 추가). 비-energy면 legacy limit_on_time ceiling — slice-D 이중화 결정
+     * (2026-06-27, samd20 main.c:5296-faithful): HAND 모드의 COMM/REMOTE만,
+     * NOT TOUCH (V30 lost-release 리스크는 위 30 s 안전 ceiling이 커버).
+     * US_CYCLE은 양쪽 모두 자연 제외 — WELD 길이는 weld-cycle FSM의
+     * limit_delay_time2가 지배(app_weld). limit_*은 매 call cfg 주입(M1) —
+     * 패널 편집 즉시 반영(mid-run 포함). */
+    {
         uint8_t rs = g_reg.us_run_status;
         if ((rs == (uint8_t)US_TOUCH) || (rs == (uint8_t)US_COMM) ||
             (rs == (uint8_t)US_REMOTE)) {
@@ -335,9 +359,11 @@ void app_reg_tick(const reg_run_limits_t *lim)
                                (unsigned long)lim->limit_energy, (unsigned long)elapsed);
 #endif
                 }
-            } else if ((lim->limit_on_time != 0u) &&
+            } else if ((lim->model_type == MODEL_TYPE_HAND) &&
+                       ((rs == (uint8_t)US_COMM) || (rs == (uint8_t)US_REMOTE)) &&
+                       (lim->limit_on_time != 0u) &&
                        (elapsed >= (uint32_t)lim->limit_on_time * ON_TIME_UNIT_MS)) {
-                reg_stop_run(rs);
+                reg_stop_run(rs);   /* COMM/REMOTE: no swallow (legacy) */
 #ifdef REG_TRACE
                 mon_printf("[reg] on-time ceiling (%u x10ms) -> stop\r\n",
                            (unsigned)lim->limit_on_time);

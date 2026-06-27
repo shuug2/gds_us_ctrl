@@ -127,13 +127,21 @@ g_reg.us_run_status = src;                  /* run-start */
 
 ---
 
-## 7. on-time ceiling — US_REMOTE 추가 (`app_reg.c:282`)
+## 7. on-time ceiling — 이중 구조 재설계 (2026-06-27 보드세션, 사용자 확정)
 
-현재 ceiling 대상 = `US_TOUCH || US_COMM` (`app_reg.c:282`). `app_reg.c:270` 주석이 "REMOTE ceiling lands with the REMOTE slice, NOT covered here"로 본 작업을 예고. 조건에 `US_REMOTE` 추가:
-```c
-if ((rs == US_TOUCH) || (rs == US_COMM) || (rs == US_REMOTE)) { ... }
-```
-단 ceiling 도달 시 `swallow_start=1`은 **TOUCH 전용 유지**(V30 LCD 버튼 data=0 quirk 대응). 물리 B_START의 release 엣지는 신뢰성 있어 REMOTE는 swallow 불필요 → REMOTE ceiling은 `us_run_status=IDLE`만.
+> **개정**: 초기 설계는 단일 ceiling에 `US_REMOTE`만 추가(`US_TOUCH||US_COMM||US_REMOTE`, 모드 무관)였으나, 보드세션에서 legacy 대조 결과 **legacy `main.c:5296`은 limit_on_time을 `(US_COMM||US_REMOTE) && sys_mode==SYS_HAND`에만 적용**(hand 모드 전용, TOUCH 제외)함이 확인됨. 사용자 결정 = **두 개의 독립 ceiling으로 분리**.
+
+**(1) 절대 on-time 안전 ceiling — `ON_TIME_SAFETY_MS=30000`(30초)**
+- 적용: **모든 초음파 런(US_TOUCH/US_COMM/US_REMOTE/US_CYCLE), 모든 모드, 무조건**.
+- `limit_on_time`과 **완전 독립**(limit_on_time==0이어도 발화), 패널 편집 불가.
+- 목적: 트랜스듀서 폭주 백스톱(V30 RUN data=0 release 엣지 분실, 멈춘 원격명령 등). `run_start_ms`는 모든 START 엣지(US_CYCLE 포함, app_weld 경유)에서 스탬프되므로 30초 기준 유효.
+- 정지 = `reg_run_stop_latch(rs)`(last_* 래치 + IDLE; TOUCH면 swallow_start).
+
+**(2) 운용 on-time ceiling — `limit_on_time`(×10ms, 0=off, 패널 편집)**
+- 적용: **`(US_COMM||US_REMOTE) && model_type==HAND(0)` 에만** (legacy `main.c:5296` 충실). **US_TOUCH 제외**(legacy 미적용; V30 quirk는 위 30초 안전망이 커버), **multi/std 제외**(weld/energy/multi 한계가 지배).
+- `limit_on_time`/`model_type` 모두 `app_reg_tick(limit_on_time, model_type)`로 주입(M1 순환의존 회피).
+
+> **보드 검증(2026-06-27)**: 임시 `ON_TIME_SAFETY_MS=3000`(3초)로 빌드→플래시→multi 모드 Modbus START → SWD 샘플링 = `US_COMM` 런이 **~2.7s(129샘플) 지속 후 정지**(560ms 아님) → ① multi 모드 limit_on_time 미적용 ② 30초(임시 3초) 안전 발화 동시 입증. 이후 30000으로 굳혀 재플래시.
 
 ---
 
@@ -147,7 +155,7 @@ if ((rs == US_TOUCH) || (rs == US_COMM) || (rs == US_REMOTE)) { ... }
 | B_START | 모멘터리 hold-to-run (`main.c:1356-1390`) |
 | PC11 분기 | `cfg->model_type` 매 tick (0/1=SEEK, 2=EMSW) |
 | force-stop | overload와 동일 active 레벨 재시도(idempotent, source-matched) |
-| ceiling | US_REMOTE 추가, swallow는 TOUCH 전용 유지 |
+| ceiling | **이중 구조(§7 개정)**: (1) 절대 30초 안전(전 모드·전 소스·limit_on_time 독립) + (2) 운용 limit_on_time(COMM/REMOTE·hand 전용, legacy 충실). swallow는 TOUCH 전용 유지 |
 | STATUS ESTOP | `MB_STATUS_ESTOP=0x02` (이미 정의됨) OR 반영 |
 
 ---

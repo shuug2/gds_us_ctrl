@@ -25,12 +25,15 @@ typedef struct {
     uint32_t limit_energy;    /* 에너지-도달 정상정지 임계 (curr_energy 비교) */
     uint16_t limit_out_time;  /* OVTIME 한계 = 초 (0 = OVTIME off) */
     int16_t  freq_cal_val;    /* FREQ_IN 표시 보정 → freq_fsm_compute (slice-B) */
+    uint8_t  model_type;      /* 0=hand — legacy ceiling 게이트 (slice-D) */
 } reg_run_limits_t;
 
 /* Superloop regulation step; gates internally on sys_tick_get_ms() deltas:
  * 1 ms both-channel ADC accumulate/average, ~2 ms scale + lookup on the
  * latest ch0_avg + lcd_measure_t publish, ~10 ms boot warm-up advance.
- * The run termination (ceiling 또는 energy/OVTIME)은 매 call 평가 (2ms gate 아님).
+ * The run termination (30s 안전 ceiling / 운영 ceiling / energy/OVTIME)은 매
+ * call 평가 (2ms gate 아님). model_type(0=hand)은 운영 limit_on_time ceiling을
+ * hand 모드로 게이트(samd20-faithful); 절대 30 s 안전 ceiling은 모드 무관.
  * `lim`은 호출자 스택 임시값 — app_reg_tick은 동기 호출이라 보관하지 않음
  * (caller's stack lifetime sufficient; cpp-review N1). */
 void app_reg_tick(const reg_run_limits_t *lim);
