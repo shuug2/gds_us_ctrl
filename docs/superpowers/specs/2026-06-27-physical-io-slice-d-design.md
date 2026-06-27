@@ -143,6 +143,12 @@ g_reg.us_run_status = src;                  /* run-start */
 
 > **보드 검증(2026-06-27)**: 임시 `ON_TIME_SAFETY_MS=3000`(3초)로 빌드→플래시→multi 모드 Modbus START → SWD 샘플링 = `US_COMM` 런이 **~2.7s(129샘플) 지속 후 정지**(560ms 아님) → ① multi 모드 limit_on_time 미적용 ② 30초(임시 3초) 안전 발화 동시 입증. 이후 30000으로 굳혀 재플래시.
 
+**cpp-review(opus) MERGE-READY 0 Crit/High, Minor 3(문서만)**:
+- **≤2ms 물리 비활성 지연**: ceiling은 `us_run_status=IDLE`만 세트하고 실제 트랜스듀서 비활성은 다음 `reg_publish_measure`(~2ms 게이트)의 `app_reg_hook_us_output(false)` + setpoint MUX=0에서 발생 → 안전정지~물리off ≤2ms(손상 임계 훨씬 미만).
+- **게이트 기준**: 운용 ceiling은 persisted `cfg->model_type`로 게이트(legacy는 runtime `sys_mode`). 본 코드베이스선 `sys_mode(=model_type)`로 일치(LCD 편집이 `cfg->model_type` 직접 기록·FRAM 영속) → 무해. RAM-only 모드전환 미영속 시에만 괴리(30초 안전은 모드 무관이라 무영향).
+- **TOUCH-in-hand**: 운용 ceiling 제외(legacy 미적용 충실)이나 30초 안전은 추가 → **legacy보다 엄격(안전)**, 회귀 아님.
+- ⚠ tick/ceiling는 host 커버리지 밖 → rig 잔여검증: hand COMM/REMOTE가 `limit_on_time×10ms`에 cut / US_CYCLE 30초 도달 / TOUCH-in-hand 30초 안전.
+
 ---
 
 ## 8. 핵심 결정 (확정)
