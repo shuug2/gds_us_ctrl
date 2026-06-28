@@ -121,6 +121,27 @@ static void test_energy_integration_steps(void) {
     CHECK_EQ(step_reached, 10);
 }
 
+/* reg_energy_termination — energy 모드 직접런 종료 (spec 2026-06-28-ovtime §4).
+ * energy 도달(curr>=limit)→STOP_ENERGY(우선) / 미달+elapsed>=limit_out_time*1000→
+ * FAULT_OVTIME / 비-energy 또는 limit_out_time==0 → CONTINUE. */
+static void test_reg_energy_termination(void) {
+    /* 비-energy → 항상 CONTINUE (호출측 on-time ceiling이 처리) */
+    CHECK_EQ(reg_energy_termination(0, 0, 100, 999999u, 10), REG_RUN_CONTINUE);
+    /* 에너지 도달 → 정상 정지 */
+    CHECK_EQ(reg_energy_termination(1, 100, 100, 0, 10), REG_RUN_STOP_ENERGY);
+    CHECK_EQ(reg_energy_termination(1, 150, 100, 0, 10), REG_RUN_STOP_ENERGY);
+    /* 미달 + 시간 미만 → CONTINUE (9999 < 10*1000) */
+    CHECK_EQ(reg_energy_termination(1, 50, 100, 9999u, 10), REG_RUN_CONTINUE);
+    /* 미달 + 시간 경계(==) → FAULT_OVTIME (10*1000) */
+    CHECK_EQ(reg_energy_termination(1, 50, 100, 10000u, 10), REG_RUN_FAULT_OVTIME);
+    /* 미달 + 시간 초과 → FAULT_OVTIME */
+    CHECK_EQ(reg_energy_termination(1, 0, 100, 20000u, 10), REG_RUN_FAULT_OVTIME);
+    /* limit_out_time==0 → OVTIME off (시간 무한이어도 CONTINUE) */
+    CHECK_EQ(reg_energy_termination(1, 0, 100, 999999u, 0), REG_RUN_CONTINUE);
+    /* 도달이 시간초과보다 우선 (둘 다 참 → STOP_ENERGY) */
+    CHECK_EQ(reg_energy_termination(1, 100, 100, 999999u, 10), REG_RUN_STOP_ENERGY);
+}
+
 int main(void) {
     test_reg_scale();
     test_reg_output_level();
@@ -129,6 +150,7 @@ int main(void) {
     test_reg_on_time_200m();
     test_energy_from_acc();
     test_energy_integration_steps();
+    test_reg_energy_termination();
     if (failures) { printf("%d check(s) FAILED\n", failures); return 1; }
     printf("all checks PASSED\n");
     return 0;

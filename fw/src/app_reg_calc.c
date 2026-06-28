@@ -59,3 +59,16 @@ uint32_t reg_energy_from_acc(uint32_t acc_energy)
 {
     return acc_energy / REG_ENERGY_DIV;
 }
+
+reg_energy_outcome_t reg_energy_termination(uint8_t energy_ctrl, uint32_t curr_energy,
+                                            uint32_t limit_energy, uint32_t elapsed_ms,
+                                            uint16_t limit_out_time)
+{
+    if (!energy_ctrl)                { return REG_RUN_CONTINUE; }     /* 비-energy → 호출측 on-time ceiling */
+    if (curr_energy >= limit_energy) { return REG_RUN_STOP_ENERGY; } /* 정상 (main.c:5272) — OVTIME보다 우선 */
+    if ((limit_out_time != 0u) &&                                    /* 0 = OVTIME off (ceiling 0=off 관례) */
+        (elapsed_ms >= (uint32_t)limit_out_time * OVTIME_SEC_MS)) {
+        return REG_RUN_FAULT_OVTIME;                                 /* fault (main.c:5288) */
+    }
+    return REG_RUN_CONTINUE;
+}

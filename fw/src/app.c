@@ -89,9 +89,18 @@ void app_loop_iter(void)
     app_seek_reset_tick();
 
     /* 3. Regulation core — ~2 ms cadence (spec §6), compute-only this slice.
-     * limit_on_time injected from the live config (cpp-review M1: app_reg
-     * must not reach back into app_lcd); per-iter read = live panel edits. */
-    app_reg_tick(app_lcd_cfg()->limit_on_time);
+     * 런 한계(on-time ceiling / energy-도달 / OVTIME)를 라이브 config에서 주입
+     * (cpp-review M1: app_reg는 app_lcd로 콜백 금지); per-iter read = 라이브 편집. */
+    {
+        const app_config_t *rc = app_lcd_cfg();
+        reg_run_limits_t lim = {
+            .limit_on_time  = rc->limit_on_time,
+            .energy_ctrl    = rc->energy_ctrl ? 1u : 0u,
+            .limit_energy   = rc->limit_energy,
+            .limit_out_time = rc->limit_out_time,
+        };
+        app_reg_tick(&lim);
+    }
 
     /* 4. Ethernet/DHCP — drive the W5500 DHCP client (no-op unless DHCP mode).
      * Before Modbus so a lease acquired this iter flips app_eth_available(). */

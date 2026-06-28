@@ -67,6 +67,14 @@ typedef enum {
 enum { US_IDLE = 0, US_REMOTE = 1, US_TOUCH = 2, US_COMM = 3, US_CYCLE = 4 };
 /* US_CYCLE = weld-cycle WELD 단계가 게이트를 구동하는 소스 — app_reg_command는 src를 그대로 us_run_status에 저장하므로 별도 분기 불필요. */
 
+/* error_status bitmask (samd20 define.h). 공유 정의: app_reg(fault source가 OVTIME
+ * 세팅)와 app_lcd_input(키 복구 클리어)이 같은 값을 쓰도록 한 곳에. app_reg가
+ * lcd_measure_t.error_status로 publish → LCD warning / Modbus STATUS가 소비. */
+#define ERR_NOERROR  0u
+#define ERR_OVLD     1u
+#define ERR_OVTIME   2u
+#define ERR_OUTERR   4u
+
 /* ether-input field selector (LV_ETHER_KEY 'I'/'M'/'G'); NONE = idle. */
 #define LCD_ETHER_INPUT_NONE  0xFFu
 #define LCD_ETHER_INPUT_IP    0u
@@ -121,6 +129,7 @@ typedef struct {
     uint8_t  us_on_time_200m;               /* 0..200 → LV_TIME bar fill */
     uint8_t  us_run_status;                 /* US_IDLE/REMOTE/TOUCH/COMM */
     uint8_t  sig_run_status, sig_seek_status, sig_reset_status;
+    uint8_t  error_status;                  /* ERR_* bitmask — app_reg publish (OVTIME 등) */
 } lcd_measure_t;
 
 /* Single owner of the transient state (kept in app_lcd.c). */

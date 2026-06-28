@@ -81,9 +81,14 @@ static void mirror_live(void)
     g_mb.holding[MB_REG_EN_ENERGY]   = cfg->energy_ctrl ? 1u : 0u;
     g_mb.holding[MB_REG_EN_MULTI]    = cfg->multi_ctrl  ? 1u : 0u;
     g_mb.holding[MB_REG_EN_SAFTY]    = cfg->f_safty;
-    /* STATUS bit0 = run active (spec §3.1: us_run_status != US_IDLE);
-     * ESTOP/OVLD/OVTIME/OUTERR stay 0 until the overload/weld slices. */
-    g_mb.holding[MB_REG_STATUS]      = running ? MB_STATUS_US : 0u;
+    /* STATUS bit0 = run active (spec §3.1: us_run_status != US_IDLE).
+     * OVTIME = app_reg가 publish한 energy 모드 직접런 과대시간 fault
+     * (2026-06-28-ovtime spec). ESTOP/OVLD/OUTERR는 estop/overload/6b 슬라이스. */
+    uint16_t status = running ? MB_STATUS_US : 0u;
+    if (m->error_status & ERR_OVTIME) {
+        status |= MB_STATUS_OVTIME;
+    }
+    g_mb.holding[MB_REG_STATUS]      = status;
 }
 
 /* samd20 update_holding_reg(1): one else-if chain per message — commands

@@ -57,6 +57,7 @@ typedef struct {
                                       * timeout-stopped run (V30 data=0 quirk) */
     uint32_t acc_energy;             /* 전력 적분기 (run-start 리셋; samd20 acc_energy) */
     uint32_t last_energy;            /* run-stop 시 curr_energy 래치 (samd20 last_energy) */
+    uint8_t  error_status;           /* ERR_* (OVTIME 등); RESET이 클리어. publish됨 */
 
     uint32_t prev_acq_ms;
     uint32_t prev_ms;
@@ -67,6 +68,20 @@ typedef struct {
 
 static reg_state_t   g_reg;
 static lcd_measure_t g_measure;
+
+/* 자동 정지 공통 (on-time ceiling / energy-reached / OVTIME): 피크 래치 + IDLE.
+ * TOUCH 런은 V30 데이터=0 release 페어링 위해 swallow_start 무장 (수동
+ * RUN_RELEASE는 별도 — swallow 없음). */
+static void reg_stop_run(uint8_t rs)
+{
+    g_reg.last_power    = g_reg.max_power;
+    g_reg.last_amp      = g_reg.max_amp;
+    g_reg.last_energy   = g_measure.curr_energy;
+    g_reg.us_run_status = (uint8_t)US_IDLE;
+    if (rs == (uint8_t)US_TOUCH) {
+        g_reg.swallow_start = 1u;
+    }
+}
 
 void app_reg_init(void)
 {
@@ -111,6 +126,12 @@ void app_reg_command(us_cmd_t cmd, uint8_t src)
             if (app_seek_reset_active() != 0u) {
                 break;
             }
+            /* fault(OVTIME 등) 중 새 START 막음 — RESET으로 클리어해야 재시작
+             * (samd20 SYS_ERROR가 START 무시). swallow consume 뒤 별도 break로
+             * 둬서 위 비대칭(swallow 스킵)을 피함 (seek_reset 가드와 동일 패턴). */
+            if (g_reg.error_status != 0u) {
+                break;
+            }
             g_reg.us_run_status = src;   /* US_TOUCH or US_COMM */
             g_reg.max_power     = 0u;
             g_reg.max_amp       = 0u;    /* samd20 comm START zeroes max_amp too */
@@ -150,6 +171,9 @@ void app_reg_command(us_cmd_t cmd, uint8_t src)
          * quirk + 에러 표시 클리어는 입력 레이어(app_lcd_input.c)/에러 머신.
          * warm-up(main_state) 게이팅 불요 — samd20 충실, spec §3.4 (SEEK/RESET은
          * START과 별도 경로; FSM 자체 타임아웃으로 해제, cpp-review Minor 3). */
+        if (cmd == US_CMD_RESET) {
+            g_reg.error_status = 0u;   /* samd20 RESET이 error_status 클리어 (main.c:3719) */
+        }
         app_seek_reset_request(cmd, src);
         break;
     default:
@@ -226,9 +250,10 @@ static void reg_publish_measure(uint32_t now)
     g_measure.last_amp = g_reg.last_amp;
     g_measure.last_energy = g_reg.last_energy;
     g_measure.us_run_status = g_reg.us_run_status;
+    g_measure.error_status  = g_reg.error_status;   /* OVTIME 등 fault → LCD/Modbus */
 }
 
-void app_reg_tick(uint16_t limit_on_time)
+void app_reg_tick(const reg_run_limits_t *lim)
 {
     uint32_t now = sys_tick_get_ms();
 
@@ -257,28 +282,34 @@ void app_reg_tick(uint16_t limit_on_time)
      * samd20's multi_ctrl/energy_ctrl run branches (main.c:5234..) belong to
      * the weld-cycle machine — deferred, spec §8. */
     {
-        /* US_CYCLE(weld-cycle WELD)은 의도적으로 ceiling 대상 아님: WELD 길이는
-         * weld-cycle FSM의 limit_delay_time2가 지배(app_weld). 아래 조건이
-         * TOUCH/COMM만 포함하므로 US_CYCLE은 자연히 제외됨 (spec §5.2). */
+        /* 런 자동 종료. energy 모드면 에너지-도달 정상정지 + OVTIME이 on-time
+         * ceiling을 대체(legacy main.c:5270 분기); 비-energy면 기존 ceiling.
+         * 조건이 TOUCH/COMM만 포함하므로 US_CYCLE(weld WELD)은 자연 제외(spec §5.2).
+         * limit_*은 매 call cfg에서 주입(M1) — 패널 편집 즉시 반영(mid-run 포함). */
         uint8_t rs = g_reg.us_run_status;
         if ((rs == (uint8_t)US_TOUCH) || (rs == (uint8_t)US_COMM)) {
-            /* limit_on_time is injected by the caller from the live config
-             * each call (M1: no call back into app_lcd), so a panel edit of
-             * LV_MAX_ON_TIME still takes effect immediately, even mid-run. */
-            if ((limit_on_time != 0u) &&
-                ((uint32_t)(now - g_reg.run_start_ms) >=
-                 (uint32_t)limit_on_time * ON_TIME_UNIT_MS)) {
-                g_reg.last_power    = g_reg.max_power;   /* same latch as release */
-                g_reg.last_amp      = g_reg.max_amp;
-                g_reg.last_energy   = g_measure.curr_energy;   /* slice2 last_energy 래치 */
-                g_reg.us_run_status = (uint8_t)US_IDLE;
-                if (rs == (uint8_t)US_TOUCH) {
-                    /* held button's release still pending — touch-only quirk */
-                    g_reg.swallow_start = 1u;
+            uint32_t elapsed = (uint32_t)(now - g_reg.run_start_ms);
+            if (lim->energy_ctrl != 0u) {
+                reg_energy_outcome_t oc = reg_energy_termination(
+                    lim->energy_ctrl, g_measure.curr_energy, lim->limit_energy,
+                    elapsed, lim->limit_out_time);
+                if (oc != REG_RUN_CONTINUE) {
+                    reg_stop_run(rs);
+                    if (oc == REG_RUN_FAULT_OVTIME) {
+                        g_reg.error_status |= ERR_OVTIME;   /* samd20 main.c:5292 */
+                    }
+#ifdef REG_TRACE
+                    mon_printf("[reg] energy stop oc=%u (e=%lu/%lu t=%lums)\r\n",
+                               (unsigned)oc, (unsigned long)g_measure.curr_energy,
+                               (unsigned long)lim->limit_energy, (unsigned long)elapsed);
+#endif
                 }
+            } else if ((lim->limit_on_time != 0u) &&
+                       (elapsed >= (uint32_t)lim->limit_on_time * ON_TIME_UNIT_MS)) {
+                reg_stop_run(rs);
 #ifdef REG_TRACE
                 mon_printf("[reg] on-time ceiling (%u x10ms) -> stop\r\n",
-                           (unsigned)limit_on_time);
+                           (unsigned)lim->limit_on_time);
 #endif
             }
         }
