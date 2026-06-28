@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### 2026-06-28 — i2c-pot 진폭 actuation + OVTIME energy-run 종료 HW 검증·머지 (tag `hw-revA_fw-stage-i2c-pot` / `-ovtime`)
+
+간이 벤치 HW 세션. 미머지 HW-게이트 백로그 중 벤치(패널 미연결)에서 검증 가능한 2건을 mbpoll/단발-정적-SWD로 검증 후 `--no-ff` 머지. SWD halt 금지 규칙 준수(런타임=mbpoll/LCD만).
+
+- **i2c-pot** (main `189810b`, tag `hw-revA_fw-stage-i2c-pot`): 진폭 hook 2개(set_pot %/set_amp raw DAC)를 공용 `drivers/i2c_pot.c`로 U4 I2C_POT @0x28 실구동 연결 + 부팅 초기값. HW: 부팅+Modbus START set_pot write 후 `s_err_count`=0 = U4 0x28 ACK 입증. 진폭 절대추종/칩스케일/극성 6b 이연.
+- **ovtime** (main `4c31f8a`, tag `hw-revA_fw-stage-ovtime`): energy 모드 직접런 종료 — 에너지-도달 정상정지 + 과대시간 OVTIME fault(`ERR_OVTIME`→LCD_WARNING+`MB_STATUS_OVTIME`). `app_reg_tick(reg_run_limits_t)` energy 분기(on-time ceiling 대체). HW: energy_ctrl=OFF 직접런 무회귀 + OVTIME fault 벤치 검증(curr_energy=0→STATUS=8) + RESET 복구. 에너지-도달 정상정지 실 curr_energy 6b 이연.
+- 정리: 머지 완료 브랜치(`stage-d-slice2b`/`m1`) 삭제, output-power-graph orphaned stash drop.
+- 남은 미머지 4 = `output-power-graph-ch1`(ch1+OD+6b 통합)·`physical-io-slice-a~d`(rig). 전부 HW-gated.
+- ⚠ `app_reg_tick`=ovtime 버전(`reg_run_limits_t`) 이제 main 기준 → 후속 output-power-graph(cal_val)/slice-d(ceiling 이중화) 머지 시 흡수.
+
 ### 2026-06-20 — 핀맵 정정(PA0=FREQ_IN, PB4=CON_USOUT) + SAMD20→STM32 레거시 IO 대응표(부록 D) 신설
 
 문서 전용 세션 (코드 무변경, 빌드 무영향). 사용자 HW 확정 정보로 SAMD20→STM32 IO 매핑을 1차 소스(`ref/samd20/.../user_board.h` + `ref/samd20/main.c` 실사용)와 대조 검증·반영.

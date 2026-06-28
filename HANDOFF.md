@@ -1,8 +1,19 @@
-# Handoff: I2C_POT 진폭 actuation + OVTIME energy-run 종료 (mode-b 설계+host구현)
+# Handoff: i2c-pot + ovtime HW 검증·머지 완료 — 남은 백로그 = 6b/rig 게이트
 
-**Generated**: 2026-06-28
-**Branches**: `feat/i2c-pot-amplitude` + `feat/ovtime-energy-run` (둘 다 main `36b0a06`에서 분기, **미머지**)
-**Status**: 🟢 두 슬라이스 CODE-COMPLETE · host 검증 · cpp-review APPROVE · 커밋됨 / ⏳ actuation·표면 HW-gated, 미머지
+**Generated**: 2026-06-28 (d, HW 검증 세션)
+**Branches**: `feat/i2c-pot-amplitude` + `feat/ovtime-energy-run` → **둘 다 main 머지 + 태그 완료, 브랜치 삭제**
+**Status**: ✅ 2026-06-28 d HW 세션 — 둘 다 mbpoll 벤치 검증 PASS → `--no-ff` 머지. main ahead origin (push=사람 SSH 미완).
+
+> ## ⚡ 2026-06-28 d — HW 검증 세션 결과 (간이 벤치, [[feedback-swd-halt-breaks-board-validation]] 규칙 준수: 런타임=mbpoll/LCD만, SWD=정적 1회만)
+>
+> - **i2c-pot** (tag `hw-revA_fw-stage-i2c-pot`, main `189810b`): U4 0x28 **ACK PASS** — 부팅+Modbus START set_pot write 후 `s_err_count`@0x200003e0=0(단발 정적 SWD read=no-halt 예외; NACK였다면 50ms timeout+err≥1), 직접런 STATUS 1×8→0 무회귀. START가 set_pot 확실 호출(`app_modbus.c:117`)+err0 유지로 write-미발생 회의 제거. **진폭 절대추종/칩스케일(0–127/255)/극성 = 6b/스코프 이연**.
+> - **ovtime** (tag `hw-revA_fw-stage-ovtime`, main `4c31f8a`): energy_ctrl=OFF 직접런 무회귀(STATUS 1×8→560ms ceiling) + **OVTIME fault 벤치 PASS**(EN_ENERGY=ON+TIMEOVER=1s+START→curr_energy=0[무신호]→~1s후 STATUS=**8**=MB_STATUS_OVTIME) + RESET 복구(bit3→0) + fault 가드 해제 재START 정상. **에너지-도달 정상정지 실 curr_energy + LCD_WARNING 육안 = 6b/실rig 이연**.
+> - **정리**: 머지 완료된 `stage-d-slice2b`/`m1` 브랜치 삭제. output-power-graph의 orphaned stash(2026-06-28c 세션맵) drop(내용 MEMORY.md 백업).
+> - **⚠ app_reg_tick = 이제 ovtime 버전(`reg_run_limits_t`)이 main 기준** → 미머지 output-power-graph(cal_val 주입)/physical-io-slice-d(ceiling 이중화)는 후속 머지 시 이 구조에 흡수(advisor: 먼저 머지된 ovtime 기준 rebase).
+> - **남은 미머지 4 (전부 HW-gated)**: `output-power-graph-ch1`(ch1 repoint + OD + 6b 통합 스테이지 게이트, 단독 불가 판명) / `physical-io-slice-a~d`(패널·물리입력 실배선 rig 필요).
+> - **보드 현재**: ovtime 펌웨어 적재, SERIAL/addr=1/9600/EVEN, EN_ENERGY=0·TIMEOVER=8 복원, OUT_POWER=55, ether_ip .70 잔여.
+
+> 진입점 = 이 파일. (이하 2026-06-28 b mode-b 설계+host 세션 기록 — 두 슬라이스 모두 위에서 머지됨)
 
 > 진입점 = 이 파일. 이번 세션은 **HW 없이 설계+host 구현(mode-b)** — 초음파 종료조건 SAMD20 분석에서 출발해 2개 슬라이스를 brainstorming→spec→TDD(host)→glue→cpp-review까지. 실 HW actuation/표면 검증만 보드 세션으로 분리. (이 브랜치들과 별개로 `feat/physical-io-slice-d`의 OSC+slice D 스택은 직전 세션 산출물 — 이번 세션 무관, 여전히 실배선 rig 대기.)
 
