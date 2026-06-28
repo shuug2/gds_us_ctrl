@@ -50,7 +50,8 @@ typedef enum {
 } reg_energy_outcome_t;
 
 /* limit_out_time 단위 = 초. legacy us_on_time(100ms 단위) >= limit_out_time*10
- * → elapsed_ms >= limit_out_time*1000. */
+ * → elapsed_ms >= limit_out_time*1000. limit_out_time=0은 "off"가 아니라 즉시
+ * OVTIME(legacy 충실; energy 모드가 ceiling 대체라 0=off면 never-stop). */
 #define OVTIME_SEC_MS  1000u
 
 reg_energy_outcome_t reg_energy_termination(uint8_t energy_ctrl, uint32_t curr_energy,

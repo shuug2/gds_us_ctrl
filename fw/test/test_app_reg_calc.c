@@ -136,8 +136,12 @@ static void test_reg_energy_termination(void) {
     CHECK_EQ(reg_energy_termination(1, 50, 100, 10000u, 10), REG_RUN_FAULT_OVTIME);
     /* 미달 + 시간 초과 → FAULT_OVTIME */
     CHECK_EQ(reg_energy_termination(1, 0, 100, 20000u, 10), REG_RUN_FAULT_OVTIME);
-    /* limit_out_time==0 → OVTIME off (시간 무한이어도 CONTINUE) */
-    CHECK_EQ(reg_energy_termination(1, 0, 100, 999999u, 0), REG_RUN_CONTINUE);
+    /* limit_out_time==0 → 즉시 OVTIME (legacy us_on_time>=0*10 항상 참; never-stop 방지,
+     * advisor). elapsed=0이어도 fault — energy 모드가 ceiling을 대체하므로 backstop 필수. */
+    CHECK_EQ(reg_energy_termination(1, 0, 100, 0u, 0), REG_RUN_FAULT_OVTIME);
+    CHECK_EQ(reg_energy_termination(1, 50, 100, 999999u, 0), REG_RUN_FAULT_OVTIME);
+    /* 단 에너지 도달은 limit_out_time=0이어도 여전히 우선 → STOP_ENERGY */
+    CHECK_EQ(reg_energy_termination(1, 100, 100, 0u, 0), REG_RUN_STOP_ENERGY);
     /* 도달이 시간초과보다 우선 (둘 다 참 → STOP_ENERGY) */
     CHECK_EQ(reg_energy_termination(1, 100, 100, 999999u, 10), REG_RUN_STOP_ENERGY);
 }

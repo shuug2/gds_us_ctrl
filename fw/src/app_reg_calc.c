@@ -66,8 +66,10 @@ reg_energy_outcome_t reg_energy_termination(uint8_t energy_ctrl, uint32_t curr_e
 {
     if (!energy_ctrl)                { return REG_RUN_CONTINUE; }     /* 비-energy → 호출측 on-time ceiling */
     if (curr_energy >= limit_energy) { return REG_RUN_STOP_ENERGY; } /* 정상 (main.c:5272) — OVTIME보다 우선 */
-    if ((limit_out_time != 0u) &&                                    /* 0 = OVTIME off (ceiling 0=off 관례) */
-        (elapsed_ms >= (uint32_t)limit_out_time * OVTIME_SEC_MS)) {
+    /* legacy(main.c:5288) us_on_time >= limit_out_time*10 — 0=off 가드 없음(있으면
+     * energy 모드가 ceiling을 대체하므로 limit_out_time=0이 never-stop이 됨, advisor).
+     * 0이면 elapsed>=0 항상 참 → 즉시 OVTIME(degenerate; config-validation 클램프는 slice4). */
+    if (elapsed_ms >= (uint32_t)limit_out_time * OVTIME_SEC_MS) {
         return REG_RUN_FAULT_OVTIME;                                 /* fault (main.c:5288) */
     }
     return REG_RUN_CONTINUE;

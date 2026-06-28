@@ -46,8 +46,9 @@ reg_energy_outcome_t reg_energy_termination(
 {
     if (!energy_ctrl)                 return REG_RUN_CONTINUE;       /* 비-energy → 호출측 on-time ceiling */
     if (curr_energy >= limit_energy)  return REG_RUN_STOP_ENERGY;    /* 정상 (5272) */
-    if (limit_out_time != 0u &&                                     /* 0 = OVTIME off (ceiling 0=off 관례) */
-        elapsed_ms >= (uint32_t)limit_out_time * OVTIME_SEC_MS)
+    /* legacy us_on_time>=limit_out_time*10 — 0=off 가드 없음(있으면 energy 모드가
+     * ceiling 대체라 limit_out_time=0이 never-stop, advisor). 0→즉시 OVTIME. */
+    if (elapsed_ms >= (uint32_t)limit_out_time * OVTIME_SEC_MS)
         return REG_RUN_FAULT_OVTIME;                                /* fault (5288) */
     return REG_RUN_CONTINUE;
 }
@@ -98,7 +99,7 @@ void app_reg_tick(const reg_run_limits_t *lim);
 
 ## 9. 테스트
 
-- **host (신규 스위트 `test_reg_energy_term` 또는 reg_calc 편입)**: `reg_energy_termination` — `energy_ctrl=0`→CONTINUE / `curr_energy>=limit_energy`→STOP_ENERGY / 미달+`elapsed<thr`→CONTINUE / 미달+`elapsed>=thr`→FAULT_OVTIME / `limit_out_time=0`→never OVTIME / 경계(`elapsed==limit_out_time*1000`).
+- **host (신규 스위트 `test_reg_energy_term` 또는 reg_calc 편입)**: `reg_energy_termination` — `energy_ctrl=0`→CONTINUE / `curr_energy>=limit_energy`→STOP_ENERGY / 미달+`elapsed<thr`→CONTINUE / 미달+`elapsed>=thr`→FAULT_OVTIME / `limit_out_time=0`→즉시 FAULT_OVTIME(never-stop 방지) / 단 0이어도 STOP_ENERGY 우선 / 경계(`elapsed==limit_out_time*1000`).
 - **HW-gated**: energy 모드 직접런 OVTIME → LCD_WARNING + MB_STATUS_OVTIME(mbpoll) + RESET 복구; 에너지-도달 정상정지(실 curr_energy=6b 후).
 
 ## 10. 구현 단위 요약 (plan 입력)

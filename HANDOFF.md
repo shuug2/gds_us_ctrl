@@ -77,7 +77,8 @@ typedef enum { REG_RUN_CONTINUE=0, REG_RUN_STOP_ENERGY=1, REG_RUN_FAULT_OVTIME=2
 #define OVTIME_SEC_MS 1000u   /* limit_out_time = 초 (legacy us_on_time[100ms]>=limit_out_time*10) */
 reg_energy_outcome_t reg_energy_termination(uint8_t energy_ctrl, uint32_t curr_energy,
     uint32_t limit_energy, uint32_t elapsed_ms, uint16_t limit_out_time);
-/* !energy→CONTINUE; curr>=limit→STOP_ENERGY(우선); limit_out_time && elapsed>=lot*1000→FAULT_OVTIME */
+/* !energy→CONTINUE; curr>=limit→STOP_ENERGY(우선); elapsed>=lot*1000→FAULT_OVTIME
+   (lot=0이면 elapsed>=0 항상 참=즉시 OVTIME — 0=off 아님, never-stop 방지, advisor) */
 ```
 **진폭 변환** (`i2c_pot.h`): `pot_dac_from_power(p)` = p<=50?0 : p>=100?127 : (p-50)*255/100.
 
@@ -96,7 +97,7 @@ reg_energy_outcome_t reg_energy_termination(uint8_t energy_ctrl, uint32_t curr_e
 
 ## Edge Cases & Error Handling
 
-- **벤치 무신호(curr_energy=0)**: energy 모드 직접런은 에너지-도달 불가 → 항상 OVTIME으로 종료(정상; 실 에너지=6b).
+- **벤치 무신호(curr_energy=0)**: energy 모드 직접런은 에너지-도달 불가 → `limit_out_time*1000ms`(또는 0이면 즉시) OVTIME으로 종료(정상; 실 에너지=6b). ⚠ `limit_out_time=0`은 "off"가 아니라 **즉시 OVTIME**(legacy 충실; 0=off로 두면 energy 모드가 ceiling 대체라 never-stop — advisor가 잡은 버그, ffd675c 이후 수정).
 - **OVTIME fault 중 START**: app_reg가 `error_status!=0`이면 새 START 거부 → RESET으로 클리어해야 재시작(samd20 SYS_ERROR 충실).
 - **U4 미ACK(슬라이스1)**: 모든 set_pot/set_amp가 `I2C1_TIMEOUT_MS`(50ms) 블로킹 + `i2c1_err_count`만 증가. HW 첫 검증=err_count 0 확인.
 
