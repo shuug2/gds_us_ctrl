@@ -2,7 +2,8 @@
  *
  * I2C1 raw I/O — FM24C16B FRAM (PB6=SCL / PB7=SDA, AF4, 400 kHz Fast mode).
  * External 10 kΩ pull-ups to VCC_5 → GPIO_NOPULL. PCLK1 = 48 MHz (APB1 = HCLK/2).
- * Caller: fw/drivers/fram.c only.
+ * Callers: fw/drivers/fram.c (FRAM) + fw/drivers/i2c_pot.c (U4 I2C_POT @0x28).
+ * All access is superloop-only (no ISR) → no bus contention.
  */
 #include "stm32f4xx_hal.h"
 #include "periph.h"

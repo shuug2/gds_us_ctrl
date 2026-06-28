@@ -4,6 +4,7 @@
 #include "sys_tick.h"
 #include "mon.h"
 #include "app_reg.h"
+#include "i2c_pot.h"   /* pot_dac_from_power + i2c_pot_set_dac (U4 진폭) */
 
 /*--- Stage LCD subsystem state owner + control/HW stub hooks ---
  * Single definition of the transient state; render/input/disp layers (Tasks 5-9)
@@ -23,9 +24,11 @@ const lcd_measure_t *app_lcd_measure(void)
 
 void app_lcd_hook_set_pot(uint8_t output_power)
 {
-    /* F1: DAC byte = (power-50)*255/100 → 50%→0, 100%→127. No I2C write
-     * (U4 I2C_POT identity = open question F2). */
-    uint8_t dac = (uint8_t)(((int)output_power - 50) * 255 / 100);
+    /* output_power(%) → wiper DAC (언더플로 가드 + 상한 포화, i2c_pot.h) →
+     * U4 I2C_POT @0x28. F2: 진폭=I2C_POT 기능적 역할만 확정(사용자) —
+     * 칩 정체(DS1803?)·wiper 스케일(0–127 vs 0–255)은 HW/6b 이연. */
+    uint8_t dac = pot_dac_from_power(output_power);
+    i2c_pot_set_dac(dac);
     mon_printf("[lcd-hook] set_pot power=%u dac=%u\r\n",
                (unsigned)output_power, (unsigned)dac);
 }

@@ -41,6 +41,7 @@ void app_init(void)
     sys_tick_delay_ms(DGUS_LOGO_DWELL_MS);
 
     app_config_load(cfg);             /* FRAM read; factory-write on blank (0xAA flag) */
+    app_lcd_hook_set_pot(cfg->output_power);  /* 부팅 초기 진폭 1회 (samd20 main.c:910) */
     app_lcd_init_mode(cfg);           /* model str + VP pre-fill + set_page(run) */
 
     /* Re-assert the run page until SYS_PIC_NOW confirms it — covers the panel
