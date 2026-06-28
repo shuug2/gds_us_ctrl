@@ -124,6 +124,7 @@ void app_loop_iter(void)
             .limit_out_time = rc->limit_out_time,
             .freq_cal_val   = rc->freq_cal_val,
             .model_type     = rc->model_type,
+            .cal_val        = rc->cal_val,
         };
         app_reg_tick(&lim);
     }
