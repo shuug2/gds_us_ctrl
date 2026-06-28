@@ -1,133 +1,110 @@
-# Handoff: B-SEAM OSC 출력단 + overload 분석/설계 (코드 무변경)
+# Handoff: I2C_POT 진폭 actuation + OVTIME energy-run 종료 (mode-b 설계+host구현)
 
-**Generated**: 2026-06-20
-**Branch**: `main` — origin 동기 (`git status` = `## main...origin/main`), 푸시 완료. 현재 해시는 `git log --oneline`; 안정 레퍼런스=태그.
-**Status**: 🟢 깨끗한 체크포인트 — 진행 중 코드 작업 없음. 이번 세션은 **HW 비의존 분석/설계**(펌웨어 0줄, docs+ref만). 다음 = 확정 사실 위에서 코딩 또는 측정.
+**Generated**: 2026-06-28
+**Branches**: `feat/i2c-pot-amplitude` + `feat/ovtime-energy-run` (둘 다 main `36b0a06`에서 분기, **미머지**)
+**Status**: 🟢 두 슬라이스 CODE-COMPLETE · host 검증 · cpp-review APPROVE · 커밋됨 / ⏳ actuation·표면 HW-gated, 미머지
 
-> 이전 HANDOFF(2026-06-20 "B-SEAM 분석 대기")는 본 세션 결과로 supersede. 이력 = `docs/changelog.md` / `docs/superpowers/RESUME.md`(자동 로드, 2026-06-20 블록 ①~⑨).
+> 진입점 = 이 파일. 이번 세션은 **HW 없이 설계+host 구현(mode-b)** — 초음파 종료조건 SAMD20 분석에서 출발해 2개 슬라이스를 brainstorming→spec→TDD(host)→glue→cpp-review까지. 실 HW actuation/표면 검증만 보드 세션으로 분리. (이 브랜치들과 별개로 `feat/physical-io-slice-d`의 OSC+slice D 스택은 직전 세션 산출물 — 이번 세션 무관, 여전히 실배선 rig 대기.)
 
 ## Goal
 
-SAMD20 + ATmega16 → STM32F410RBT 단일 MCU 통합. 코드/host-test 가능 계층은 이미 완료(LCD·레귤레이션·Modbus·weld·seek-reset). 본 세션은 **남은 출력/효과 계층(B-SEAM/overload/6b)을 코딩 가능한 수준까지 규명** — M16 disasm + SAMD20 소스 + 사용자 HW 진실로 미지 다수 해소.
+SAMD20 legacy 분석으로 도출한 두 미포팅 기능을 6b/HW 없이 가능한 데까지 포팅: ① 진폭(I2C_POT) 실구동 ② energy 모드 직접런 종료(에너지-도달 정상정지 + 과대시간 OVTIME fault). + #7 출력이상(ERR_OUTERR)을 6b 하위항목으로 문서화.
 
-## Completed (이번 세션, 전부 docs/ref — origin 푸시 완료)
+## Completed
 
-- [x] **B-SEAM 신호 체인 정리**: 출력단 = ① OSC 채널(B-SEAM) + ② 진폭 pot(F2=U4 칩 정체), **둘 다 현재 hook 로그 stub**(`mon_printf`만, 실 핀/I2C 미구동; `app_reg.c`="drives NO OSC GPIO").
-- [x] **B4 해소**: PB1(ADC1_IN9) = **SAMD20 PA02 소비전류**(M16 PA1은 미연결). 전류/전력(`curr_amp×2.2`)/에너지(`acc/500`) 전부 PB1 파생. STM32는 현재 PB1 read-and-discard + 이 3값을 ch0(reg_scale)에서 뽑음 = **source 틀림**.
-- [x] **OSC 3채널 명령 매핑 확정(사용자 HW + disasm)**: **RUN→PC7→PB14(OSC4) / SEEK→PB1→PB2(OSC0) / RESET→PB0→PB10(OSC1)**, 전부 **active-LOW binary 미러**(thermometer 패턴 아님). v001 변수명 오라벨(`g_run_flag`=실제 RESET).
-- [x] **OVLD(PC0) 로직 디코드**: PA7(PINA.7) HIGH ×5 디바운스 → PC0 어서트 + OVLD→SEEK 복구 훅. **PA7=과부하 입력 → 보류했던 OSC3(PB13) 해소**.
-- [x] **PA0/SENS_OUT = 양 레거시 MCU 모두 vestigial**(M16 dead 7seg / SAMD20 curr_lv 소비처 주석).
-- [x] **overload 스테이지 설계 확정(사용자 결정)**: STM32 직접 처리(M_OVLD IPC 소멸), 입력 PB13 active HIGH, 출력 PB3 CON_OVLD=외부 릴레이(active HIGH), heartbeat PB3→PB8, 복구=seek-reset FSM 재사용.
-- [x] **M16 disasm 자료 repo 추가**: `ref/atmega16/m16_controller_prg.hex` + `m16_disasm/firmware_disassembled.asm`(2953줄) — 권위 소스.
-- [x] **pinmap 정정**(`docs/pinmap.md` 상단 "2026-06-20 정정" 배너 + 인라인 표).
-- [x] 분석 문서/메모리/RESUME/검토 Artifact 동기화.
+### 슬라이스 1 — I2C_POT 진폭 actuation (`feat/i2c-pot-amplitude`: `77844f7` spec + `2d653f4` feat)
+- [x] 두 진폭 hook(`app_lcd_hook_set_pot` %, `app_weld_hook_set_amp` raw DAC)이 둘 다 로그 stub이던 것을 공용 `drivers/i2c_pot.c`(`i2c_pot_set_dac`→`i2c1_mem_write(0x28,0x00)` best-effort)로 통합.
+- [x] 순수 `pot_dac_from_power`(언더플로 가드 `<=50→0`, 상한 127; 50~100 samd20 비트-동일) host-test 신규 스위트 `test_i2c_pot`.
+- [x] 부팅 초기 진폭 1회(app.c config 로드 직후, samd20 main.c:910).
+- [x] 빌드 0-warning FLASH 41.73%, host 6스위트 PASS, cpp-review **APPROVE**.
 
-## Not Yet Done (전부 HW-gated 또는 코딩 대기)
+### 슬라이스 2 — OVTIME energy-run 종료 (`feat/ovtime-energy-run`: `f9b878c` spec+#7 + `ffd675c` feat)
+- [x] 순수 `reg_energy_termination`(`app_reg_calc`): energy 도달→STOP_ENERGY(우선) / 미달+`elapsed≥limit_out_time*1000ms`→FAULT_OVTIME / 비-energy·`limit_out_time=0`→CONTINUE. host-test 8케이스(reg_calc 편입).
+- [x] `app_reg_tick(reg_run_limits_t*)`: energy 모드면 on-time ceiling **대체**(legacy 충실). `reg_stop_run` helper. OVTIME→`error_status|=ERR_OVTIME`. START fault 가드(swallow consume 뒤 별도 break). RESET이 클리어. `lcd_measure_t.error_status` publish.
+- [x] fault 표면(기존 미공급 인프라 첫 공급): `app_lcd_tick` 엣지→`app_lcd_show_error`(LCD_WARNING) + `app_modbus` STATUS|=`MB_STATUS_OVTIME`. ERR_* `app_lcd.h` 공유.
+- [x] 빌드 0-warning FLASH 42.01%/RAM 16.82%, host 5스위트 PASS, cpp-review **APPROVE-WITH-COMMENTS**(0 Crit/High).
 
-- [ ] **B-SEAM 3채널 코딩** — 내부 run/seek/reset 상태 → PB14/PB2/PB10 active-LOW 구동. (로직 확정, 코딩 가능; 극성 sanity만 HW.)
-- [ ] **overload 코딩** — PB13 입력 디바운스 → 내부 응답(정지/ERR/LCD "OVER LOAD"/복구) → PB3 릴레이. heartbeat PB3→PB8 이전 필요. (로직 확정, 코딩 가능.)
-- [ ] **6b** — 전류/전력/에너지를 PB1(소비전류)에서 SAMD20 공식으로 재구성 + 절대 보정(cal_val·×4·/10·×2.2·thr51/off37·/500↔/250). ch0 currentprice 오용 정리. (실 rig 게이트.)
-- [ ] **F2** — U4 I2C_POT 진폭 실구동(칩 정체 확인 + I2C1 write).
-- [ ] **OSC2(PC4/PB12) 정체** — mega16 입력(`sbis 0x13,4`), 용도 미디코드 (사용자 보류).
-- [ ] **ch0(PA0/출력세기) 통합 역할 결정** — curr_lv 표시 부활 / vestigial 유지 / 기타.
-- [ ] **measurements** — OSC/OVLD 극성 sanity, F2, 6b 절대값 (스코프/실 초음파 rig).
+### #7 출력이상 (문서만)
+- [x] `docs/NEXT_STEPS.md` §1.2 6b **하위항목으로 명시** — legacy 트리거 `re_outerr_issued=1` 주석처리(main.c:4333)=비활성, `curr_amp`(ADC) 의존→6b 종속.
 
-## Failed Approaches (반복 금지)
+## Not Yet Done
 
-- **v001(`m16_conv_v001.c`) 단독 신뢰 금지** — 부분·부정확 재구성. 누락/오기 누적: ×6를 `>>6`로, lookup `<`를 `>`로, warmup, ADMUX REFS=11을 AVCC로, OSC 변수명 오라벨, **PA5/PA6 read 0건, PC4 read 누락, overload 로직 전체 누락**. → **권위 = `ref/atmega16/m16_disasm/firmware_disassembled.asm`**, v001은 참고용.
-- **"진폭(I2C_POT)은 동작중" 가정 = 틀림** — `app_lcd_hook_set_pot`/`app_weld_hook_set_amp`는 `mon_printf` stub. I2C1은 FRAM 전용. 진폭도 미구동(F2).
-- **"8단 thermometer 패턴 → OSC 1:1" 가설 = 기각** — 그 패턴은 V26 dead 7-seg 전용. OSC = binary run/seek/reset 미러(사용자 HW 매핑이 입증).
-- **"5채널 OSC = 5 push-pull 출력" = 틀림** — PB13=과부하 입력, PB12=입력. 출력은 PB2/PB10/PB14 3개뿐. PB12/PB13 출력 구동 금지(contention).
-- **핀 라벨 혼동 주의** — "STM32 PB1"(소비전류 ADC 입력) ≠ "M16 PB1"(SEEK 출력→STM32 PB2). "mega16 PA7"(→PB13 과부하) ≠ "STM32 자신 PA7"(=ETH_MOSI).
+- [ ] **두 슬라이스 머지** — 각각 HW 검증 후 `--no-ff` 머지 + 태그. 독립(서로·OSC 스택과 무관, 전부 off main).
+- [ ] **HW 검증(슬라이스1)**: U4 0x28 ACK 확인(미ACK 시 매 set 호출 50ms 블로킹) → 스코프로 wiper가 output_power/weld out1→out2 추종.
+- [ ] **HW 검증(슬라이스2)**: energy 모드 직접런 OVTIME→LCD_WARNING+`MB_STATUS_OVTIME`(mbpoll)+RESET 복구. 에너지-도달 정상정지는 실 `curr_energy`(=6b) 후.
+- [ ] **OSC/slice-D 스택**(`feat/physical-io-slice-d`, 이번 세션 무관) — 실배선 rig 대기. 메모리 [[project-osc-boot-init]]/[[project-physical-io-layer]].
+
+## Failed Approaches (Don't Repeat These)
+
+- **#4 OVTIME을 OVTIME만 떼어 포팅 X** — legacy(5270-5294)에서 OVTIME은 energy 종료 **쌍의 절반**(에너지-도달 정상정지가 나머지). OVTIME만 넣으면 에너지-도달 정상정지가 없어 벤치선 늘 OVTIME으로 끝나 의미가 약함 → 쌍 전체 포팅.
+- **#7 ERR_OUTERR 단독 포팅 X** — legacy에서 트리거(`re_outerr_issued=1`)가 **주석처리되어 비활성**이고, 검출이 실 `curr_amp`(ADC 측정 진폭)에 의존 → 6b calibration 없이는 무의미. 6b 하위항목으로만 문서화.
 
 ## Key Decisions
 
 | Decision | Rationale |
 |----------|-----------|
-| overload = STM32 직접 처리, M_OVLD IPC 소멸 | PA4/5/6 명령처럼 MCU간 신호는 내부화. PB13(←PA7) 입력이 STM32에 연결됨 |
-| overload active HIGH (입력 fault HIGH / 출력 릴레이 assert HIGH) | 사용자 확정. M16 disasm(PA7 HIGH=fault)과 일관 |
-| CON_OVLD(PB3) = 외부 릴레이 제어 출력 유지 | 사용자: 외주 릴레이제어신호로 사용 |
-| heartbeat PB3 → PB8 이전 | PB3을 CON_OVLD 본용도로 복원 (빈 GPIO 중 PB8 선정) |
-| 전력/에너지 source = PB1(소비전류), not ch0 | SAMD20 검증: curr_power=curr_amp×2.2. ch0(PA0)는 레거시 vestigial |
-| OSC 구동 = binary run/seek/reset active-LOW | disasm C6 + 사용자 HW 매핑; thermometer 패턴은 dead 7seg |
+| 두 슬라이스 각각 main에서 분기(OSC 스택 위에 안 쌓음) | I2C_POT·OVTIME은 app_lcd/app_weld/app_reg(전부 main에 존재)만 의존 — OSC 미머지 스택 오염 회피 |
+| I2C_POT 통합(set_amp만 X) | legacy 12 write 중 9곳이 set_pot(%) = 정상 진폭 전부. set_amp만 연결 시 일반 진폭 죽음 |
+| OVTIME = energy 종료 쌍 전체 | energy 모드가 on-time ceiling **대체**(legacy 5270 분기) |
+| fault source=app_reg, `lcd_measure_t.error_status` publish | 기존 미공급 인프라(LCD warning/MB_STATUS_OVTIME/키 복구) 첫 공급자 |
+| START fault 가드 = swallow consume **뒤** 별도 break | advisor: if 조건 합산 시 swallow 비대칭 버그(seek_reset 가드와 동일 패턴) |
 
 ## Current State
 
-**Working**: main 빌드 0-warning, FLASH 42.11%/RAM 16.77%, host **5스위트 PASS**(reg_calc/modbus_core/tcp_frame/weld_fsm/seek_reset_fsm) — 세션 시작 시 검증, 이후 펌웨어 코드 무변경이라 유효. `fw/build/gds_us_ctrl.elf` 존재.
+**Working**: 두 브랜치 각각 빌드 0-warning(우리 코드; vendor WIZnet 경고 격리), host 전 스위트 PASS. 트리 clean(`?? ref/signal/`=이전 OSC Saleae 캡처, 무관·미추적).
 
 **Broken**: 없음.
 
-**Uncommitted**: 없음 (origin 동기). 이번 세션 6커밋 전부 docs/ref, 푸시 완료: `31ae52b`→`c5fd258`→`1d2107b`→`a886edf`→`d086a6c`→`90ef91b`.
+**현재 체크아웃**: `feat/ovtime-energy-run`. ⚠ **브랜치 전환 시 `cmake -S fw -B fw/build` reconfigure 필수**(GLOB은 configure-time — i2c-pot 브랜치엔 `drivers/i2c_pot.c` 있고 ovtime/main엔 없음 → 캐시 stale 시 빌드 실패. 이번 세션 실제로 겪음).
 
 ## Files to Know
 
 | File | Why It Matters |
 |------|----------------|
-| `docs/superpowers/analysis/2026-06-20-bseam-osc-signal-chain-and-port-fidelity.md` | **이번 세션 권위 분석** — §1 신호체인 · §2 명령선 · §3 OSC핀 충실도 · §4 처리코어 · §4b ADC/B4 · §4c OVLD/PA7/PA0/overload설계 · §5 측정 · 부록A 처리코어 |
-| `ref/atmega16/m16_disasm/firmware_disassembled.asm` | **M16 권위 disasm**(2953줄). OVLD fn `@0x10A6`, OSC 미러 `@0x2EE`, scaling `@0x1A5C` |
-| `docs/pinmap.md` | 핀 스펙 — 상단 "2026-06-20 정정" 배너 우선 |
-| `fw/src/app_reg.c` | 레귤레이션+RUN게이트. `reg_acquire_step`(ch0/ch1), `reg_publish_measure`(curr_power=ch0 오용), "drives NO OSC GPIO" |
-| `fw/src/app_reg_calc.c` | reg_scale(×6)/lookup/`reg_energy_from_acc(acc/250)` |
-| `fw/src/app_seek_reset_fsm.c` `app_seek_reset.c` | overload 복구가 재사용할 FSM/글루 |
-| `fw/src/board.c` | OSC idle-HIGH init(PB2/PB10/PB14), heartbeat=PB3(→PB8 이전 대상) |
-| `ref/samd20/main.c` | curr_amp/power/energy(412–436), curr_lv 주석(5135), overload 응답(1452/1659) |
-| 검토 Artifact | https://claude.ai/code/artifact/ce2570b9-4e50-4ad8-bfab-8c3d2edec2b1 (사용자 오프라인 검토용) |
+| `fw/src/app_reg_calc.c` / `.h` | 순수 `reg_energy_termination`(host-test) + `OVTIME_SEC_MS`. reg_* 순수 계열 |
+| `fw/src/app_reg.c` | energy 분기(`app_reg_tick`)·`reg_stop_run`·START fault 가드·RESET 클리어·`error_status` publish |
+| `fw/include/app_reg.h` | `reg_run_limits_t`(주입 구조)·시그니처 |
+| `fw/src/app_lcd.c` | `app_lcd_tick` error_status 엣지→`app_lcd_show_error`. `set_pot`(i2c-pot 브랜치) |
+| `fw/include/app_lcd.h` | ERR_* 공유 define + `lcd_measure_t.error_status` |
+| `fw/drivers/i2c_pot.c` / `.h` | (i2c-pot 브랜치) `i2c_pot_set_dac`·순수 `pot_dac_from_power` |
+| `docs/superpowers/specs/2026-06-28-{i2c-pot-amplitude,ovtime-energy-run}-design.md` | 두 슬라이스 spec(legacy 근거·결정·HW-gated 경계) |
 
 ## Code Context
 
-**확정 I/O 매핑 (STM32):**
-```
-입력 ADC:  PB0(IN8)=출력세기 피드백(M16 PA0, vestigial)  ·  PB1(IN9)=소비전류(SAMD20 PA02)
-OSC 출력:  PB14=RUN  PB2=SEEK  PB10=RESET   (전부 active-LOW binary 미러)
-           PB12=OSC2?(입력 미확정)  PB13=과부하 입력(active HIGH)
-출력:      PB3=CON_OVLD 릴레이(active HIGH)  ·  heartbeat→PB8
-진폭:      I2C_POT @0x28 (F2, 미구동)
-명령:      옛 IPC PA4=START/PA5=SEEK/PA6=RESET → STM32 내부 us_cmd
-```
-
-**M16 OVLD 로직 (firmware_disassembled.asm @0x10A6, per-tick 0x06EC 호출):**
-```
-PA7(PINA.7) HIGH → 카운터 0x0199++ ; ≥5 → sbi 0x15,0 (PC0=HIGH) + 래치 0x019C/0x01A2
-PA7 LOW → 카운터 리셋 (noise reject)
-복구: 0x08CC→call 0x1D28 → SEEK 플래그 0x018A=1
-```
-
-**현재 STM32 measure 게시 (app_reg.c reg_publish_measure) — ⚠ source 오용:**
+**OVTIME 순수 결정** (`app_reg_calc.h`):
 ```c
-g_measure.curr_amp   = g_reg.ch0_avg;            // ⚠ ch0=PA0(vestigial); 실 전류는 PB1
-g_measure.curr_power = reg_scale(g_reg.ch0_avg);  // ⚠ 전력=PB1 소비전류×2.2 여야 함 (6b)
-g_reg.acc_energy += curr_power; curr_energy = acc/250;  // 구조 OK, 입력 틀림
+typedef enum { REG_RUN_CONTINUE=0, REG_RUN_STOP_ENERGY=1, REG_RUN_FAULT_OVTIME=2 } reg_energy_outcome_t;
+#define OVTIME_SEC_MS 1000u   /* limit_out_time = 초 (legacy us_on_time[100ms]>=limit_out_time*10) */
+reg_energy_outcome_t reg_energy_termination(uint8_t energy_ctrl, uint32_t curr_energy,
+    uint32_t limit_energy, uint32_t elapsed_ms, uint16_t limit_out_time);
+/* !energy→CONTINUE; curr>=limit→STOP_ENERGY(우선); elapsed>=lot*1000→FAULT_OVTIME
+   (lot=0이면 elapsed>=0 항상 참=즉시 OVTIME — 0=off 아님, never-stop 방지, advisor) */
 ```
+**진폭 변환** (`i2c_pot.h`): `pot_dac_from_power(p)` = p<=50?0 : p>=100?127 : (p-50)*255/100.
 
 ## Resume Instructions
 
-1. 자동 로드 `docs/superpowers/RESUME.md`(2026-06-20 블록 ①~⑨) + 권위 분석 `docs/superpowers/analysis/2026-06-20-bseam-osc-…md` 정독.
-2. sanity:
-   ```bash
-   env -u STM32_TOOLCHAIN cmake -S fw -B fw/build -G Ninja && env -u STM32_TOOLCHAIN cmake --build fw/build   # 0-warning 기대
-   make -C fw/test test    # 5 스위트 PASS 기대
-   git status              # ## main...origin/main 기대
-   ```
-3. **사용자 오프라인 검토(분석+Artifact) 피드백을 먼저 반영** → 그 후 spec.
-4. 방향 선택:
-   - **HW 없음(설계/코딩)** → `superpowers:brainstorming→spec→writing-plans→subagent-driven`로: ① B-SEAM 3채널(내부 run/seek/reset→PB14/PB2/PB10 active-LOW) ② overload(PB13 디바운스→내부 응답+seek-reset FSM 복구→PB3 릴레이; heartbeat PB8 이전) ③ 6b(전력/에너지 PB1 재구성). host-test로 검증, 절대값/극성은 HW로 분리.
-   - **HW 있음(측정)** → 분석 §5 측정 절차(OSC/OVLD 극성 sanity, F2, 6b 절대값). ⚠ 스코프 프로빙 고전압/비접지 절연 확인.
-5. 머지 시 `--no-ff` + 태그 `hw-revA_fw-stage-<x>` → `git push origin main && git push origin --tags` (이 환경 푸시 가능 확인됨; ls-remote로 검증).
+1. 빌드/host sanity (브랜치 선택 후 **reconfigure**):
+   `cd fw && env -u STM32_TOOLCHAIN cmake -S . -B build -G Ninja && env -u STM32_TOOLCHAIN cmake --build build` (0-warning 기대)
+   `make -C fw/test test` — i2c-pot 브랜치=6스위트, ovtime 브랜치=5스위트 PASS.
+2. **머지 결정**: 두 슬라이스는 독립·HW 게이트. HW 검증 통과분부터 `--no-ff` 머지 + 태그(`hw-revA_fw-...`).
+3. HW 세션 = 위 "Not Yet Done" HW 항목.
 
 ## Setup Required
 
-- 빌드: `$STM32_TOOLCHAIN` stale → **`env -u STM32_TOOLCHAIN` 필수**. 새 소스 추가 후 **`cmake -B build` reconfigure 필수**(GLOB는 configure 시점만 평가).
-- 보드(HW 세션): SERIAL/addr=1/9600/EVEN(USART6=Modbus 점유, mon 비가용). RS-485=`/dev/cu.usbserial-AB0MLYXA`, ST-LINK=`/dev/cu.usbmodem*`. mon 필요 시 LCD addr=NONE.
+- 빌드: `env -u STM32_TOOLCHAIN` 래핑 필수. 신규 `.c` 추가/브랜치 전환 시 `cmake -S fw -B build` reconfigure.
+- 보드: ST-LINK SWD. SERIAL이면 USART6=Modbus 점유 → mon 비가용(검증=mbpoll/스코프).
 
 ## Edge Cases & Error Handling
 
-- OVLD 입력(PB13) 극성: active HIGH 확정이나 PA7 풀업 idle HIGH 텐션 → 정상시 외부 LOW 유지·fault/단선 HIGH(fail-safe) 가설, **보드 실측**. STM32 GPIO pull 설정(pull-down vs none) 결정 필요.
-- B-SEAM/overload 코딩은 host-test 가능하나 **물리 출력/극성/실 fault는 HW** — host로 로직만, HW로 절대 검증 분리(weld/seek-reset 선례).
+- **벤치 무신호(curr_energy=0)**: energy 모드 직접런은 에너지-도달 불가 → `limit_out_time*1000ms`(또는 0이면 즉시) OVTIME으로 종료(정상; 실 에너지=6b). ⚠ `limit_out_time=0`은 "off"가 아니라 **즉시 OVTIME**(legacy 충실; 0=off로 두면 energy 모드가 ceiling 대체라 never-stop — advisor가 잡은 버그, ffd675c 이후 수정).
+- **OVTIME fault 중 START**: app_reg가 `error_status!=0`이면 새 START 거부 → RESET으로 클리어해야 재시작(samd20 SYS_ERROR 충실).
+- **U4 미ACK(슬라이스1)**: 모든 set_pot/set_amp가 `I2C1_TIMEOUT_MS`(50ms) 블로킹 + `i2c1_err_count`만 증가. HW 첫 검증=err_count 0 확인.
 
 ## Warnings
 
-- **옛 해시 신뢰 금지** — 2026-06-20 `git filter-repo`로 전체 SHA 재작성됨. 태그/메시지로 참조.
-- **v001 단독 신뢰 금지** (Failed Approaches 참조). 권위 = disasm.
-- **핀 라벨 중복** — STM32 PB1≠M16 PB1, STM32 PA7≠mega16 PA7 (Failed Approaches).
-- **push = SSH** (`git@github.com:shuug2/gds_us_ctrl.git`). 이 세션에서 푸시 동작 확인됨(ls-remote 검증). GitHub 이메일 인증(nogari@gmail.com → shuug2 Settings)은 사용자 미완료(소급).
-- **물리 OSC/진폭/overload 효과 전부 미검증**(코드 0줄 또는 stub) — B-SEAM/F2/6b까지 실거동 미확인.
+- ⚠ **두 슬라이스 미머지·각각 HW 게이트** — 단독 머지는 HW 검증 후.
+- ⚠ **OVTIME ↔ slice-D ceiling 이중화 머지 충돌**: 둘 다 `app_reg_tick` 종료 블록 개조. 머지 시 energy 분기 + 절대30s + legacy hand ceiling 통합 필요.
+- ⚠ **cpp-review 비차단 코멘트(반영 보류, OVTIME)**: M1 ERR_* 중복정의 drift 위험(app_lcd_input.c 로컬 vs app_lcd.h 공유, "요청한 부분만" 규칙으로 미수정) / L1 error_status publish 2ms 게이트 stale window(무해) / L2 OVTIME_SEC_MS↔ON_TIME_UNIT_MS 단위 주석 분산. N1(동기 lifetime 주석)은 반영함.
+- ⚠ **clangd LSP 위양성**(cmake include 미연동) — "file not found/unknown type" 무시. 진실 = `cmake --build`(0-warning) + `make -C fw/test test`.
+- ⚠ git 해시는 2026-06-20 filter-repo 재작성됨 — 안정 레퍼런스는 태그.

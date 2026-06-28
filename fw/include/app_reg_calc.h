@@ -39,3 +39,21 @@ uint8_t reg_on_time_200m(uint32_t run_elapsed_ms);
  * (spec §4.2). ⚠ REG_ENERGY_DIV는 app_reg.c의 REG_TICK_MS=2ms 누산 cadence와
  * 결합 — REG_TICK_MS 변경 시 divisor도 재산정. 절대 보정은 6b/HW. */
 uint32_t reg_energy_from_acc(uint32_t acc_energy);
+
+/* energy 모드 직접런 종료 결정 (spec 2026-06-28-ovtime §4; samd20 main.c:5270-5294
+ * energy 분기 포팅). 순수·HAL-free: curr_energy/elapsed_ms 주입 → 6b 독립.
+ * 비-energy(energy_ctrl=0)면 CONTINUE = 호출측이 on-time ceiling으로 처리. */
+typedef enum {
+    REG_RUN_CONTINUE     = 0,   /* 계속 진행 */
+    REG_RUN_STOP_ENERGY  = 1,   /* 정상 종료: curr_energy >= limit_energy (main.c:5272) */
+    REG_RUN_FAULT_OVTIME = 2    /* fault: 시간 내 에너지 미도달 (main.c:5288, ERR_OVTIME) */
+} reg_energy_outcome_t;
+
+/* limit_out_time 단위 = 초. legacy us_on_time(100ms 단위) >= limit_out_time*10
+ * → elapsed_ms >= limit_out_time*1000. limit_out_time=0은 "off"가 아니라 즉시
+ * OVTIME(legacy 충실; energy 모드가 ceiling 대체라 0=off면 never-stop). */
+#define OVTIME_SEC_MS  1000u
+
+reg_energy_outcome_t reg_energy_termination(uint8_t energy_ctrl, uint32_t curr_energy,
+                                            uint32_t limit_energy, uint32_t elapsed_ms,
+                                            uint16_t limit_out_time);

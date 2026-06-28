@@ -171,6 +171,19 @@ bool app_lcd_ensure_run_page(const app_config_t *cfg)
 
 void app_lcd_tick(void)
 {
+    /* fault 표면: app_reg가 publish한 measure.error_status의 0→nonzero 엣지에
+     * 경고 페이지 1회 진입(app_lcd_show_error→LCD_WARNING). state.error_status는
+     * 입력 레이어(KEY_ERROR_RESET)가 읽으므로 매 호출 미러. 복구 = RESET 키 →
+     * app_lcd_hook_us_command(US_CMD_RESET) → app_reg가 source 클리어 → 다음
+     * publish에서 0 (app_reg.c). 매 iter 호출(4ms 게이트는 disp_step 한정). */
+    static uint8_t prev_err = 0u;
+    uint8_t err = app_lcd_measure()->error_status;
+    app_lcd_state()->error_status = err;
+    if ((err != 0u) && (prev_err == 0u)) {
+        app_lcd_show_error(err);
+    }
+    prev_err = err;
+
     /* Advance the display step machine on a 4 ms cadence (spec §11) — samd20's
      * 10-step job_state on odd ticks of a 2 ms timer ⇒ ~4 ms/step. One VP-group
      * per call; the machine wraps 0..9 internally. */
