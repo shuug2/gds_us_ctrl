@@ -6,6 +6,7 @@
 #include "app_lcd.h"      /* app_lcd_cfg, app_lcd_set_work_cnt, US_CYCLE, us_cmd_t */
 #include "app_reg.h"      /* app_reg_command (US_CMD_x and us_cmd_t come via app_lcd.h) */
 #include "app_config.h"   /* app_config_t, app_config_save_all */
+#include "i2c_pot.h"      /* i2c_pot_set_dac (U4 진폭, raw DAC) */
 #include "sys_tick.h"
 #include "mon.h"
 
@@ -36,8 +37,9 @@ void app_weld_hook_sol_dn(bool on)
 void app_weld_hook_set_amp(uint8_t dac)
 {
     /* comp_time-corrected RAW DAC (0..127) straight to I2C_POT (samd20
-     * main.c:1549). slice 1: log only. NOT app_lcd_hook_set_pot — that takes
-     * output_power and re-converts (x-50)*255/100 = double-convert bug. */
+     * main.c:1549). NOT app_lcd_hook_set_pot — that takes output_power and
+     * re-converts (x-50)*255/100 = double-convert bug. */
+    i2c_pot_set_dac(dac);
     mon_printf("[weld] set_amp dac=%u\r\n", (unsigned)dac);
 }
 

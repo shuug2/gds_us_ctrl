@@ -102,13 +102,14 @@ static inline uint8_t pot_dac_from_power(uint8_t power) {
 - `fw/test`에 신규 스위트로 추가(기존 reg_calc 편입 아님 — 사용자 확정). 빌드 0-warning + 기존 스위트 무회귀.
 
 ### 7.2 HW E2E (board-gated, 이연)
+- **선결: U4가 0x28에서 ACK하는지 먼저 확인.** 미실장/오주소면 모든 `set_pot`/`set_amp` 호출이 `I2C1_TIMEOUT_MS`(50ms) 동안 슈퍼루프를 블로킹하고 `i2c1_err_count()`만 증가한다(증상=주기적 50ms stall). 부팅 1회 write + 첫 RUN에서 `i2c1_err_count()` 0인지 확인.
 - 스코프/멀티미터: ① LCD/Modbus로 output_power 변경 → I2C_POT wiper 전압 변화 ② weld out1→time1→out2 진폭 전환 ③ 부팅 초기값 적용. 실제 초음파 진폭이 설정 추종하는지.
 
 ## 8. 범위 밖 (이연)
 
 - **comp_time 보정** — weld FSM 책임(set_amp에 보정된 DAC 유입). 본 슬라이스 무관.
 - **LOW-1 LCD 입력 클램프** (`app_lcd_input.c:752` output_power<50) — §4 변환 가드로 **디바이스 진폭 언더플로는 제거**되나, 저장/표시값 자체 클램프는 weld 슬라이스4 must-fix로 유지(별개 이슈).
-- **칩 정체(DS1803 등)·wiper 물리 스케일(0–127 vs 0–255)·극성** — HW/6b calibration 확정. (U4 = I2C_POT 진폭 제어는 사용자 확정으로 정체 해소; 코드 주석의 "open Q F2"는 본 spec으로 종결.)
+- **칩 정체(DS1803 등)·wiper 물리 스케일(0–127 vs 0–255)·극성** — HW/6b calibration 확정. (F2 = "진폭은 I2C_POT로 제어"라는 **기능적 역할만** 사용자 확정으로 해소; 칩 정체·스케일은 여전히 HW/6b 이연 — "종결" 아님.)
 
 ## 9. HW-gated 표시
 
