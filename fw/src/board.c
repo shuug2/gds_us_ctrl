@@ -24,10 +24,15 @@ void board_init(void) {
     out.Pin = HB_PIN;
     HAL_GPIO_Init(HB_PORT, &out);
 
-    /* Idle the 3 confirmed OSC outputs HIGH (= OSC off; active-LOW per C6).
-     * Set the level BEFORE switching to output to avoid a boot LOW glitch. */
-    HAL_GPIO_WritePin(GPIOB, CTRL_OSC_OUT_PINS, GPIO_PIN_SET);
-    out.Pin = CTRL_OSC_OUT_PINS;
+    /* OSC 3채널 = open-drain (active-LOW; idle = hi-Z, 외부 풀업이 HIGH=off).
+     * PP에서는 RESET/SEEK 라인이 OSC보드와 전기 충돌(GAP=0)했음 — OD로 STM32가
+     * 라인을 놓아 충돌을 해소한다. slice-d(8006e9c)의 HW 검증된 핀설정과 동일:
+     * 전기 설정만 main에 승격하며, board_osc4/boot-init/PB12 입력 등 slice-d
+     * 나머지(superset)는 패널 rig HW-gated로 미머지 유지 → slice-d 머지 시 reconcile.
+     * 초음파 RUN 물리 구동(board_osc4)은 여기 없음 = full slice-d/6b 이연. */
+    HAL_GPIO_WritePin(GPIOB, CTRL_OSC_OUT_PINS, GPIO_PIN_SET);  /* idle hi-Z (외부 풀업 HIGH) */
+    out.Mode = GPIO_MODE_OUTPUT_OD;
+    out.Pin  = CTRL_OSC_OUT_PINS;
     HAL_GPIO_Init(GPIOB, &out);
 }
 

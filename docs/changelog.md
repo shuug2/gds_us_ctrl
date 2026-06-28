@@ -9,6 +9,7 @@
 - **i2c-pot** (main `189810b`, tag `hw-revA_fw-stage-i2c-pot`): 진폭 hook 2개(set_pot %/set_amp raw DAC)를 공용 `drivers/i2c_pot.c`로 U4 I2C_POT @0x28 실구동 연결 + 부팅 초기값. HW: 부팅+Modbus START set_pot write 후 `s_err_count`=0 = U4 0x28 ACK 입증. 진폭 절대추종/칩스케일/극성 6b 이연.
 - **ovtime** (main `4c31f8a`, tag `hw-revA_fw-stage-ovtime`): energy 모드 직접런 종료 — 에너지-도달 정상정지 + 과대시간 OVTIME fault(`ERR_OVTIME`→LCD_WARNING+`MB_STATUS_OVTIME`). `app_reg_tick(reg_run_limits_t)` energy 분기(on-time ceiling 대체). HW: energy_ctrl=OFF 직접런 무회귀 + OVTIME fault 벤치 검증(curr_energy=0→STATUS=8) + RESET 복구. 에너지-도달 정상정지 실 curr_energy 6b 이연.
 - 정리: 머지 완료 브랜치(`stage-d-slice2b`/`m1`) 삭제, output-power-graph orphaned stash drop.
+- **OSC OD 전기설정 main 분리 승격** (`board.c` OSC 3채널 `OUTPUT_PP`→`OUTPUT_OD`, slice-d `8006e9c`와 byte-identical): OD가 미머지 slice-d에만 갇혀 브랜치 전환마다 PP로 "회귀"하던 반복 마찰 종료. heartbeat(PB3) PP 유지(dead). HW regression PASS(START→STATUS 1×8→560ms ceiling 무회귀). ⚠ main이 OD를 slice-d보다 앞서 보유 → slice-d=superset(board_osc4/boot-init/PB12) 머지 시 reconcile. 초음파 RUN 물리구동은 main에 없음 = 충돌 회피만, 출력 자체는 full slice-d/6b 이연.
 - 남은 미머지 4 = `output-power-graph-ch1`(ch1+OD+6b 통합)·`physical-io-slice-a~d`(rig). 전부 HW-gated.
 - ⚠ `app_reg_tick`=ovtime 버전(`reg_run_limits_t`) 이제 main 기준 → 후속 output-power-graph(cal_val)/slice-d(ceiling 이중화) 머지 시 흡수.
 
