@@ -170,6 +170,8 @@ g_measure.curr_power = active ? disp_pwr : 0u;
 - **신설**: `reg_current_from_adc`/`reg_power_from_amp`(순수) + `reg_publish_measure` 글루 2줄 교체 + cal_val 주입 통로 + host-test.
 - **6b 이연**: gain/deadband/offset/×2.2 절대 보정, trimmed-mean 여부, 보드 E2E, 머지.
 
+> **⚠ 교차 영향 (최종 whole-branch 리뷰 발견, 2026-06-28)**: `curr_power`를 ch1 파생값으로 옮기면 그 값을 누산하는 `acc_energy`(`app_reg.c:213`)도 ch1 기반이 된다. `acc_energy`→`curr_energy`는 weld FSM이 소비(`app_weld.c:73`→`app_weld_fsm.c:142` energy_ctrl WELD 종료 비교)하므로, **weld 에너지-도달 종료 입력도 ch1로 이동**한다. 따라서 범위는 "display-only"가 아니라 **"표시 소스 + 그것이 먹이는 에너지 누산값(curr_power)"** 이다. 이는 SAMD20 충실(에너지=ADC_CURR=ch1)하며, 누산 메커니즘·`REG_ENERGY_DIV=250`은 불변(누산 입력만 ch1). 벤치 휴면(weld `work_cnt=0`, 절대 에너지 6b 이연)이라 현 관측 회귀 없음. **머지 노트에 이 사실을 반드시 명기할 것.**
+
 ---
 
 ## 9. 증거 레퍼런스
