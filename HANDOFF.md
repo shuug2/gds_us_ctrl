@@ -1,123 +1,127 @@
-# Handoff: i2c-pot + ovtime HW 검증·머지 완료 — 남은 백로그 = 6b/rig 게이트
+# Handoff: 전면 감사 세션 — 포팅 충실성 + 코드 품질 리뷰 (수정 0건, 보고만)
 
-**Generated**: 2026-06-28 (d, HW 검증 세션)
-**Branches**: `feat/i2c-pot-amplitude` + `feat/ovtime-energy-run` → **둘 다 main 머지 + 태그 완료, 브랜치 삭제**
-**Status**: ✅ 2026-06-28 d HW 세션 — 둘 다 mbpoll 벤치 검증 PASS → `--no-ff` 머지. main ahead origin (push=사람 SSH 미완).
+**Generated**: 2026-07-02
+**Branch**: `main` (`4fcf7e8`, == origin/main — **push 완료 상태**, 이전 handoff의 "push 미완"은 stale이었음)
+**Status**: 감사 완료 / 수정 미착수 — 다음 세션 = 아래 발견 수정 작업
 
-> ## ⚡ 2026-06-28 d — HW 검증 세션 결과 (간이 벤치, [[feedback-swd-halt-breaks-board-validation]] 규칙 준수: 런타임=mbpoll/LCD만, SWD=정적 1회만)
->
-> - **i2c-pot** (tag `hw-revA_fw-stage-i2c-pot`, main `189810b`): U4 0x28 **ACK PASS** — 부팅+Modbus START set_pot write 후 `s_err_count`@0x200003e0=0(단발 정적 SWD read=no-halt 예외; NACK였다면 50ms timeout+err≥1), 직접런 STATUS 1×8→0 무회귀. START가 set_pot 확실 호출(`app_modbus.c:117`)+err0 유지로 write-미발생 회의 제거. **진폭 절대추종/칩스케일(0–127/255)/극성 = 6b/스코프 이연**.
-> - **ovtime** (tag `hw-revA_fw-stage-ovtime`, main `4c31f8a`): energy_ctrl=OFF 직접런 무회귀(STATUS 1×8→560ms ceiling) + **OVTIME fault 벤치 PASS**(EN_ENERGY=ON+TIMEOVER=1s+START→curr_energy=0[무신호]→~1s후 STATUS=**8**=MB_STATUS_OVTIME) + RESET 복구(bit3→0) + fault 가드 해제 재START 정상. **에너지-도달 정상정지 실 curr_energy + LCD_WARNING 육안 = 6b/실rig 이연**.
-> - **정리**: 머지 완료된 `stage-d-slice2b`/`m1` 브랜치 삭제. output-power-graph의 orphaned stash(2026-06-28c 세션맵) drop(내용 MEMORY.md 백업).
-> - **OSC OD 전기설정 main 분리 승격** (board.c OSC 3채널 `OUTPUT_PP`→`OUTPUT_OD`만, slice-d `8006e9c`와 byte-identical): 반복 "회귀" 마찰 종료 — OD가 미머지 slice-d에만 갇혀 main 계열 브랜치 전환마다 PP로 돌아가던 것을 main에 영구 적용. heartbeat(PB3) PP 유지(dead). regression-only PASS(START→STATUS 1×8→560ms ceiling 무회귀, 빌드 0-warning). **⚠ divergence: main이 OD를 slice-d보다 앞서 보유** → slice-d board.c=superset(board_osc4/boot-init FSM/PB12 입력/heartbeat 제거), slice-d 머지 시 reconcile. **초음파 RUN 물리구동(board_osc4)은 main에 없음=충돌 회피(전기 정합)만, 초음파 출력 자체는 full slice-d/6b 이연**(app_reg는 여전히 drives NO OSC GPIO). [[project-osc-boot-init]]
-> - **⚠ app_reg_tick = 이제 ovtime 버전(`reg_run_limits_t`)이 main 기준** → 미머지 output-power-graph(cal_val 주입)/physical-io-slice-d(ceiling 이중화)는 후속 머지 시 이 구조에 흡수(advisor: 먼저 머지된 ovtime 기준 rebase).
-> - **남은 미머지 4 (전부 HW-gated)**: `output-power-graph-ch1`(ch1 repoint + OD + 6b 통합 스테이지 게이트, 단독 불가 판명) / `physical-io-slice-a~d`(패널·물리입력 실배선 rig 필요).
-> - **★ 다음 세션 작업 (사용자 우선순위 2026-06-28 d 마감 시점)**: **`feat/physical-io-slice-d` 전체 통합 검토**. ⚠ **중요 발견: OSC 명령 제어(seek/reset/RUN → OSC 핀 PB2/PB10/PB14 물리 구동)는 slice-d 포함 어느 브랜치에도 미구현**. slice-d의 `board_reset(PB10)`/`board_seek(PB2)`/`board_osc4(PB14)` setter는 **boot-init(app_osc_init) 부팅 시퀀스 전용**이고, `app_seek_reset_hook_signal`은 slice-d에서도 **stub**(`app_seek_reset.c:44` "물리 OSC 구동 stub (B-SEAM)", mon 로그만). 즉 **slice-d 통합 ≠ OSC 명령 제어 완성**. ⓐ slice-d 통합 게이트 = 패널 실배선 rig(io.c START/SENS/ESTOP/SOL_DN 등) + PB12 피드백 입력(OSC 보드) + **board.c reconcile**(main OD가 slice-d보다 앞섬, slice-d board.c=superset). ⓑ OSC 명령 제어 실구동 = **B-SEAM 별도 작업**(app_seek_reset hook → board_reset/seek 바인딩 + app_reg RUN → board_osc4 + 스코프/실초음파 극성·주파수 검증). [[project-seek-reset]]/[[project-osc-boot-init]].
-> - **보드 현재**: ovtime 펌웨어 적재, SERIAL/addr=1/9600/EVEN, EN_ENERGY=0·TIMEOVER=8 복원, OUT_POWER=55, ether_ip .70 잔여.
+> **요약**: 이번 세션은 READ-ONLY 전면 감사 2종. ① 프로젝트 상태·레거시 포팅 충실성·미머지 브랜치 감사 → 레거시 실거동과 어긋나는 코드 2건 + 이전 handoff 문서의 사실 오류 4건 발견. ② main 전체 코드 품질 리뷰(영역별 cpp-reviewer 4개) → **CRITICAL 1 + HIGH 4 + MEDIUM 9 + LOW 5** 발견. 코드/문서 수정 일절 없음. 이 문서가 수정 백로그의 단일 진입점.
 
-> 진입점 = 이 파일. (이하 2026-06-28 b mode-b 설계+host 세션 기록 — 두 슬라이스 모두 위에서 머지됨)
-
-> 진입점 = 이 파일. 이번 세션은 **HW 없이 설계+host 구현(mode-b)** — 초음파 종료조건 SAMD20 분석에서 출발해 2개 슬라이스를 brainstorming→spec→TDD(host)→glue→cpp-review까지. 실 HW actuation/표면 검증만 보드 세션으로 분리. (이 브랜치들과 별개로 `feat/physical-io-slice-d`의 OSC+slice D 스택은 직전 세션 산출물 — 이번 세션 무관, 여전히 실배선 rig 대기.)
+---
 
 ## Goal
 
-SAMD20 legacy 분석으로 도출한 두 미포팅 기능을 6b/HW 없이 가능한 데까지 포팅: ① 진폭(I2C_POT) 실구동 ② energy 모드 직접런 종료(에너지-도달 정상정지 + 과대시간 OVTIME fault). + #7 출력이상(ERR_OUTERR)을 6b 하위항목으로 문서화.
+사용자 요청: ① 프로젝트 진행정도·남은작업·잘못된 내용 비판 보고 ② main 코드 품질 전면 리뷰. 둘 다 보고만, 수정 금지.
 
 ## Completed
 
-### 슬라이스 1 — I2C_POT 진폭 actuation (`feat/i2c-pot-amplitude`: `77844f7` spec + `2d653f4` feat)
-- [x] 두 진폭 hook(`app_lcd_hook_set_pot` %, `app_weld_hook_set_amp` raw DAC)이 둘 다 로그 stub이던 것을 공용 `drivers/i2c_pot.c`(`i2c_pot_set_dac`→`i2c1_mem_write(0x28,0x00)` best-effort)로 통합.
-- [x] 순수 `pot_dac_from_power`(언더플로 가드 `<=50→0`, 상한 127; 50~100 samd20 비트-동일) host-test 신규 스위트 `test_i2c_pot`.
-- [x] 부팅 초기 진폭 1회(app.c config 로드 직후, samd20 main.c:910).
-- [x] 빌드 0-warning FLASH 41.73%, host 6스위트 PASS, cpp-review **APPROVE**.
+- [x] 진행도 확인: 코딩 가능 스테이지 전부 main 머지 완료(태그 14개), host 6스위트 실재, main==origin 동기
+- [x] 레거시 포팅 충실성 감사 (samd20 + atmega16, 현존 disasm 재검증 포함)
+- [x] 미머지 브랜치 5개 divergence 감사 (merge-tree 실측)
+- [x] main 전체 코드 품질 리뷰 (코어FSM / LCD / Modbus·ETH / 플랫폼·드라이버 4영역)
+- [x] HANDOFF + 메모리 기록 (이 문서)
 
-### 슬라이스 2 — OVTIME energy-run 종료 (`feat/ovtime-energy-run`: `f9b878c` spec+#7 + `ffd675c` feat)
-- [x] 순수 `reg_energy_termination`(`app_reg_calc`): energy 도달→STOP_ENERGY(우선) / 미달+`elapsed≥limit_out_time*1000ms`→FAULT_OVTIME / 비-energy·`limit_out_time=0`→CONTINUE. host-test 8케이스(reg_calc 편입).
-- [x] `app_reg_tick(reg_run_limits_t*)`: energy 모드면 on-time ceiling **대체**(legacy 충실). `reg_stop_run` helper. OVTIME→`error_status|=ERR_OVTIME`. START fault 가드(swallow consume 뒤 별도 break). RESET이 클리어. `lcd_measure_t.error_status` publish.
-- [x] fault 표면(기존 미공급 인프라 첫 공급): `app_lcd_tick` 엣지→`app_lcd_show_error`(LCD_WARNING) + `app_modbus` STATUS|=`MB_STATUS_OVTIME`. ERR_* `app_lcd.h` 공유.
-- [x] 빌드 0-warning FLASH 42.01%/RAM 16.82%, host 5스위트 PASS, cpp-review **APPROVE-WITH-COMMENTS**(0 Crit/High).
+## Not Yet Done (수정 백로그 — **2026-07-02 사용자 결정 D0~D6 반영, 정본 = `docs/NEXT_STEPS.md` §1.3**)
 
-### #7 출력이상 (문서만)
-- [x] `docs/NEXT_STEPS.md` §1.2 6b **하위항목으로 명시** — legacy 트리거 `re_outerr_issued=1` 주석처리(main.c:4333)=비활성, `curr_amp`(ADC) 의존→6b 종속.
+다음 코딩 세션 실행 순서 (전부 HW 불필요, 검증만 보드):
+- [ ] **D0** C1 즉시 단독 커밋: `app_lcd_input.c:667-682` dispatch 최상단 `if (f->data_len < 3) return;` 1줄 (dgus_read_word `dgus_lcd.c:298` 패턴 재사용) + host 회귀 + 0-warning
+- [ ] **D1** seek/reset 600ms 충실화: `SR_TICKS` 50→60 (`app_seek_reset_fsm.h:15`) + host 테스트 경계값 갱신 (근거: 레거시 `us_reset_cnt++` 후 `> 5`, 0-시작·100ms = 600ms/leg)
+- [ ] **D3** 'fram-i2c-robustness' 슬라이스 (spec→plan 절차): H3 `fram_read_*` status 전파 + `app_config_load` 실패 필드 팩토리 폴백/경고 · H2 I2C1 bus-unstick(SCL 9클럭) + `i2c1_err_count()` 표면 배선
+- [ ] **D6** M7: LCD static IP 저장→가동 중 W5500 즉시 반영 경로 (`app_lcd.c:54-61` hook stub → app_eth 재적용 API, 소규모 설계 필요)
+- [ ] **D5** reconcile 선행 (b→d→ch1): 각 브랜치→현 main rebase + `app_reg_tick` 3-way 시그니처 semantic 통합 + board.c 병합, 빌드+host PASS까지. **머지/태그는 HW 검증 후**
+- [ ] stale 주석 동승 정정: `app_reg.h:42` "no-op" / `app_modbus.c:105,109` / `fw/test/Makefile:1-3` — 해당 파일 첫 코드 커밋에 포함
 
-## Not Yet Done
-
-- [ ] **두 슬라이스 머지** — 각각 HW 검증 후 `--no-ff` 머지 + 태그. 독립(서로·OSC 스택과 무관, 전부 off main).
-- [ ] **HW 검증(슬라이스1)**: U4 0x28 ACK 확인(미ACK 시 매 set 호출 50ms 블로킹) → 스코프로 wiper가 output_power/weld out1→out2 추종.
-- [ ] **HW 검증(슬라이스2)**: energy 모드 직접런 OVTIME→LCD_WARNING+`MB_STATUS_OVTIME`(mbpoll)+RESET 복구. 에너지-도달 정상정지는 실 `curr_energy`(=6b) 후.
-- [ ] **OSC/slice-D 스택**(`feat/physical-io-slice-d`, 이번 세션 무관) — 실배선 rig 대기. 메모리 [[project-osc-boot-init]]/[[project-physical-io-layer]].
+스테이지 게이트 (결정 반영):
+- [ ] **D4** weld slice4 **첫 Task = H1 근본수정**(WELD 진입 시 모드 래치 + 상태전이 카운터 리셋, `app_weld_fsm.c:111-161`)
+- [ ] **D2** slice4 must-fix = **M1~M4 전체**(LV_* 필드군 클램프 + FRAM comm idx 클램프 + `app_weld.c:64-81` uint8 절단 + limit_energy=0 하한) — OUT_POWER 1개에서 확장
+- [ ] H4+IWDG 별도 슬라이스 (ADC 영구 lock 정책은 IWDG와 함께 재검토)
+- [ ] M6/M8/M9 = HMI 착수 시 'modbus-tcp-hardening'
+- [ ] 기존 HW-gated 계속: B-SEAM(잔여=SEEK/RESET 2선+극성), 6b, overload — `docs/NEXT_STEPS.md` §1.2
 
 ## Failed Approaches (Don't Repeat These)
 
-- **#4 OVTIME을 OVTIME만 떼어 포팅 X** — legacy(5270-5294)에서 OVTIME은 energy 종료 **쌍의 절반**(에너지-도달 정상정지가 나머지). OVTIME만 넣으면 에너지-도달 정상정지가 없어 벤치선 늘 OVTIME으로 끝나 의미가 약함 → 쌍 전체 포팅.
-- **#7 ERR_OUTERR 단독 포팅 X** — legacy에서 트리거(`re_outerr_issued=1`)가 **주석처리되어 비활성**이고, 검출이 실 `curr_amp`(ADC 측정 진폭)에 의존 → 6b calibration 없이는 무의미. 6b 하위항목으로만 문서화.
+- 없음 (READ-ONLY 세션). 단 리뷰 에이전트 1개가 스트림 오류로 최종 출력 유실 → SendMessage 재개로 복구(재실행 불필요했음).
+
+## 감사 발견 ① — 레거시/문서 대조 (2026-07-02)
+
+**코드가 레거시 실거동과 어긋남**:
+1. **seek/reset 600ms vs 500ms off-by-one**: 레거시 `us_reset_cnt++` 후 `> MAX_US_RESET_CNT(5)`, 0-시작 100ms 단위(`ref/samd20/main.c:5388-5409`, `:118`) = cnt 6에서 트립 = **600ms/leg**. fw `s_elapsed >= SR_TICKS(50)` @10ms = **500ms/leg**(`app_seek_reset_fsm.c:44-47`). 레거시 주석 `// x 100mS` *의도*(500ms)엔 맞고 *코드 실거동*(600ms)엔 불충실. 3구간(RESET dwell/RESET→SEEK/SEEK해제) 전부. 충실화=SR_TICKS≈60. **수정 여부 사용자 결정**(실 rig에서 100ms dwell 유의미성).
+2. **limit_out_time=0 이중 처리**: `reg_energy_termination`=즉시 OVTIME(레거시 충실) vs `weld_backstop_ticks`(`app_weld_fsm.c:40-42`)=1s floor(레거시 이탈). 두 에너지-종료 경로 0-핸들링 상반.
+
+**이전 handoff(2026-06-28 d)의 사실 오류 — 이 문서로 대체**:
+3. ~~"main cffeaaf board.c == slice-d 8006e9c byte-identical"~~ → **거짓**(blob 상이, 47줄 차이). OSC 전기설정(OD/active-LOW/PB2|PB10|PB14) *부분만* 동일. slice-d=superset(heartbeat 제거+board_osc4/reset/seek 추가)은 맞음 → **board.c는 slice-d 머지 시 충돌 확정**.
+4. ~~"OSC 명령 제어 seek/reset/RUN 전부 미구현"~~ → **부분 오류**. SEEK→PB2/RESET→PB10 런타임=stub 맞음. **RUN→PB14(board_osc4)는 slice-d에서 실배선**(slice-d `app_reg.c:260` `app_reg_hook_us_output` 실호출). B-SEAM 잔여=SEEK/RESET 2선+극성/스코프 검증.
+5. ~~"main ahead origin, push 미완"~~ → main==origin/main==4fcf7e8.
+6. ~~"physical-io a→b→c→d 스택"~~ → 실측 ancestry: **a ⊂ c ⊂ d 체인 + b는 독립**(2026-06-21, 최고령 standalone — 방치위험 1순위). 실질 통합 단위=**{d, b, output-power-graph-ch1} 3개뿐**(a/c는 d에 포함, 개별 머지 불필요).
+
+**미머지 통합 충돌 실측**(merge-tree): 3단위 모두 `app_reg.c/h`+`app.c` 충돌. **app_reg_tick 시그니처 3-way 분기**: main(`const reg_run_limits_t*`) vs slice-d(`uint16_t limit_on_time, uint8_t model_type`) vs ch1(`uint16_t limit_on_time, int16_t cal_val`) — 텍스트 병합 불가, semantic reconcile 필수. 순차 머지 시 매번 재충돌 → 선머지 기준 rebase.
+
+**문서 남은작업 누락(안전)**: 물리 ESTOP(slice-d에 구현돼 있으나 §1.2에 연결 미기재)·부저(slice-a에 있음, 동일)·f_safty CYL1 abort 강제(config만 포팅)·SYS_HORN 실동작. 미해소 잔여: PC1 3자 충돌, PB12(OSC2) 방향, 레거시 blink-phase/PA4 display-period 폐기 미기록. provenance: regulation-core 문서 인용 `ref/atmega16/M16_reverse/out/*` repo 부재(사실은 현존 `m16_disasm/firmware_disassembled.asm`으로 재검증 완료 — 유효).
+
+## 감사 발견 ② — 코드 품질 리뷰 (main, 4영역)
+
+### CRITICAL
+- **C1** `app_lcd_input.c:667-682`: dispatch가 `data_len` 미검증으로 `f->data[1..2]`(미초기화 스택/직전 프레임 잔재) 사용 → 노이즈 프레임(LEN=4)이 KEY_MULTI START/DATA_SAVE/LV_* 로 흐를 수 있음. 정상 프로토콜에선 불발, **EMI 깨진 프레임에서만** — 초음파 용접기라 노이즈 전제. 가드 패턴은 `dgus_lcd.c:298`에 이미 존재(이식 누락).
+
+### HIGH
+- **H1** `app_weld_fsm.c:111-161`: 런중 EN_MULTI/EN_ENERGY 토글 시 stale `s_multi_stage/s_multi_elapsed`/`s_temp_time` 오판 → 조기 종료/FAULT abort. 현재 weld dormant라 잠복 — **slice4 전 필수**.
+- **H2** `i2c1.c:47-65`: 버스 stuck 복구 전무(FRAM+POT 공유 → 동반 마비, save_all 최대 ~1.5s 루프 정지) + `i2c1_err_count()` 소비처 0(죽은 observability).
+- **H3** `fram.c:5-25`+`app_config.c:79-122`: read 실패 무시 → 필드 조용히 0 로드(limit_on_time=0/limit_out_time=0→즉시OVTIME/output_power=0). 전체 고장은 factory reset로 안전, **부분 실패가 최위험**.
+- **H4** `adc1.c:34-52`: 폴링 실패=무조건 `Error_Handler()`(`irq.c:17` `__disable_irq;while(1)`) 영구 lock, IWDG 부재. 의도된 트레이드오프(주석 有)이나 백스톱 없음. `HAL_ADC_Stop` 반환 무시=지연-치명 전이 가능. B-SEAM 배선 시 재평가 필수(현재는 OSC 미구동이라 "출력 켜진 채 고착" 불가).
+
+### MEDIUM (9)
+- M1 `app_reg_calc.c:63-76`: `limit_energy=0`+energy_ctrl → START 즉시 무증상 "정상완료"(하한 가드 없음)
+- M2 `app_weld.c:64-81`: `limit_mo_out1/2` uint16→uint8 무검증 절단(LCD 무클램프와 결합: 300→44→진폭0 silent)
+- M3 `app_lcd_render.c:144,179`+`app_config.c:111-113`: FRAM 로드 comm_speed_idx/parity_idx 무클램프 배열 인덱스 → OOB flash read(터치 경로엔 가드 有=비대칭)
+- M4 `app_lcd_input.c:710-762`: LV_* 필드군 LCD 터치 무클램프(레거시 유래 — slice4 must-fix를 OUT_POWER 1개→필드군 전체로 확장)
+- M5 `fram.h`: 레이아웃 버전 필드 부재(INIT_FLAG는 초기화 여부만) — M3와 결합 시 실질 위험
+- M6 `app_modbus_tcp.c:42-59`: coalesced/파이프라인 TCP 프레임 2번째 요청 폐기(mbpoll 무관, SCADA류 간헐 타임아웃)
+- M7 `app_lcd.c:54-61`+`app_eth.c:204-207`: static IP 변경·저장이 가동 중 W5500 미반영(재부팅/링크 재협상 필요)
+- M8 `app_modbus.c:239-286`: ETH→SERIAL 전환 시 TCP 소켓 미정리(ESTABLISHED 방치)
+- M9 `app_modbus_tcp.c:29,35,66`: blocking 소켓+send/disconnect 반환 무시, CLOSE_WAIT `disconnect()` 최대 ~1.6s 루프 블로킹
+
+### LOW (5)
+`weld_backstop_ticks` 폭 확장 부재(주석 "≤10"이 LCD 실상 255와 불일치, 현재 우연히 안전) / `usart1.h` 주석 폐기된 IT 모델 서술(실제 DMA circular) / `_sbrk` 힙-스택 미검사(힙 미사용) / `energy2str` 정확히 100000에서 자릿수 1개 누락(레거시 verbatim) / ether 필드 미선택 숫자키→VP 0x2460 오발신(UX)
+
+### 결함 없음 확인
+Modbus 코어 경계/CRC(samd20 unbounded write는 포팅 때 수정됨)·RTU DMA 링버퍼·MBAP 검증 체인·부팅 init 순서·ISR 공유변수(단일 writer 32bit)·tick 32bit 랩 안전·seek/reset FSM 전이/직교·DGUS 파서 자체 경계·TX 빌더.
 
 ## Key Decisions
 
 | Decision | Rationale |
 |----------|-----------|
-| 두 슬라이스 각각 main에서 분기(OSC 스택 위에 안 쌓음) | I2C_POT·OVTIME은 app_lcd/app_weld/app_reg(전부 main에 존재)만 의존 — OSC 미머지 스택 오염 회피 |
-| I2C_POT 통합(set_amp만 X) | legacy 12 write 중 9곳이 set_pot(%) = 정상 진폭 전부. set_amp만 연결 시 일반 진폭 죽음 |
-| OVTIME = energy 종료 쌍 전체 | energy 모드가 on-time ceiling **대체**(legacy 5270 분기) |
-| fault source=app_reg, `lcd_measure_t.error_status` publish | 기존 미공급 인프라(LCD warning/MB_STATUS_OVTIME/키 복구) 첫 공급자 |
-| START fault 가드 = swallow consume **뒤** 별도 break | advisor: if 조건 합산 시 swallow 비대칭 버그(seek_reset 가드와 동일 패턴) |
+| 수정 0건, 보고만 | 사용자 명시 지시 ×2 |
+| C1을 유일 CRITICAL로 | 미초기화 데이터가 START 명령으로 흐를 수 있는 유일 경로, EMI 환경 전제 |
+| seek/reset off-by-one은 수정 아닌 결정사항 | 레거시 "주석 의도 500ms vs 코드 실거동 600ms" 중 무엇에 충실할지는 실 rig 판단 필요 |
+| H1은 slice4 게이트로 | 현재 dormant(트리거 미연결)라 실기 위험 0, 물리 트리거 연결이 활성화 조건 |
 
 ## Current State
 
-**Working**: 두 브랜치 각각 빌드 0-warning(우리 코드; vendor WIZnet 경고 격리), host 전 스위트 PASS. 트리 clean(`?? ref/signal/`=이전 OSC Saleae 캡처, 무관·미추적).
-
-**Broken**: 없음.
-
-**현재 체크아웃**: `feat/ovtime-energy-run`. ⚠ **브랜치 전환 시 `cmake -S fw -B fw/build` reconfigure 필수**(GLOB은 configure-time — i2c-pot 브랜치엔 `drivers/i2c_pot.c` 있고 ovtime/main엔 없음 → 캐시 stale 시 빌드 실패. 이번 세션 실제로 겪음).
+**Working**: main 빌드/host 전제 무변경(이 세션 코드 무수정). 보드=ovtime fw, SERIAL/addr=1/9600/EVEN.
+**Broken**: 없음 (발견들은 잠복/경계 결함).
+**Uncommitted**: `?? ref/signal/`(Saleae 캡처, 의도적 미추적)만.
 
 ## Files to Know
 
 | File | Why It Matters |
 |------|----------------|
-| `fw/src/app_reg_calc.c` / `.h` | 순수 `reg_energy_termination`(host-test) + `OVTIME_SEC_MS`. reg_* 순수 계열 |
-| `fw/src/app_reg.c` | energy 분기(`app_reg_tick`)·`reg_stop_run`·START fault 가드·RESET 클리어·`error_status` publish |
-| `fw/include/app_reg.h` | `reg_run_limits_t`(주입 구조)·시그니처 |
-| `fw/src/app_lcd.c` | `app_lcd_tick` error_status 엣지→`app_lcd_show_error`. `set_pot`(i2c-pot 브랜치) |
-| `fw/include/app_lcd.h` | ERR_* 공유 define + `lcd_measure_t.error_status` |
-| `fw/drivers/i2c_pot.c` / `.h` | (i2c-pot 브랜치) `i2c_pot_set_dac`·순수 `pot_dac_from_power` |
-| `docs/superpowers/specs/2026-06-28-{i2c-pot-amplitude,ovtime-energy-run}-design.md` | 두 슬라이스 spec(legacy 근거·결정·HW-gated 경계) |
-
-## Code Context
-
-**OVTIME 순수 결정** (`app_reg_calc.h`):
-```c
-typedef enum { REG_RUN_CONTINUE=0, REG_RUN_STOP_ENERGY=1, REG_RUN_FAULT_OVTIME=2 } reg_energy_outcome_t;
-#define OVTIME_SEC_MS 1000u   /* limit_out_time = 초 (legacy us_on_time[100ms]>=limit_out_time*10) */
-reg_energy_outcome_t reg_energy_termination(uint8_t energy_ctrl, uint32_t curr_energy,
-    uint32_t limit_energy, uint32_t elapsed_ms, uint16_t limit_out_time);
-/* !energy→CONTINUE; curr>=limit→STOP_ENERGY(우선); elapsed>=lot*1000→FAULT_OVTIME
-   (lot=0이면 elapsed>=0 항상 참=즉시 OVTIME — 0=off 아님, never-stop 방지, advisor) */
-```
-**진폭 변환** (`i2c_pot.h`): `pot_dac_from_power(p)` = p<=50?0 : p>=100?127 : (p-50)*255/100.
+| `fw/src/app_lcd_input.c:667-682` | C1 수정 지점(1줄) + M4 클램프 필드군 |
+| `fw/drivers/fram.c` + `fw/src/app_config.c` | H3 — status 전파 리팩터 지점 |
+| `fw/drivers/i2c1.c` | H2 — bus recovery + err_count 표면 |
+| `fw/src/app_weld_fsm.c:111-161` | H1 — slice4 전 필수 |
+| `fw/src/app_seek_reset_fsm.c:44-47` + `ref/samd20/main.c:5388-5409` | off-by-one 양쪽 근거 |
+| `docs/NEXT_STEPS.md` | §1.1 표에 i2c-pot/ovtime 누락 등 정정 대상 |
 
 ## Resume Instructions
 
-1. 빌드/host sanity (브랜치 선택 후 **reconfigure**):
-   `cd fw && env -u STM32_TOOLCHAIN cmake -S . -B build -G Ninja && env -u STM32_TOOLCHAIN cmake --build build` (0-warning 기대)
-   `make -C fw/test test` — i2c-pot 브랜치=6스위트, ovtime 브랜치=5스위트 PASS.
-2. **머지 결정**: 두 슬라이스는 독립·HW 게이트. HW 검증 통과분부터 `--no-ff` 머지 + 태그(`hw-revA_fw-...`).
-3. HW 세션 = 위 "Not Yet Done" HW 항목.
-
-## Setup Required
-
-- 빌드: `env -u STM32_TOOLCHAIN` 래핑 필수. 신규 `.c` 추가/브랜치 전환 시 `cmake -S fw -B build` reconfigure.
-- 보드: ST-LINK SWD. SERIAL이면 USART6=Modbus 점유 → mon 비가용(검증=mbpoll/스코프).
-
-## Edge Cases & Error Handling
-
-- **벤치 무신호(curr_energy=0)**: energy 모드 직접런은 에너지-도달 불가 → `limit_out_time*1000ms`(또는 0이면 즉시) OVTIME으로 종료(정상; 실 에너지=6b). ⚠ `limit_out_time=0`은 "off"가 아니라 **즉시 OVTIME**(legacy 충실; 0=off로 두면 energy 모드가 ceiling 대체라 never-stop — advisor가 잡은 버그, ffd675c 이후 수정).
-- **OVTIME fault 중 START**: app_reg가 `error_status!=0`이면 새 START 거부 → RESET으로 클리어해야 재시작(samd20 SYS_ERROR 충실).
-- **U4 미ACK(슬라이스1)**: 모든 set_pot/set_amp가 `I2C1_TIMEOUT_MS`(50ms) 블로킹 + `i2c1_err_count`만 증가. HW 첫 검증=err_count 0 확인.
+1. sanity: `env -u STM32_TOOLCHAIN cmake -S fw -B fw/build -G Ninja && env -u STM32_TOOLCHAIN cmake --build fw/build`(0-warning) + `make -C fw/test test`(6스위트 PASS).
+2. 수정 착수 순서 = 위 "Not Yet Done". C1은 1줄+회귀(host 스위트 무영향, LCD 터치 정상경로 HW 확인)로 독립 커밋 가능.
+3. H3는 시그니처 변경(전파형)이라 spec→plan→subagent 절차(§NEXT_STEPS §3) 권장. H2는 같은 슬라이스로 묶기 자연스러움.
+4. seek/reset off-by-one은 **먼저 사용자에게 물을 것**(600ms 충실 vs 500ms 유지).
+5. 미머지 통합 시: slice-b 결정 최우선(독립·최고령) → slice-d(a/c 자동 포함, app_reg_tick semantic reconcile + board.c heartbeat/OSC 병합) → ch1.
 
 ## Warnings
 
-- ⚠ **두 슬라이스 미머지·각각 HW 게이트** — 단독 머지는 HW 검증 후.
-- ⚠ **OVTIME ↔ slice-D ceiling 이중화 머지 충돌**: 둘 다 `app_reg_tick` 종료 블록 개조. 머지 시 energy 분기 + 절대30s + legacy hand ceiling 통합 필요.
-- ⚠ **cpp-review 비차단 코멘트(반영 보류, OVTIME)**: M1 ERR_* 중복정의 drift 위험(app_lcd_input.c 로컬 vs app_lcd.h 공유, "요청한 부분만" 규칙으로 미수정) / L1 error_status publish 2ms 게이트 stale window(무해) / L2 OVTIME_SEC_MS↔ON_TIME_UNIT_MS 단위 주석 분산. N1(동기 lifetime 주석)은 반영함.
-- ⚠ **clangd LSP 위양성**(cmake include 미연동) — "file not found/unknown type" 무시. 진실 = `cmake --build`(0-warning) + `make -C fw/test test`.
-- ⚠ git 해시는 2026-06-20 filter-repo 재작성됨 — 안정 레퍼런스는 태그.
+- ⚠ 이 문서 이전 버전(2026-06-28 d)의 4개 주장(byte-identical/RUN 미구현/push 미완/a→b→c→d 스택)은 **실측으로 반증됨** — 위 §감사 발견 ① 3~6이 정본.
+- ⚠ `fw/build/`·`fw/build-trace/`에 미머지 브랜치 소스 오브젝트 잔재(app_overload/app_buzzer 등) — GLOB 이력, main 소스 실체와 불일치(감사 시 혼동 유발, 실해 없음).
+- ⚠ 검증 규칙 유지: 런타임=mbpoll/LCD만, SWD halt 금지(정적 1회만). 브랜치 전환 시 cmake reconfigure.
+- ⚠ git 해시는 2026-06-20 filter-repo 재작성 — 안정 레퍼런스는 태그.
