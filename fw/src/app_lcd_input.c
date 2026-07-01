@@ -671,6 +671,13 @@ void app_lcd_input_dispatch(const dgus_frame_t *f)
         return;
     }
 
+    /* Payload must carry READ_LEN + DATA_H + DATA_L — a shorter (noise-truncated)
+     * frame would read stale/uninitialised data[1..2]. Same guard as
+     * dgus_read_word() in dgus_lcd.c. */
+    if (f->data_len < 3u) {
+        return;
+    }
+
     /* DGUS 0x83 read-response payload after the VP address is:
      *   data[0] = READ_LEN (word count, 0x01 for a 1-word read)
      *   data[1] = DATA_H,  data[2] = DATA_L
