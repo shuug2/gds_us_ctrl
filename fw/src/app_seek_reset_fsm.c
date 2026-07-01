@@ -38,13 +38,13 @@ void seek_reset_fsm_step(const seek_reset_in_t *in, seek_reset_out_t *out)
         break;
 
     case SR_RESET:                        /* cmd 무시 (busy) */
-        /* 포화 가드: SR_TICKS=50 고정이라 s_elapsed는 최대 50에서 전이 — 현재는
+        /* 포화 가드: SR_TICKS=60 고정이라 s_elapsed는 최대 60에서 전이 — 현재는
          * 미발동이나 config-driven 비교로 확장될 때 대비해 weld 패턴 유지
          * (cpp-review Minor 1). SR_SEEK도 동일. */
         if (s_elapsed < 0xFFFFu) {
             s_elapsed++;
         }
-        if (s_elapsed >= SR_TICKS) {      /* 500ms 경과 → SEEK 자동 체인 (samd20 5395-5396) */
+        if (s_elapsed >= SR_TICKS) {      /* 600ms 경과 → SEEK 자동 체인 (samd20 5395-5396) */
             out->reset_icon_off = 1u;     /* reset_signal=0 (memset), off 엣지 */
             out->seek_signal    = 1u;
             out->seek_icon      = 1u;     /* on 엣지 */
@@ -59,7 +59,7 @@ void seek_reset_fsm_step(const seek_reset_in_t *in, seek_reset_out_t *out)
         if (s_elapsed < 0xFFFFu) {
             s_elapsed++;
         }
-        if (s_elapsed >= SR_TICKS) {      /* 500ms 경과 → 자동 해제 (samd20 5403-5407) */
+        if (s_elapsed >= SR_TICKS) {      /* 600ms 경과 → 자동 해제 (samd20 5403-5407) */
             out->seek_icon_off = 1u;      /* seek_signal=0 (memset), off 엣지 */
             s_state            = SR_IDLE;
             s_elapsed          = 0u;
