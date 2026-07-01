@@ -24,7 +24,7 @@
 | Stage D | ATmega16 흡수 — 레귤레이션 compute · 상태머신 · soft-start · RUN 게이트 · m1(param 주입) | `hw-revA_fw-stage-d` / `-d2` / `-d2b` |
 | Stage C | Modbus 흡수 — slice 1 RTU(USART6) + slice 2 TCP(W5500 static+DHCP) | `hw-revA_fw-stage-c1` / `-c2b` |
 | Weld-cycle | 공압 프레스 사이클 FSM 흡수 — slice 1 DELAY + slice 2 energy_ctrl exit + slice 3 multi_ctrl 2단 진폭 (host + HW-regression verified; 사이클/스테핑 자체 E2E·에너지 절대값은 6b/슬라이스4) | `hw-revA_fw-stage-weld1` / `-weld2` / `-weld3` |
-| SEEK/RESET | samd20 공진 RESET/SEEK 명령 효과 — 순수 FSM + 글루, 자동 체인(RESET→500ms→SEEK→500ms→해제) + ICON + 양방향 RUN 직교 (host + HW verified; 물리 OSC 효과는 hook stub → B-SEAM/6b) ⚠ 2026-07-02 감사: 레거시 실거동은 **600ms/leg** — SR_TICKS 50→60 충실화 결정(§1.3 D1) | `hw-revA_fw-stage-seekreset` |
+| SEEK/RESET | samd20 공진 RESET/SEEK 명령 효과 — 순수 FSM + 글루, 자동 체인(RESET→600ms→SEEK→600ms→해제) + ICON + 양방향 RUN 직교 (host + HW verified; 물리 OSC 효과는 hook stub → B-SEAM/6b) ✅ 2026-07-02 D1 완료: SR_TICKS 50→60 충실화(레거시 실거동 600ms/leg) 커밋됨 — 보드 재검증은 다음 HW 세션 | `hw-revA_fw-stage-seekreset` |
 | I2C_POT 진폭 | U4 디지털 포텐셔미터(@0x28) 실구동 — set_pot(%)/set_amp(raw) 공용 `drivers/i2c_pot.c` + 부팅 초기값 (HW ACK PASS) | `hw-revA_fw-stage-i2c-pot` |
 | OVTIME | energy 직접런 종료 쌍(에너지-도달 정상정지 + ERR_OVTIME fault) — `app_reg_tick`이 `reg_run_limits_t` 주입 구조로 변경(이후 머지의 기준) | `hw-revA_fw-stage-ovtime` |
 
@@ -53,8 +53,8 @@
 
 | # | 결정 | 실행 시점 |
 |---|------|-----------|
-| D0 | **C1**(CRITICAL, `app_lcd_input.c` dispatch `data_len<3` 가드 1줄) 즉시 단독 수정 | **다음 코딩 세션 첫 커밋** |
-| D1 | seek/reset **600ms 충실화** — `SR_TICKS` 50→60 + host 테스트 경계 갱신 (레거시 실거동 `us_reset_cnt > 5` 0-시작 100ms = 600ms/leg) | 다음 코딩 세션 |
+| D0 | ✅ **완료 2026-07-02** — **C1**(CRITICAL, `app_lcd_input.c` dispatch `data_len<3` 가드) 단독 커밋 `eabeab0`, cpp-reviewer APPROVED | ~~다음 코딩 세션 첫 커밋~~ |
+| D1 | ✅ **완료 2026-07-02** — seek/reset **600ms 충실화** `SR_TICKS` 50→60 + host 테스트 경계 갱신, 커밋 `85811fc`, cpp-reviewer APPROVED (레거시 실거동 `us_reset_cnt > 5` 0-시작 100ms = 600ms/leg) | ~~다음 코딩 세션~~ |
 | D2 | config 클램프 **M1~M4 전부 slice4 일괄** — must-fix가 LV_OUT_POWER 1개→필드군 전체(LV_DM_*/LV_TM_*/LV_MO_OUT*/LV_MAX_ON_TIME/LV_ENERGY_EDIT/LV_LIMIT_OUT_T)+FRAM comm idx 클램프+uint8 절단+limit_energy=0 하한으로 확장 | weld slice4 |
 | D3 | **H3+H2 = 'fram-i2c-robustness' 슬라이스**(fram_read_* status 전파+실패 필드 팩토리 폴백/경고, I2C1 bus-unstick+err_count 표면 배선) / **H4+IWDG는 별도 슬라이스** | 코딩 세션 (HW=검증만) |
 | D4 | weld **H1**(런중 EN_MULTI/EN_ENERGY 토글 stale 카운터) = **slice4 첫 Task로 근본수정**(WELD 진입 시 모드 래치+상태전이 카운터 리셋) | weld slice4 선결 |
@@ -83,7 +83,7 @@ make -C fw/test test                                # 5 스위트 PASS 기대 (r
 
 ### 2.2 다음 작업 후보
 
-**⚠ 2026-07-02부로 코딩 세션 작업이 존재** — 우선순위 = §1.3 결정 큐: **D0(C1 1줄)** → D1(SR_TICKS 60) → D3(fram-i2c-robustness) → D6(M7) → D5(reconcile b→d→ch1). 그 다음이 아래 HW-gated 후보(검증은 HW 세션으로).
+**⚠ 2026-07-02부로 코딩 세션 작업이 존재** — 우선순위 = §1.3 결정 큐: ~~D0(C1 1줄)~~✅ → ~~D1(SR_TICKS 60)~~✅ → **D3(fram-i2c-robustness)** → D6(M7) → D5(reconcile b→d→ch1). 그 다음이 아래 HW-gated 후보(검증은 HW 세션으로).
 
 - **weld 슬라이스4** — TRIGGER + 물리 SW_START + 센서 + 실 SOL_DN GPIO + 안전 abort + config-validation 클램프(LOW-1 LCD `app_lcd_input.c:752` 포함). 사이클/스테핑 자체 E2E도 여기. (samd20 `ref/samd20/main.c:1404-1466`)
 - **B-SEAM OSC 물리 구동** — seek/reset/weld의 실제 `CTRL_OSC*` 주파수 출력(현재 전부 hook stub). 레귤레이션 compute의 마지막 블로커. 실 초음파 rig + 스코프.

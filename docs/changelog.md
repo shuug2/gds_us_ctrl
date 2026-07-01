@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### 2026-07-02 — 감사 수정 큐 착수: D0(C1 LCD dispatch 가드) + D1(seek/reset 600ms 충실화)
+
+코딩 세션 (보드 불필요, 검증=host+빌드). 2026-07-02 전면 감사(`HANDOFF.md`)의 적용 결정 큐(§1.3 D0~D6) 중 앞 2건 완료. 두 커밋 모두 cpp-reviewer APPROVED (0 Crit/High/Med).
+
+- **D0/C1** (`eabeab0`): `app_lcd_input.c` dispatch 최상단 `data_len < 3` 가드 — 노이즈 절단 0x83 프레임의 미초기화/잔재 `data[1..2]`가 KEY_MULTI START/DATA_SAVE/LV_* 경로로 흐르는 유일 CRITICAL 경로 차단. `dgus_read_word`(dgus_lcd.c) 기존 가드 패턴 이식. 정상 1-word 프레임(data_len=3)은 무영향.
+- **D1** (`85811fc`): `SR_TICKS` 50→60 — 레거시 실거동 충실화. samd20 `us_reset_cnt++` 후 `> MAX_US_RESET_CNT(5)`, 0-시작 100ms 단위 = cnt 6 트립 = **600ms/leg**(주석 명목 500ms 아님). RESET dwell/RESET→SEEK 체인/SEEK 해제 3구간 모두. host 테스트 경계 50→60 갱신(TDD RED→GREEN).
+- 검증: 0-warning 빌드(FLASH 42.50%/RAM 16.80%) + host 6스위트 PASS. HW 재검증(LCD 터치 정상경로 + RESET→SEEK 체인 600ms 육안)은 다음 보드 세션에 동승.
+- 감사 문서 커밋(`5ca13b8`): HANDOFF.md 재작성 + NEXT_STEPS §1.3 결정 7건 신설.
+- 다음 = **D3 'fram-i2c-robustness' 슬라이스**(H3 fram status 전파 + H2 I2C1 bus-unstick, spec→plan 절차) → D6(M7) → D5(reconcile b→d→ch1).
+
 ### 2026-06-28 — i2c-pot 진폭 actuation + OVTIME energy-run 종료 HW 검증·머지 (tag `hw-revA_fw-stage-i2c-pot` / `-ovtime`)
 
 간이 벤치 HW 세션. 미머지 HW-게이트 백로그 중 벤치(패널 미연결)에서 검증 가능한 2건을 mbpoll/단발-정적-SWD로 검증 후 `--no-ff` 머지. SWD halt 금지 규칙 준수(런타임=mbpoll/LCD만).
