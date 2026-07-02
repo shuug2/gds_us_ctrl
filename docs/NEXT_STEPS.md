@@ -56,7 +56,7 @@
 | D0 | ✅ **완료 2026-07-02** — **C1**(CRITICAL, `app_lcd_input.c` dispatch `data_len<3` 가드) 단독 커밋 `eabeab0`, cpp-reviewer APPROVED | ~~다음 코딩 세션 첫 커밋~~ |
 | D1 | ✅ **완료 2026-07-02** — seek/reset **600ms 충실화** `SR_TICKS` 50→60 + host 테스트 경계 갱신, 커밋 `85811fc`, cpp-reviewer APPROVED (레거시 실거동 `us_reset_cnt > 5` 0-시작 100ms = 600ms/leg) | ~~다음 코딩 세션~~ |
 | D2 | config 클램프 **M1~M4 전부 slice4 일괄** — must-fix가 LV_OUT_POWER 1개→필드군 전체(LV_DM_*/LV_TM_*/LV_MO_OUT*/LV_MAX_ON_TIME/LV_ENERGY_EDIT/LV_LIMIT_OUT_T)+FRAM comm idx 클램프+uint8 절단+limit_energy=0 하한으로 확장 | weld slice4 |
-| D3 | **H3+H2 = 'fram-i2c-robustness' 슬라이스**(fram_read_* status 전파+실패 필드 팩토리 폴백/경고, I2C1 bus-unstick+err_count 표면 배선) / **H4+IWDG는 별도 슬라이스** | 코딩 세션 (HW=검증만) |
+| D3 | **H3+H2 = 'fram-i2c-robustness' 슬라이스**(fram_read_* status 전파+실패 필드 팩토리 폴백/경고, I2C1 bus-unstick+err_count 표면 배선) / **H4+IWDG는 별도 슬라이스** — 📐 **spec 완료 2026-07-02**(`docs/superpowers/specs/2026-07-02-fram-i2c-robustness-design.md`; 확정: 경고=mon만·unstick=init 1회·write 무변경·INIT_FLAG 읽기실패=factory-write 금지). 다음=writing-plans→subagent-driven | 코딩 세션 (HW=검증만) |
 | D4 | weld **H1**(런중 EN_MULTI/EN_ENERGY 토글 stale 카운터) = **slice4 첫 Task로 근본수정**(WELD 진입 시 모드 래치+상태전이 카운터 리셋) | weld slice4 선결 |
 | D5 | 미머지 통합 = **코딩 세션에서 reconcile 선행**(각 브랜치→현 main rebase+`app_reg_tick` 시그니처 semantic 통합+board.c 병합, 빌드+host PASS까지), 순서 **b→d→ch1**(b=독립·최고령, d가 a·c 포함). **머지/태그는 HW 검증 후**(기존 정책 유지) | 코딩 세션 + HW 세션 분리 |
 | D6 | Modbus/ETH 중 **M7만 먼저**(LCD static IP 저장→가동 중 W5500 즉시 반영 경로), M6/M8/M9는 **HMI 착수 시 'modbus-tcp-hardening'** | M7=코딩 세션 / 나머지=HMI 트리거 |

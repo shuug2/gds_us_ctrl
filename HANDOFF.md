@@ -23,9 +23,9 @@
 ## Not Yet Done (수정 백로그 — **2026-07-02 사용자 결정 D0~D6 반영, 정본 = `docs/NEXT_STEPS.md` §1.3**)
 
 다음 코딩 세션 실행 순서 (전부 HW 불필요, 검증만 보드):
-- [ ] **D0** C1 즉시 단독 커밋: `app_lcd_input.c:667-682` dispatch 최상단 `if (f->data_len < 3) return;` 1줄 (dgus_read_word `dgus_lcd.c:298` 패턴 재사용) + host 회귀 + 0-warning
-- [ ] **D1** seek/reset 600ms 충실화: `SR_TICKS` 50→60 (`app_seek_reset_fsm.h:15`) + host 테스트 경계값 갱신 (근거: 레거시 `us_reset_cnt++` 후 `> 5`, 0-시작·100ms = 600ms/leg)
-- [ ] **D3** 'fram-i2c-robustness' 슬라이스 (spec→plan 절차): H3 `fram_read_*` status 전파 + `app_config_load` 실패 필드 팩토리 폴백/경고 · H2 I2C1 bus-unstick(SCL 9클럭) + `i2c1_err_count()` 표면 배선
+- [x] **D0** ✅ 완료 2026-07-02 (`eabeab0`, cpp-reviewer APPROVED): `app_lcd_input.c` dispatch `data_len<3` 가드
+- [x] **D1** ✅ 완료 2026-07-02 (`85811fc`, cpp-reviewer APPROVED): `SR_TICKS` 50→60 + host 테스트 경계 갱신
+- [ ] **D3** 'fram-i2c-robustness' 슬라이스 — 📐 **spec 완료 2026-07-02** (`docs/superpowers/specs/2026-07-02-fram-i2c-robustness-design.md`): H3 `fram_read_*` bool(addr,*out) 전파 + defaults 선적용-덮어쓰기 로드 + **INIT_FLAG 읽기실패=factory-write 금지**(데이터손실 경로 차단) · H2 init 1회 SCL 9클럭 unstick + mon 표면(부팅 [cfg] 확장+1s err 델타). host=mock-fram 신규 스위트 test_app_config 6시나리오. **다음 = writing-plans → subagent-driven 구현**
 - [ ] **D6** M7: LCD static IP 저장→가동 중 W5500 즉시 반영 경로 (`app_lcd.c:54-61` hook stub → app_eth 재적용 API, 소규모 설계 필요)
 - [ ] **D5** reconcile 선행 (b→d→ch1): 각 브랜치→현 main rebase + `app_reg_tick` 3-way 시그니처 semantic 통합 + board.c 병합, 빌드+host PASS까지. **머지/태그는 HW 검증 후**
 - [ ] stale 주석 동승 정정: `app_reg.h:42` "no-op" / `app_modbus.c:105,109` / `fw/test/Makefile:1-3` — 해당 파일 첫 코드 커밋에 포함
