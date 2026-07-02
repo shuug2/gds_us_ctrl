@@ -10,6 +10,7 @@
  */
 #pragma once
 #include <stdint.h>
+#include <stdbool.h>
 
 #define FRAM_I2C_ADDR_7B       0x50u
 #define FRAM_INIT_FLAG_MAGIC   0xAAu
@@ -45,9 +46,11 @@
 #define FRAM_ADDR_ETHER_NM     49   /* 4B */
 #define FRAM_ADDR_ETHER_GW     53   /* 4B */
 
-uint8_t  fram_read_byte(uint8_t addr);
-uint16_t fram_read_u16 (uint8_t addr);   /* big-endian */
-uint32_t fram_read_u32 (uint8_t addr);   /* big-endian */
+/* Reads return true on success; on failure *out is left untouched so a caller
+ * that pre-loads defaults keeps them (감사 H3: silent-0 load 제거). */
+bool fram_read_byte(uint8_t addr, uint8_t  *out);
+bool fram_read_u16 (uint8_t addr, uint16_t *out);   /* big-endian */
+bool fram_read_u32 (uint8_t addr, uint32_t *out);   /* big-endian */
 void     fram_write_byte(uint8_t addr, uint8_t  v);
 void     fram_write_u16 (uint8_t addr, uint16_t v);   /* big-endian */
 void     fram_write_u32 (uint8_t addr, uint32_t v);   /* big-endian */

@@ -23,10 +23,18 @@ typedef struct {
     uint8_t  ether_ip[4], ether_nm[4], ether_gw[4];
 } app_config_t;
 
-/* Read config from FRAM; if INIT_FLAG != 0xAA, write full factory defaults first. */
-void app_config_load(app_config_t *cfg);
+/* Load config from FRAM. Factory defaults are pre-applied; each field is only
+ * overwritten by a successful read (감사 H3 폴백).
+ * Returns: 0 = clean / 1..38 = failed-read count (those fields run on
+ * defaults) / 0xFF = INIT_FLAG itself unreadable → FRAM left UNTOUCHED
+ * (no factory-write: a transient bus fault must not wipe a good FRAM),
+ * all fields on defaults. */
+uint8_t app_config_load(app_config_t *cfg);
 
-/* Write the full samd20 default map to FRAM and fill cfg with the same values. */
+/* Fill *cfg with factory defaults. RAM only — never touches FRAM. */
+void app_config_factory_defaults(app_config_t *cfg);
+
+/* factory defaults + persist full map (save_all). */
 void app_config_factory_write(app_config_t *cfg);
 
 /* Commit the full live config map to FRAM (DATA_SAVE). FRAM has no write-cycle

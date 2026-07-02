@@ -2,26 +2,35 @@
 #include "fram.h"
 #include "i2c1.h"
 
-uint8_t fram_read_byte(uint8_t addr)
+bool fram_read_byte(uint8_t addr, uint8_t *out)
 {
-    uint8_t b = 0;
-    i2c1_mem_read(FRAM_I2C_ADDR_7B, addr, &b, 1);
-    return b;
+    uint8_t b;
+    if (i2c1_mem_read(FRAM_I2C_ADDR_7B, addr, &b, 1) != HAL_OK) {
+        return false;
+    }
+    *out = b;
+    return true;
 }
 
-uint16_t fram_read_u16(uint8_t addr)
+bool fram_read_u16(uint8_t addr, uint16_t *out)
 {
-    uint8_t b[2] = {0};
-    i2c1_mem_read(FRAM_I2C_ADDR_7B, addr, b, 2);
-    return (uint16_t)(((uint16_t)b[0] << 8) | (uint16_t)b[1]);
+    uint8_t b[2];
+    if (i2c1_mem_read(FRAM_I2C_ADDR_7B, addr, b, 2) != HAL_OK) {
+        return false;
+    }
+    *out = (uint16_t)(((uint16_t)b[0] << 8) | (uint16_t)b[1]);
+    return true;
 }
 
-uint32_t fram_read_u32(uint8_t addr)
+bool fram_read_u32(uint8_t addr, uint32_t *out)
 {
-    uint8_t b[4] = {0};
-    i2c1_mem_read(FRAM_I2C_ADDR_7B, addr, b, 4);
-    return ((uint32_t)b[0] << 24) | ((uint32_t)b[1] << 16)
+    uint8_t b[4];
+    if (i2c1_mem_read(FRAM_I2C_ADDR_7B, addr, b, 4) != HAL_OK) {
+        return false;
+    }
+    *out = ((uint32_t)b[0] << 24) | ((uint32_t)b[1] << 16)
          | ((uint32_t)b[2] <<  8) |  (uint32_t)b[3];
+    return true;
 }
 
 void fram_write_byte(uint8_t addr, uint8_t v)
