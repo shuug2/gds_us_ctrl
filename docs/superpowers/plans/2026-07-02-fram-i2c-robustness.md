@@ -738,7 +738,7 @@ mon 부팅 로그가 소비(후속 커밋). 런타임 재시도 없음(사용자
     }
 ```
 
-(⚠ `sys_tick_get_ms`/`mon_printf`는 app.c에서 기존 사용 중 — include 추가 불요. 델타 산술은 uint16 랩에도 안전: `e - s_i2c_err_last`는 uint16 모듈로.)
+(⚠ `sys_tick_get_ms`/`mon_printf`는 app.c에서 기존 사용 중 — include 추가 불요. ~~델타 산술은 uint16 랩에도 안전~~ **정정(최종 리뷰)**: uint16 피연산자는 int로 승격되므로 랩 시 `(unsigned)(e - s_i2c_err_last)`는 거대값 오출력 — 모듈로 안전하지 않음. 로그 전용·65536+ 오류 후에만 발생, 절대값 `err=%u`는 항상 정확 → defer. 수정 시 `(unsigned)(uint16_t)(e - s_i2c_err_last)`.)
 
 - [ ] **Step 3: 타깃 빌드 + host 회귀**
 
