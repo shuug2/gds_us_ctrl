@@ -12,3 +12,7 @@ HAL_StatusTypeDef i2c1_mem_read (uint8_t dev7, uint8_t mem_addr, uint8_t *buf, u
 HAL_StatusTypeDef i2c1_mem_write(uint8_t dev7, uint8_t mem_addr, const uint8_t *buf, uint16_t n);
 
 uint16_t i2c1_err_count(void);   /* non-OK transfer count (observability) */
+
+/* Boot bus-unstick result (감사 H2; init 시 1회만 시도 — 사용자 확정):
+ * 0 = bus clean, 1..9 = SCL clocks used to recover, 0xFF = recovery failed. */
+uint8_t i2c1_unstick_events(void);
