@@ -12,6 +12,7 @@
 #include "app_seek_reset.h"
 #include "app_modbus.h"
 #include "app_eth.h"
+#include "i2c1.h"    /* i2c1_err_count / i2c1_unstick_events — 부팅·1s 관측 로그 */
 
 void app_init(void)
 {
@@ -40,7 +41,7 @@ void app_init(void)
     dgus_set_page(LCD_LOGO);          /* page 0 — logo */
     sys_tick_delay_ms(DGUS_LOGO_DWELL_MS);
 
-    app_config_load(cfg);             /* FRAM read; factory-write on blank (0xAA flag) */
+    uint8_t cfg_fail = app_config_load(cfg);  /* FRAM read; factory-write on blank (0xAA flag) */
     app_lcd_hook_set_pot(cfg->output_power);  /* 부팅 초기 진폭 1회 (samd20 main.c:910) */
     app_lcd_init_mode(cfg);           /* model str + VP pre-fill + set_page(run) */
 
@@ -53,6 +54,15 @@ void app_init(void)
                (unsigned)cfg->model_freq, (unsigned)cfg->model_type,
                (unsigned long)cfg->work_cnt, (unsigned long)cfg->limit_energy,
                (unsigned)cfg->energy_ctrl, (unsigned)cfg->multi_ctrl);
+
+    mon_printf("[cfg] fram_fail=%u unstick=%u i2c_err=%u\r\n",
+               (unsigned)cfg_fail, (unsigned)i2c1_unstick_events(),
+               (unsigned)i2c1_err_count());
+    if (cfg_fail == 0xFFu) {
+        mon_writeln("[cfg] WARN: FRAM unreadable - ALL defaults, FRAM untouched");
+    } else if (cfg_fail != 0u) {
+        mon_printf("[cfg] WARN: defaults active for %u field(s)\r\n", (unsigned)cfg_fail);
+    }
 
 #ifdef LCD_TRACE_RX
     mon_printf("[lcd] boot cm=%u ip=%u.%u.%u.%u\r\n", (unsigned)cfg->comm_mode,
@@ -110,4 +120,21 @@ void app_loop_iter(void)
     /* 5. Modbus slave — occupancy re-eval + one RTU/TCP frame per iter (spec §2).
      * After app_reg_tick so the mirror sees this iter's freshest measure. */
     app_modbus_tick();
+
+    /* 6. I2C1 관측 — 1 s cadence, err_count 델타 시에만 mon 1줄 (감사 H2 표면;
+     * mon 전용 = 사용자 확정. save_all/POT write 실패 런타임 관측용). */
+    {
+        static uint32_t s_i2c_chk_ms;
+        static uint16_t s_i2c_err_last;
+        uint32_t now_ms = sys_tick_get_ms();
+        if ((uint32_t)(now_ms - s_i2c_chk_ms) >= 1000u) {
+            s_i2c_chk_ms = now_ms;
+            uint16_t e = i2c1_err_count();
+            if (e != s_i2c_err_last) {
+                mon_printf("[i2c] err=%u (+%u)\r\n",
+                           (unsigned)e, (unsigned)(e - s_i2c_err_last));
+                s_i2c_err_last = e;
+            }
+        }
+    }
 }
