@@ -1,127 +1,111 @@
-# Handoff: 전면 감사 세션 — 포팅 충실성 + 코드 품질 리뷰 (수정 0건, 보고만)
+# Handoff: 감사 수정 큐 실행 — D0+D1 main 커밋 + D3 'fram-i2c-robustness' CODE-COMPLETE
 
-**Generated**: 2026-07-02
-**Branch**: `main` (`4fcf7e8`, == origin/main — **push 완료 상태**, 이전 handoff의 "push 미완"은 stale이었음)
-**Status**: 감사 완료 / 수정 미착수 — 다음 세션 = 아래 발견 수정 작업
+**Generated**: 2026-07-02 (c 세션 마감)
+**Branch**: `main` (`c5b7ad3`, origin+8 — **push 미완, 사람 SSH**) + 미머지 **`feat/fram-i2c-robustness`** (`46a9b20`, BASE `46b596f`, 4커밋)
+**Status**: D0·D1·D3 코드 완료 / **다음 = D3 HW 회귀 → 머지·태그** → D6(M7) → D5(reconcile)
 
-> **요약**: 이번 세션은 READ-ONLY 전면 감사 2종. ① 프로젝트 상태·레거시 포팅 충실성·미머지 브랜치 감사 → 레거시 실거동과 어긋나는 코드 2건 + 이전 handoff 문서의 사실 오류 4건 발견. ② main 전체 코드 품질 리뷰(영역별 cpp-reviewer 4개) → **CRITICAL 1 + HIGH 4 + MEDIUM 9 + LOW 5** 발견. 코드/문서 수정 일절 없음. 이 문서가 수정 백로그의 단일 진입점.
-
----
+> **요약**: 2026-07-02 감사 결정 큐(D0~D6, 정본=`docs/NEXT_STEPS.md` §1.3) 실행 세션.
+> ① **D0**(C1 CRITICAL, LCD dispatch `data_len<3` 가드)·**D1**(seek/reset 600ms 충실화 SR_TICKS 60) → main 직접 커밋, 각각 cpp-reviewer APPROVED.
+> ② **D3**(감사 H3+H2) → spec→plan→subagent-driven 4 Task 전부 구현, Task별 2단계 리뷰 + **최종 whole-branch opus 리뷰 CODE-COMPLETE 승인(0 Crit/0 Imp)**. 브랜치 미머지 = HW 회귀 게이트(기존 정책).
+> 모든 게이트 GREEN: host 7스위트(신규 `test_app_config`) PASS + our-code 0-warning(FLASH 43.20%/RAM 16.82%).
 
 ## Goal
 
-사용자 요청: ① 프로젝트 진행정도·남은작업·잘못된 내용 비판 보고 ② main 코드 품질 전면 리뷰. 둘 다 보고만, 수정 금지.
+감사(2026-07-02)에서 확정된 수정 결정 큐를 순서대로 실행: D0(C1) → D1 → D3 슬라이스. D3는 위험한 축(FRAM 읽기 실패 침묵 + I2C 버스 stuck 무복구)의 견고화.
 
 ## Completed
 
-- [x] 진행도 확인: 코딩 가능 스테이지 전부 main 머지 완료(태그 14개), host 6스위트 실재, main==origin 동기
-- [x] 레거시 포팅 충실성 감사 (samd20 + atmega16, 현존 disasm 재검증 포함)
-- [x] 미머지 브랜치 5개 divergence 감사 (merge-tree 실측)
-- [x] main 전체 코드 품질 리뷰 (코어FSM / LCD / Modbus·ETH / 플랫폼·드라이버 4영역)
-- [x] HANDOFF + 메모리 기록 (이 문서)
+- [x] **D0** (`eabeab0`, main): `app_lcd_input.c` dispatch 최상단 `if (f->data_len < 3u) return;` — EMI 절단 프레임의 미초기화 `data[1..2]`→KEY_MULTI START 유입 차단. 리뷰어가 `dgus_frame_t.data_len` 정의(dgus_lcd.h:150, 페이로드만 = LEN-3)부터 추적해 임계값 3의 필요충분성 확인.
+- [x] **D1** (`85811fc`, main): `SR_TICKS` 50→60 (600ms/leg, 레거시 실거동 `us_reset_cnt++` 후 `>5` 0-시작 100ms). host 테스트 경계 50→60 TDD(RED 16 FAIL→GREEN).
+- [x] **D3 spec** (`cc8b4e5`) + **plan** (`46b596f`): `docs/superpowers/specs|plans/2026-07-02-fram-i2c-robustness*.md`
+- [x] **D3 구현** (브랜치 `feat/fram-i2c-robustness`, 4커밋):
+  - `8b3c44a` **H3**: `fram_read_*`→`bool(addr,*out)`(실패 시 *out 미기록) + `app_config_load` 기본값 선적용-덮어쓰기(반환 0/1..38/0xFF) + **INIT_FLAG 읽기실패=factory-write 금지** + host 신규 스위트 `test_app_config`(mock-fram link 치환, 6시나리오) + test/Makefile stale 주석 정정 동승
+  - `52f934c` **H2**: `i2c1_init` HAL init 전 프리플라이트 — SDA stuck 시 SCL(PB6) GPIO-OD 9클럭+STOP, `i2c1_unstick_events()`(0/1..9/0xFF). busy-loop 지연(sys_tick 미기동 시점)
+  - `528b7df` mon 표면: 부팅 `[cfg] fram_fail=%u unstick=%u i2c_err=%u`+WARN 줄, 루프 1s cadence err 델타 `[i2c] err=%u (+%u)`
+  - `46a9b20` docs(changelog/NEXT_STEPS CODE-COMPLETE)
+- [x] Task별 리뷰 4/4 Spec✅ Approved + **최종 opus 리뷰: Ready-to-merge Yes(CODE-COMPLETE), 0 Critical/0 Important**
+- [x] 문서/장부: RESUME.md(2026-07-02 c), changelog, NEXT_STEPS §1.3, SDD ledger(`.superpowers/sdd/progress.md`), 메모리 `project-audit-2026-07`, plan 오류 주장 정정(`c5b7ad3`)
 
-## Not Yet Done (수정 백로그 — **2026-07-02 사용자 결정 D0~D6 반영, 정본 = `docs/NEXT_STEPS.md` §1.3**)
+## Not Yet Done
 
-다음 코딩 세션 실행 순서 (전부 HW 불필요, 검증만 보드):
-- [x] **D0** ✅ 완료 2026-07-02 (`eabeab0`, cpp-reviewer APPROVED): `app_lcd_input.c` dispatch `data_len<3` 가드
-- [x] **D1** ✅ 완료 2026-07-02 (`85811fc`, cpp-reviewer APPROVED): `SR_TICKS` 50→60 + host 테스트 경계 갱신
-- [ ] **D3** 'fram-i2c-robustness' 슬라이스 — 📐 **spec 완료 2026-07-02** (`docs/superpowers/specs/2026-07-02-fram-i2c-robustness-design.md`): H3 `fram_read_*` bool(addr,*out) 전파 + defaults 선적용-덮어쓰기 로드 + **INIT_FLAG 읽기실패=factory-write 금지**(데이터손실 경로 차단) · H2 init 1회 SCL 9클럭 unstick + mon 표면(부팅 [cfg] 확장+1s err 델타). host=mock-fram 신규 스위트 test_app_config 6시나리오. **다음 = writing-plans → subagent-driven 구현**
-- [ ] **D6** M7: LCD static IP 저장→가동 중 W5500 즉시 반영 경로 (`app_lcd.c:54-61` hook stub → app_eth 재적용 API, 소규모 설계 필요)
-- [ ] **D5** reconcile 선행 (b→d→ch1): 각 브랜치→현 main rebase + `app_reg_tick` 3-way 시그니처 semantic 통합 + board.c 병합, 빌드+host PASS까지. **머지/태그는 HW 검증 후**
-- [ ] stale 주석 동승 정정: `app_reg.h:42` "no-op" / `app_modbus.c:105,109` / `fw/test/Makefile:1-3` — 해당 파일 첫 코드 커밋에 포함
-
-스테이지 게이트 (결정 반영):
-- [ ] **D4** weld slice4 **첫 Task = H1 근본수정**(WELD 진입 시 모드 래치 + 상태전이 카운터 리셋, `app_weld_fsm.c:111-161`)
-- [ ] **D2** slice4 must-fix = **M1~M4 전체**(LV_* 필드군 클램프 + FRAM comm idx 클램프 + `app_weld.c:64-81` uint8 절단 + limit_energy=0 하한) — OUT_POWER 1개에서 확장
-- [ ] H4+IWDG 별도 슬라이스 (ADC 영구 lock 정책은 IWDG와 함께 재검토)
-- [ ] M6/M8/M9 = HMI 착수 시 'modbus-tcp-hardening'
-- [ ] 기존 HW-gated 계속: B-SEAM(잔여=SEEK/RESET 2선+극성), 6b, overload — `docs/NEXT_STEPS.md` §1.2
+- [ ] **D3 HW 회귀** (다음 보드 세션, plan 말미 체크리스트 — 코드 변경 없이 검증만):
+  1. 브랜치 checkout → **cmake reconfigure**(`env -u STM32_TOOLCHAIN cmake -S fw -B fw/build -G Ninja`, GLOB 규칙) → 빌드 → 플래시
+  2. 정상 부팅: LCD 값 육안(output_power 등 저장값 유지 = 폴백 미발동)
+  3. mon 확인(LCD에서 addr=NONE으로 USART6 해방 필요): `[cfg] fram_fail=0 unstick=0 i2c_err=0`
+  4. mbpoll 직접런 ceiling 무회귀(STATUS 1×N→0) — ⚠ addr 되돌린 후
+  5. LCD 설정 저장→재부팅 리로드 정상
+  6. **D0/D1 재검증 동승**: LCD 터치 정상경로 + RESET→SEEK 체인 600ms 육안(ICON)
+- [ ] PASS 시: main 머지 `--no-ff` + tag `hw-revA_fw-stage-fram-robust` + 브랜치 삭제 + push
+- [ ] **D6** M7: LCD static IP 저장→가동 중 W5500 즉시 반영 (`app_lcd.c:54-61` hook stub → app_eth 재적용 API, 소규모 설계)
+- [ ] **D5** reconcile 선행 b→d→ch1 (`app_reg_tick` 3-way semantic 통합 + board.c 병합; 머지는 HW 후)
+- [ ] 나머지 백로그: D2/D4(weld slice4), H4+IWDG 별도 슬라이스, HW-gated(B-SEAM/6b/overload) — `docs/NEXT_STEPS.md` §1.2/§1.3
 
 ## Failed Approaches (Don't Repeat These)
 
-- 없음 (READ-ONLY 세션). 단 리뷰 에이전트 1개가 스트림 오류로 최종 출력 유실 → SendMessage 재개로 복구(재실행 불필요했음).
-
-## 감사 발견 ① — 레거시/문서 대조 (2026-07-02)
-
-**코드가 레거시 실거동과 어긋남**:
-1. **seek/reset 600ms vs 500ms off-by-one**: 레거시 `us_reset_cnt++` 후 `> MAX_US_RESET_CNT(5)`, 0-시작 100ms 단위(`ref/samd20/main.c:5388-5409`, `:118`) = cnt 6에서 트립 = **600ms/leg**. fw `s_elapsed >= SR_TICKS(50)` @10ms = **500ms/leg**(`app_seek_reset_fsm.c:44-47`). 레거시 주석 `// x 100mS` *의도*(500ms)엔 맞고 *코드 실거동*(600ms)엔 불충실. 3구간(RESET dwell/RESET→SEEK/SEEK해제) 전부. 충실화=SR_TICKS≈60. **수정 여부 사용자 결정**(실 rig에서 100ms dwell 유의미성).
-2. **limit_out_time=0 이중 처리**: `reg_energy_termination`=즉시 OVTIME(레거시 충실) vs `weld_backstop_ticks`(`app_weld_fsm.c:40-42`)=1s floor(레거시 이탈). 두 에너지-종료 경로 0-핸들링 상반.
-
-**이전 handoff(2026-06-28 d)의 사실 오류 — 이 문서로 대체**:
-3. ~~"main cffeaaf board.c == slice-d 8006e9c byte-identical"~~ → **거짓**(blob 상이, 47줄 차이). OSC 전기설정(OD/active-LOW/PB2|PB10|PB14) *부분만* 동일. slice-d=superset(heartbeat 제거+board_osc4/reset/seek 추가)은 맞음 → **board.c는 slice-d 머지 시 충돌 확정**.
-4. ~~"OSC 명령 제어 seek/reset/RUN 전부 미구현"~~ → **부분 오류**. SEEK→PB2/RESET→PB10 런타임=stub 맞음. **RUN→PB14(board_osc4)는 slice-d에서 실배선**(slice-d `app_reg.c:260` `app_reg_hook_us_output` 실호출). B-SEAM 잔여=SEEK/RESET 2선+극성/스코프 검증.
-5. ~~"main ahead origin, push 미완"~~ → main==origin/main==4fcf7e8.
-6. ~~"physical-io a→b→c→d 스택"~~ → 실측 ancestry: **a ⊂ c ⊂ d 체인 + b는 독립**(2026-06-21, 최고령 standalone — 방치위험 1순위). 실질 통합 단위=**{d, b, output-power-graph-ch1} 3개뿐**(a/c는 d에 포함, 개별 머지 불필요).
-
-**미머지 통합 충돌 실측**(merge-tree): 3단위 모두 `app_reg.c/h`+`app.c` 충돌. **app_reg_tick 시그니처 3-way 분기**: main(`const reg_run_limits_t*`) vs slice-d(`uint16_t limit_on_time, uint8_t model_type`) vs ch1(`uint16_t limit_on_time, int16_t cal_val`) — 텍스트 병합 불가, semantic reconcile 필수. 순차 머지 시 매번 재충돌 → 선머지 기준 rebase.
-
-**문서 남은작업 누락(안전)**: 물리 ESTOP(slice-d에 구현돼 있으나 §1.2에 연결 미기재)·부저(slice-a에 있음, 동일)·f_safty CYL1 abort 강제(config만 포팅)·SYS_HORN 실동작. 미해소 잔여: PC1 3자 충돌, PB12(OSC2) 방향, 레거시 blink-phase/PA4 display-period 폐기 미기록. provenance: regulation-core 문서 인용 `ref/atmega16/M16_reverse/out/*` repo 부재(사실은 현존 `m16_disasm/firmware_disassembled.asm`으로 재검증 완료 — 유효).
-
-## 감사 발견 ② — 코드 품질 리뷰 (main, 4영역)
-
-### CRITICAL
-- **C1** `app_lcd_input.c:667-682`: dispatch가 `data_len` 미검증으로 `f->data[1..2]`(미초기화 스택/직전 프레임 잔재) 사용 → 노이즈 프레임(LEN=4)이 KEY_MULTI START/DATA_SAVE/LV_* 로 흐를 수 있음. 정상 프로토콜에선 불발, **EMI 깨진 프레임에서만** — 초음파 용접기라 노이즈 전제. 가드 패턴은 `dgus_lcd.c:298`에 이미 존재(이식 누락).
-
-### HIGH
-- **H1** `app_weld_fsm.c:111-161`: 런중 EN_MULTI/EN_ENERGY 토글 시 stale `s_multi_stage/s_multi_elapsed`/`s_temp_time` 오판 → 조기 종료/FAULT abort. 현재 weld dormant라 잠복 — **slice4 전 필수**.
-- **H2** `i2c1.c:47-65`: 버스 stuck 복구 전무(FRAM+POT 공유 → 동반 마비, save_all 최대 ~1.5s 루프 정지) + `i2c1_err_count()` 소비처 0(죽은 observability).
-- **H3** `fram.c:5-25`+`app_config.c:79-122`: read 실패 무시 → 필드 조용히 0 로드(limit_on_time=0/limit_out_time=0→즉시OVTIME/output_power=0). 전체 고장은 factory reset로 안전, **부분 실패가 최위험**.
-- **H4** `adc1.c:34-52`: 폴링 실패=무조건 `Error_Handler()`(`irq.c:17` `__disable_irq;while(1)`) 영구 lock, IWDG 부재. 의도된 트레이드오프(주석 有)이나 백스톱 없음. `HAL_ADC_Stop` 반환 무시=지연-치명 전이 가능. B-SEAM 배선 시 재평가 필수(현재는 OSC 미구동이라 "출력 켜진 채 고착" 불가).
-
-### MEDIUM (9)
-- M1 `app_reg_calc.c:63-76`: `limit_energy=0`+energy_ctrl → START 즉시 무증상 "정상완료"(하한 가드 없음)
-- M2 `app_weld.c:64-81`: `limit_mo_out1/2` uint16→uint8 무검증 절단(LCD 무클램프와 결합: 300→44→진폭0 silent)
-- M3 `app_lcd_render.c:144,179`+`app_config.c:111-113`: FRAM 로드 comm_speed_idx/parity_idx 무클램프 배열 인덱스 → OOB flash read(터치 경로엔 가드 有=비대칭)
-- M4 `app_lcd_input.c:710-762`: LV_* 필드군 LCD 터치 무클램프(레거시 유래 — slice4 must-fix를 OUT_POWER 1개→필드군 전체로 확장)
-- M5 `fram.h`: 레이아웃 버전 필드 부재(INIT_FLAG는 초기화 여부만) — M3와 결합 시 실질 위험
-- M6 `app_modbus_tcp.c:42-59`: coalesced/파이프라인 TCP 프레임 2번째 요청 폐기(mbpoll 무관, SCADA류 간헐 타임아웃)
-- M7 `app_lcd.c:54-61`+`app_eth.c:204-207`: static IP 변경·저장이 가동 중 W5500 미반영(재부팅/링크 재협상 필요)
-- M8 `app_modbus.c:239-286`: ETH→SERIAL 전환 시 TCP 소켓 미정리(ESTABLISHED 방치)
-- M9 `app_modbus_tcp.c:29,35,66`: blocking 소켓+send/disconnect 반환 무시, CLOSE_WAIT `disconnect()` 최대 ~1.6s 루프 블로킹
-
-### LOW (5)
-`weld_backstop_ticks` 폭 확장 부재(주석 "≤10"이 LCD 실상 255와 불일치, 현재 우연히 안전) / `usart1.h` 주석 폐기된 IT 모델 서술(실제 DMA circular) / `_sbrk` 힙-스택 미검사(힙 미사용) / `energy2str` 정확히 100000에서 자릿수 1개 누락(레거시 verbatim) / ether 필드 미선택 숫자키→VP 0x2460 오발신(UX)
-
-### 결함 없음 확인
-Modbus 코어 경계/CRC(samd20 unbounded write는 포팅 때 수정됨)·RTU DMA 링버퍼·MBAP 검증 체인·부팅 init 순서·ISR 공유변수(단일 writer 32bit)·tick 32bit 랩 안전·seek/reset FSM 전이/직교·DGUS 파서 자체 경계·TX 빌더.
+- 코드 차원 실패 없음(전 Task 1회 통과). 절차 노트 2건:
+  - **인프라 장애**: 세션 중 safety classifier(claude-opus-4-8) 일시 다운으로 컨트롤러의 Bash/Agent 파견이 수 분간 차단됨(read-only 도구는 가용). 서브에이전트 내부 도구는 정상이었음 → 리뷰어에게 diff를 직접 git으로 뜨게 지시해 우회. 재발 시 같은 우회 유효.
+  - plan의 "델타 산술 uint16 모듈로 안전" 주장은 **오류**였음(int 승격) — 구현자가 자가 발견, plan 문서 정정 완료(`c5b7ad3`). plan 코드를 검증 없이 신뢰하지 말 것.
 
 ## Key Decisions
 
 | Decision | Rationale |
 |----------|-----------|
-| 수정 0건, 보고만 | 사용자 명시 지시 ×2 |
-| C1을 유일 CRITICAL로 | 미초기화 데이터가 START 명령으로 흐를 수 있는 유일 경로, EMI 환경 전제 |
-| seek/reset off-by-one은 수정 아닌 결정사항 | 레거시 "주석 의도 500ms vs 코드 실거동 600ms" 중 무엇에 충실할지는 실 rig 판단 필요 |
-| H1은 slice4 게이트로 | 현재 dormant(트리거 미연결)라 실기 위험 0, 물리 트리거 연결이 활성화 조건 |
+| INIT_FLAG **읽기실패**(0xFF) ≠ 빈 FRAM — factory-write 금지 | 일시 버스 오류가 정상 FRAM 전체를 팩토리로 덮어쓰는 현행 데이터손실 경로 차단(설계 핵심). 최종 리뷰: LCD 롤백 경로(`app_lcd_input.c:626`)의 동일 위험도 함께 차단됨 |
+| 경고 표면 = **mon 전용** | 사용자 확정. LCD_WARNING/Modbus bit 없음 → HMI 레지스터 계약 불변 |
+| unstick = **init 1회만** | 사용자 확정. superloop 중 버스 재초기화 개입 리스크 회피 |
+| `fram_write_*` 무변경(best-effort) | 사용자 확정. 관측은 err_count/mon |
+| D3 머지 = HW 회귀 후 | 부팅 경로 변경이라 기존 슬라이스 정책 유지 |
+| 델타 랩 오출력 등 Minor 전건 defer | 최종 리뷰 판정: 로그 전용/65536+ 오류 조건/자가복구. 수정 시 `(unsigned)(uint16_t)(e - s_i2c_err_last)` |
 
 ## Current State
 
-**Working**: main 빌드/host 전제 무변경(이 세션 코드 무수정). 보드=ovtime fw, SERIAL/addr=1/9600/EVEN.
-**Broken**: 없음 (발견들은 잠복/경계 결함).
+**Working**: main(`c5b7ad3`) = D0+D1 포함, host 6스위트+0-warning. 브랜치 = host 7스위트+0-warning. 보드 = 2026-06-28 ovtime fw 적재 상태 그대로(이번 세션 보드 무접촉), SERIAL/addr=1/9600/EVEN.
+**Broken**: 없음.
 **Uncommitted**: `?? ref/signal/`(Saleae 캡처, 의도적 미추적)만.
+**Push**: main이 origin보다 **8커밋 ahead** — 사람이 SSH로 push.
 
 ## Files to Know
 
 | File | Why It Matters |
 |------|----------------|
-| `fw/src/app_lcd_input.c:667-682` | C1 수정 지점(1줄) + M4 클램프 필드군 |
-| `fw/drivers/fram.c` + `fw/src/app_config.c` | H3 — status 전파 리팩터 지점 |
-| `fw/drivers/i2c1.c` | H2 — bus recovery + err_count 표면 |
-| `fw/src/app_weld_fsm.c:111-161` | H1 — slice4 전 필수 |
-| `fw/src/app_seek_reset_fsm.c:44-47` + `ref/samd20/main.c:5388-5409` | off-by-one 양쪽 근거 |
-| `docs/NEXT_STEPS.md` | §1.1 표에 i2c-pot/ovtime 누락 등 정정 대상 |
+| `docs/superpowers/plans/2026-07-02-fram-i2c-robustness.md` | D3 plan + **HW 회귀 체크리스트**(말미) |
+| `.superpowers/sdd/progress.md` | SDD ledger — Task별 커밋/리뷰/defer Minor 전체 목록 |
+| `fw/src/app_config.c:83-141` | 새 load 로직(기본값 선적용→성공만 덮어쓰기) |
+| `fw/drivers/i2c1.c` | unstick 프리플라이트 + getter |
+| `fw/test/mock_fram.{h,c}` + `test_app_config.c` | H3 host 게이트(6시나리오) |
+| `docs/NEXT_STEPS.md` §1.3 | 결정 큐 정본(D0✅ D1✅ D3 CODE-COMPLETE 반영됨) |
+
+## Code Context
+
+브랜치의 새 인터페이스(머지 전 다른 작업이 fram/config를 건드리면 충돌 주의):
+
+```c
+/* fram.h — 읽기 실패 시 *out 미기록 (호출자가 기본값 선적용) */
+bool fram_read_byte(uint8_t addr, uint8_t  *out);
+bool fram_read_u16 (uint8_t addr, uint16_t *out);
+bool fram_read_u32 (uint8_t addr, uint32_t *out);
+
+/* app_config.h */
+uint8_t app_config_load(app_config_t *cfg);          /* 0=clean / 1..38=실패 read 수 / 0xFF=INIT_FLAG 읽기실패(FRAM 미변경, 전 필드 기본값) */
+void    app_config_factory_defaults(app_config_t *cfg);  /* RAM만, FRAM 미접촉 */
+
+/* i2c1.h */
+uint8_t i2c1_unstick_events(void);   /* 0=깨끗 / 1..9=복구 클럭 수 / 0xFF=복구 실패 */
+```
+
+host 테스트 mock 주입: `mock_fram_fail_read(addr, nbytes)` / `mock_fram_write_count()` — `fw/test/Makefile`이 `../drivers/fram.c` 대신 `mock_fram.c`를 링크(실 fram.c 3함수는 mock 미커버 = 자명 코드 + HW 회귀가 커버, 최종 리뷰 명시).
 
 ## Resume Instructions
 
-1. sanity: `env -u STM32_TOOLCHAIN cmake -S fw -B fw/build -G Ninja && env -u STM32_TOOLCHAIN cmake --build fw/build`(0-warning) + `make -C fw/test test`(6스위트 PASS).
-2. 수정 착수 순서 = 위 "Not Yet Done". C1은 1줄+회귀(host 스위트 무영향, LCD 터치 정상경로 HW 확인)로 독립 커밋 가능.
-3. H3는 시그니처 변경(전파형)이라 spec→plan→subagent 절차(§NEXT_STEPS §3) 권장. H2는 같은 슬라이스로 묶기 자연스러움.
-4. seek/reset off-by-one은 **먼저 사용자에게 물을 것**(600ms 충실 vs 500ms 유지).
-5. 미머지 통합 시: slice-b 결정 최우선(독립·최고령) → slice-d(a/c 자동 포함, app_reg_tick semantic reconcile + board.c heartbeat/OSC 병합) → ch1.
+1. sanity: `git log --oneline -3` (main `c5b7ad3` 확인) + `make -C fw/test test`(main=6스위트 PASS).
+2. **HW 세션이면**: 위 "Not Yet Done" D3 HW 회귀 절차 그대로. 브랜치 전환 후 **반드시 cmake reconfigure**(신규 소스는 test뿐이지만 규칙 유지). 검증 규칙: 런타임=mbpoll/LCD만, SWD halt 금지(메모리 `feedback-swd-halt-breaks-board-validation`).
+3. **코딩 세션이면**: D6(M7) 착수 — `app_lcd.c:54-61` hook stub → app_eth 재적용 API 소규모 설계(brainstorming→spec, NEXT_STEPS §3 절차).
+4. 머지 시 주의: 브랜치가 `app_config.h/c`·`fram.h/c`·`i2c1.h/c`·`app.c`를 변경 — main에서 이 파일들을 건드리는 다른 작업은 D3 머지 후로 미룰 것.
 
 ## Warnings
 
-- ⚠ 이 문서 이전 버전(2026-06-28 d)의 4개 주장(byte-identical/RUN 미구현/push 미완/a→b→c→d 스택)은 **실측으로 반증됨** — 위 §감사 발견 ① 3~6이 정본.
-- ⚠ `fw/build/`·`fw/build-trace/`에 미머지 브랜치 소스 오브젝트 잔재(app_overload/app_buzzer 등) — GLOB 이력, main 소스 실체와 불일치(감사 시 혼동 유발, 실해 없음).
-- ⚠ 검증 규칙 유지: 런타임=mbpoll/LCD만, SWD halt 금지(정적 1회만). 브랜치 전환 시 cmake reconfigure.
-- ⚠ git 해시는 2026-06-20 filter-repo 재작성 — 안정 레퍼런스는 태그.
+- ⚠ **부분실패 잔여 리스크(defer, 의도된 범위)**: 부팅 시 일부 필드 read 실패 → 기본값 동작 중 사용자가 LCD 저장하면 `app_config_save_all`이 기본값을 FRAM에 굳힘. 구버전(침묵 0 굳힘)보다 개선이며 mon WARN으로 관측 가능. write-hardening 후속 슬라이스 후보(INIT_FLAG-last 순서 + write status).
+- ⚠ vendor wiznet `socket.h` 경고 3건은 **pre-existing**(full rebuild에서만 노출) — 우리 코드 0-warning 판정과 무관.
+- ⚠ mon-only 경고 표면의 알려진 한계: Modbus RTU가 USART6 점유 시 mon 비가용(수용된 결정). 1s 델타 로그는 `mon_enabled` 게이트로 RS-485 오염 없음(최종 리뷰 확인).
+- ⚠ git 해시는 2026-06-20 filter-repo 재작성 이후 — 안정 레퍼런스는 태그.
+- ⚠ 직전 감사 HANDOFF(2026-07-02 a)의 발견 상세는 이 문서로 대체되지 않음 — 미착수 항목(D2/D4/H4/M계열)의 파일:라인 근거는 `docs/NEXT_STEPS.md` §1.3 + 메모리 `project-audit-2026-07` 참조.
