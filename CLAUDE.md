@@ -104,7 +104,7 @@ cmake --build build --target flash
 
 **먼저 `docs/NEXT_STEPS.md`를 읽고 진행 상황과 다음 작업을 확인.**
 
-**현재 진행 (2026-06-13 j)**: Phase 1+2 · Stage A/B(LCD) · LCD full port · Stage D(ATmega16 흡수: 레귤레이션 compute·상태머신·RUN 게이트·m1) · Stage C(Modbus RTU+TCP static/DHCP) **전부 main 머지 완료**. 남은 것 = HW-gated deferred(B-SEAM OSC 물리 구동 · 6b signal calibration · SEEK/RESET 효과 · overload · weld-cycle). 상세 진입 = `docs/NEXT_STEPS.md`, 세션별 상태 = `docs/superpowers/RESUME.md`(자동 로드), 변경 이력 = `docs/changelog.md`.
+**현재 진행 (2026-07-04)**: Phase 1+2 · LCD full port · Stage D(ATmega16 흡수) · Stage C(Modbus RTU+TCP static/DHCP) · weld-cycle 슬라이스1~3 · SEEK/RESET 효과 · I2C_POT 진폭 · OVTIME · fram-i2c-robustness · **eth-reapply(M7: LCD 저장→가동 중 W5500 즉시 반영)** 전부 main 머지 완료 — **2026-07-02 감사 큐 D0~D6 종결**. 남은 것 = **D5 reconcile**(미머지 3브랜치 b→d→ch1, `app_reg_tick` 3-way 통합) + HW-gated deferred(weld slice4 · B-SEAM OSC 물리 구동 · 6b signal calibration · overload). 상세 진입 = 루트 `HANDOFF.md` + `docs/NEXT_STEPS.md`, 세션별 상태 = `docs/superpowers/RESUME.md`(자동 로드), 변경 이력 = `docs/changelog.md`.
 
 해소된 핵심 질문 (V30 회로도 + ATmega16 분석으로 확정):
 1. ATmega16 PA4 = 초음파 출력개시 신호 입력 / PC0 = overload 출력 / PC1·PC4 = 초음파 보드 신호 입력
