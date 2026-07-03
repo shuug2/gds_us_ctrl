@@ -9,7 +9,9 @@
 - **HW 회귀 결과**: ① 정상 부팅 + FRAM 저장값 유지(FC03 미러 OUT_POWER=56 등 전부 비기본값 = 폴백 미발동) + LCD 육안 정상 ② 직접런 ceiling 무회귀(START→STATUS `1×4→0`, ~140ms 폴 ≈560ms=ON_TIME 56×10ms 자동정지) ③ 저장→재부팅 리로드(FC06 OUT_POWER 57 write→openocd `reset run`→57 리로드 확인→56 원상복구; SWD halt 금지 규칙 준수).
 - **mon `[cfg]` 부팅 배너 캡처는 생략**(조건부 항목 — RS-485 DE 미제어로 mon 수신 불가 + addr=NONE/물리 전원 재인가 필요; ①③이 FRAM 읽기 정상을 이미 입증).
 - **D6 'eth-reapply(M7)' CODE-COMPLETE** (branch `feat/eth-reapply-m7`, 미머지·HW E2E 게이트): LCD DATA_SAVE의 ether/comm_mode 변경을 재부팅 없이 W5500에 즉시 반영(samd20 main.c:3327-3403 close_tcps+network_init 거동 복원). LCD 커밋 조건 확장(mode-only도 hook 발화, G4)+dirty flag/`app_lcd_ether_dirty_take`+`app_eth_tick`의 phase별 `eth_reapply`(STATIC_UP=재적용/DHCP_RUN=모드 유지 시 리스 보존, 이탈 시 `DHCP_stop`)+`app_modbus_tcp_reset`(sock0 강제 close — stale ESTABLISHED가 새 IP 접속 영구 차단 방지, F1)+DHCP 분기 `s_available=false` 명시(F2). host 테스트 없음(HAL/vendor 글루)=기존 7스위트 무회귀+0-warning. spec=`specs/2026-07-04-eth-reapply-m7-design.md`, plan=`plans/2026-07-04-eth-reapply-m7.md`.
-- 다음 = M7 HW E2E(spec §6: IP 변경 즉시 반영/STATIC↔DHCP 왕복/ETH↔SERIAL/ceiling 무회귀) 후 머지 → D5(reconcile b→d→ch1).
+- **D6 'eth-reapply(M7)' HW E2E PASS + MERGED** (main `6467d67` --no-ff, tag `hw-revA_fw-stage-eth-reapply`, 브랜치 삭제; 머지 후 0-warning+host 7/7 재검증): ① SERIAL→ETH_STATIC mode-only 저장 → **재부팅 없이** TCP :502 즉시 활성+RTU 해제(G4 실증) ② STATIC IP 변경(.70→.199) → 새 IP 즉시 FC03+옛 IP 소멸(M7 본체) ③ STATIC→DHCP → 리스 .70 취득+LCD 리스 표시+FC03(F2 경로) ④ DHCP→STATIC(IP 직접 입력) → DHCP 정지+.199 즉시 적용 ⑤ ETH→SERIAL → RTU 복귀+TCP 폐쇄 ⑥ 직접런 ceiling 무회귀(STATUS 1×4→0≈560ms). 검증 보조=ARP MAC 대조(00:08:dc:78:91:71)+SWD 정적 read(s_phase/s_available/g_tcp_active).
+- 벤치 노트: 시험 네트워크가 붐벼 .71/.74가 타 기기 선점으로 판정 불가(재시도로 해소), LCD IP 입력 1회 오입력("74"→"4" 커밋 — 저장 전 화면 확인 필요). 보드 최종 상태 = **SERIAL/addr=1/9600/EVEN, FRAM ether_ip=192.168.1.199**(이전 .70에서 변경).
+- 다음 = D5(reconcile b→d→ch1, 코딩 세션).
 
 ### 2026-07-02 — 감사 수정 큐 착수: D0(C1 LCD dispatch 가드) + D1(seek/reset 600ms 충실화)
 
