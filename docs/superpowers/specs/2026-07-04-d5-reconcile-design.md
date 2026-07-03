@@ -99,14 +99,24 @@ typedef struct {
 
 ### 5.2 d' (충돌 6파일: 위 4 + app_modbus.c + board.c)
 
-**ceiling semantic 통합** (main ovtime × d 이중화 — 이 rebase의 심장):
+**ceiling semantic 통합** (main ovtime × d 이중화 — 이 rebase의 심장). 실측 정정
+(2026-07-04 d): slice-d의 운영 ceiling은 **TOUCH 제외**가 d 자체의 승인 결정
+(2026-06-27 사용자 결정 + cpp-review + HW 입증, `00835cb` 주석 "NOT TOUCH —
+V30 lost-release 리스크는 30 s 안전 ceiling이 커버")이므로 그대로 채택:
 
 | 규칙 | 출처 | 통합 후 |
 |---|---|---|
-| 절대 30 s 안전 ceiling | d `00835cb` | **전모드·전소스 상시** (energy 여부 무관) |
-| legacy `limit_on_time` ceiling | main(비-energy) × d(hand 전용) | **`model_type==0`(hand) && `energy_ctrl==0`** 에서만 |
-| energy 종료(에너지-도달 + OVTIME) | main (ovtime) | main 그대로 — energy 모드에서 legacy ceiling 대체 |
-| ceiling 소스 | main(TOUCH) × d(+US_REMOTE) | TOUCH + US_REMOTE (d `1f4f23c`) |
+| 절대 30 s 안전 ceiling | d `00835cb` | **전모드·전소스(TOUCH/COMM/REMOTE/CYCLE) 상시** — energy 모드 포함 |
+| legacy `limit_on_time` ceiling | main(비-energy, TOUCH+COMM) × d(hand 전용, COMM/REMOTE) | **d 채택**: `model_type==0`(hand) && `energy_ctrl==0` && rs∈{COMM,REMOTE} — TOUCH 제외 |
+| energy 종료(에너지-도달 + OVTIME) | main (ovtime, TOUCH+COMM) | main 유지 + **US_REMOTE 소스 추가**(d가 REMOTE 슬라이스) — energy 모드에서 legacy ceiling 대체 |
+| stop helper 명칭 | main `reg_stop_run` × d `reg_run_stop_latch` (본문 동일) | main `reg_stop_run`으로 통일 |
+
+⚠ **의도된 거동 변화** (HW 세션 회귀 시나리오에 반영할 것):
+1. TOUCH(LCD RUN 버튼) 비-energy 런은 더 이상 `limit_on_time` ceiling으로 안 멈춤 —
+   30 s 안전 ceiling만 적용 (d 결정 채택). 기존 "LCD RUN → ON_TIME 1 s 깜빡" 류
+   벤치 시나리오는 무효; COMM(mbpoll) ceiling ~560 ms는 hand 모드에서 유지.
+2. `limit_out_time`(OVTIME) > 30 s 설정 시 30 s 안전 ceiling이 먼저 발화
+   (d 결정 "unconditional" 그대로 — 안전 백스톱 우선).
 
 - `app_reg.c` START guard: main의 swallow-safe 구조(swallow consume 뒤,
   `us_run_status=src` 앞, **별도 break**) 유지 + d의 E-stop/과부하 차단 break를
