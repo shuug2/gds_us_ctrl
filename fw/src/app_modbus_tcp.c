@@ -16,6 +16,16 @@
 
 static uint8_t s_rxbuf[MB_FRAME_MAX + MB_TCP_MBAP_LEN];
 
+/* M7 (eth re-apply): force-close sock0 so the FSM re-opens LISTEN on the new
+ * netinfo next poll. Without this a stale ESTABLISHED to a dead peer would
+ * permanently block new connections (single-socket server; the peer's FIN/RST
+ * may never arrive after the IP change and there is no keep-alive).
+ * close() on an already-CLOSED socket is harmless. */
+void app_modbus_tcp_reset(void)
+{
+    (void)close(MB_TCP_SOCK);
+}
+
 /* Port of samd20 process_tcp.c control_tcps: walk the socket FSM one step. */
 static void control_tcp(void)
 {

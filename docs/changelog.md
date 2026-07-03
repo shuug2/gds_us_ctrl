@@ -8,7 +8,8 @@
 
 - **HW 회귀 결과**: ① 정상 부팅 + FRAM 저장값 유지(FC03 미러 OUT_POWER=56 등 전부 비기본값 = 폴백 미발동) + LCD 육안 정상 ② 직접런 ceiling 무회귀(START→STATUS `1×4→0`, ~140ms 폴 ≈560ms=ON_TIME 56×10ms 자동정지) ③ 저장→재부팅 리로드(FC06 OUT_POWER 57 write→openocd `reset run`→57 리로드 확인→56 원상복구; SWD halt 금지 규칙 준수).
 - **mon `[cfg]` 부팅 배너 캡처는 생략**(조건부 항목 — RS-485 DE 미제어로 mon 수신 불가 + addr=NONE/물리 전원 재인가 필요; ①③이 FRAM 읽기 정상을 이미 입증).
-- 다음 = D6(M7 static IP 즉시 반영) → D5(reconcile b→d→ch1).
+- **D6 'eth-reapply(M7)' CODE-COMPLETE** (branch `feat/eth-reapply-m7`, 미머지·HW E2E 게이트): LCD DATA_SAVE의 ether/comm_mode 변경을 재부팅 없이 W5500에 즉시 반영(samd20 main.c:3327-3403 close_tcps+network_init 거동 복원). LCD 커밋 조건 확장(mode-only도 hook 발화, G4)+dirty flag/`app_lcd_ether_dirty_take`+`app_eth_tick`의 phase별 `eth_reapply`(STATIC_UP=재적용/DHCP_RUN=모드 유지 시 리스 보존, 이탈 시 `DHCP_stop`)+`app_modbus_tcp_reset`(sock0 강제 close — stale ESTABLISHED가 새 IP 접속 영구 차단 방지, F1)+DHCP 분기 `s_available=false` 명시(F2). host 테스트 없음(HAL/vendor 글루)=기존 7스위트 무회귀+0-warning. spec=`specs/2026-07-04-eth-reapply-m7-design.md`, plan=`plans/2026-07-04-eth-reapply-m7.md`.
+- 다음 = M7 HW E2E(spec §6: IP 변경 즉시 반영/STATIC↔DHCP 왕복/ETH↔SERIAL/ceiling 무회귀) 후 머지 → D5(reconcile b→d→ch1).
 
 ### 2026-07-02 — 감사 수정 큐 착수: D0(C1 LCD dispatch 가드) + D1(seek/reset 600ms 충실화)
 

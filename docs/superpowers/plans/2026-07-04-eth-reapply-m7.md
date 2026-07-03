@@ -401,6 +401,8 @@ git commit -m "docs: D6 eth-reapply(M7) CODE-COMPLETE 반영"
 2. STATIC→DHCP 전환 저장 → `[eth] dhcp lease`+FC03+LCD 리스 IP.
 3. DHCP→STATIC 전환 저장 (⚠ IP 필드 직접 입력 — 리스 미러 persist 함정).
 4. ETH→SERIAL 저장 → RTU 응답+TCP 무응답 / SERIAL→ETH 재전환 → TCP 복귀.
+   ⚠ SERIAL→ETH 방향은 reapply 시점에 RTU가 아직 USART6를 점유(mon 억제) →
+   `[eth] reapply`/`[eth] up` 로그가 그 방향만 안 보이는 게 정상. 기능(TCP 복귀)으로 판정할 것.
 5. 직접런 ceiling 무회귀 (START→STATUS 1×N→0).
 6. PASS 시 main 머지(--no-ff) + tag `hw-revA_fw-stage-eth-reapply`.
 

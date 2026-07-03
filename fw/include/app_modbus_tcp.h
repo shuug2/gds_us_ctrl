@@ -6,3 +6,5 @@
 #pragma once
 
 void app_modbus_tcp_poll(void);
+/* M7: eth 재적용 시 sock0 강제 close — control_tcp가 다음 poll에서 재open+listen. */
+void app_modbus_tcp_reset(void);

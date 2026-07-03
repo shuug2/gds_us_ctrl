@@ -18,6 +18,7 @@
 #include "sys_tick.h"       /* sys_tick_get_ms() — link-poll + DHCP cadence */
 #include "wizchip_conf.h"
 #include "socket.h"
+#include "app_modbus_tcp.h" /* app_modbus_tcp_reset — sock0 drop on re-apply (M7) */
 #include "dhcp.h"
 
 #define COMM_ETH_DHCP  2u     /* cfg->comm_mode: 0=SERIAL 1=ETH_STATIC 2=ETH_DHCP */
@@ -95,6 +96,8 @@ static void eth_apply_on_link(void)
     const app_config_t *cfg = app_lcd_cfg();
 
     if (cfg->comm_mode == COMM_ETH_DHCP) {
+        s_available = false;   /* re-apply may arrive here from STATIC_UP where
+                                * it was true — boot path is already false (F2) */
         /* Put our MAC on the chip (SHAR) BEFORE DHCP_init: the ioLibrary client
          * reads SHAR for the DISCOVER/REQUEST CHADDR and, if it is all-zero
          * (post-reset), substitutes a temporary 00:08:dc:00:00:00 — the lease
@@ -130,6 +133,42 @@ static void eth_apply_on_link(void)
     mon_printf("[eth] up ip=%u.%u.%u.%u\r\n",
                (unsigned)ni.ip[0], (unsigned)ni.ip[1],
                (unsigned)ni.ip[2], (unsigned)ni.ip[3]);
+}
+
+/* M7: LCD DATA_SAVE committed new comm_mode/ether fields (dirty flag from
+ * app_lcd) — re-apply the net lifecycle against the live cfg without a reboot.
+ * samd20 re-ran close_tcps+network_init on save (main.c:3327-3403); this
+ * restores that liveness. Phase transitions (spec §3.3):
+ *   DOWN      no-op (chip absent — boot policy, no retry)
+ *   LINKWAIT  no-op (link-up path reads the live cfg anyway)
+ *   STATIC_UP drop sock0 + re-apply (static re-netinfo, or DHCP start)
+ *   DHCP_RUN  still DHCP -> keep the lease; else stop DHCP + drop sock0 +
+ *             re-apply static */
+static void eth_reapply(void)
+{
+    const app_config_t *cfg = app_lcd_cfg();
+
+    mon_printf("[eth] reapply mode=%u phase=%u\r\n",
+               (unsigned)cfg->comm_mode, (unsigned)s_phase);
+
+    switch (s_phase) {
+    case ETH_STATIC_UP:
+        app_modbus_tcp_reset();   /* F1: stale sock0 would block the new IP */
+        eth_apply_on_link();      /* live cfg: static re-apply or DHCP start */
+        break;
+    case ETH_DHCP_RUN:
+        if (cfg->comm_mode == COMM_ETH_DHCP) {
+            break;                /* mode unchanged — keep the lease */
+        }
+        DHCP_stop();              /* closes SOCK_DHCP, client -> STOP state */
+        app_modbus_tcp_reset();
+        eth_apply_on_link();
+        break;
+    case ETH_DOWN:
+    case ETH_LINKWAIT:
+    default:
+        break;
+    }
 }
 
 bool app_eth_init(void)
@@ -169,6 +208,12 @@ bool app_eth_init(void)
  * static fallback — spec §3.3). No-op once STATIC_UP or DOWN. */
 void app_eth_tick(void)
 {
+    /* M7: consume the LCD commit flag in every phase (DOWN/LINKWAIT re-apply
+     * is a no-op — those phases read the live cfg on their own path). */
+    if (app_lcd_ether_dirty_take()) {
+        eth_reapply();
+    }
+
     uint32_t now = sys_tick_get_ms();
 
     switch (s_phase) {

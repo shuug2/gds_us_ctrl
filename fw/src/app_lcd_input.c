@@ -501,13 +501,17 @@ static void commit_comm_serial_shadows(void)
     }
 }
 
-/* MULTI-only: commit comm_mode + ether shadows → live cfg, firing the ether
- * hook on ether change (samd20 main.c:3327-3403). HAND/STD do NOT do this. */
+/* Commit comm_mode + ether shadows → live cfg, firing the ether hook on
+ * ether OR comm_mode change (samd20 main.c:3327-3403 re-ran
+ * close_tcps+network_init on save — M7 restores that liveness). HAND does
+ * NOT do this; STD reaches here via the STD-persist deviation (fix-B 0xFF
+ * guard below covers its unseeded-shadow case). */
 static void commit_comm_mode_and_ether(void)
 {
     lcd_app_state_t *state = app_lcd_state();
     app_config_t    *cfg   = app_lcd_cfg();
     bool ether_changed = false;
+    bool mode_changed  = false;
     uint8_t i;
 
 #ifdef LCD_TRACE_RX
@@ -528,6 +532,7 @@ static void commit_comm_mode_and_ether(void)
 
     if (state->temp_comm_mode != cfg->comm_mode) {
         cfg->comm_mode = state->temp_comm_mode;
+        mode_changed   = true;
     }
     for (i = 0; i < 4u; i++) {
         if (state->temp_ether_ip[i] != cfg->ether_ip[i] ||
@@ -543,6 +548,8 @@ static void commit_comm_mode_and_ether(void)
             cfg->ether_nm[i] = state->temp_ether_nm[i];
             cfg->ether_gw[i] = state->temp_ether_gw[i];
         }
+    }
+    if (ether_changed || mode_changed) {
         app_lcd_hook_ether_apply(cfg->comm_mode, cfg->ether_ip, cfg->ether_nm, cfg->ether_gw);
     }
 }

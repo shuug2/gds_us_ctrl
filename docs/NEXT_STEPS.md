@@ -59,7 +59,7 @@
 | D3 | **H3+H2 = 'fram-i2c-robustness' 슬라이스**(fram_read_* status 전파+실패 필드 팩토리 폴백/경고, I2C1 bus-unstick+err_count 표면 배선) / **H4+IWDG는 별도 슬라이스** — 📐 **spec 완료 2026-07-02**(`docs/superpowers/specs/2026-07-02-fram-i2c-robustness-design.md`; 확정: 경고=mon만·unstick=init 1회·write 무변경·INIT_FLAG 읽기실패=factory-write 금지). ✅ **HW 회귀 PASS + MERGED 2026-07-04**(main `be2fac9` --no-ff, tag `hw-revA_fw-stage-fram-robust`, 브랜치 삭제; HW=부팅 FRAM 저장값 유지 폴백 미발동+LCD 육안 / START→STATUS 1×4→0 ceiling 무회귀 / FC06 write→리셋→리로드; mon `[cfg]` 캡처는 RS-485 DE 미제어로 생략—①③④가 FRAM 로드 입증) | ~~코딩 세션 (HW=검증만)~~ |
 | D4 | weld **H1**(런중 EN_MULTI/EN_ENERGY 토글 stale 카운터) = **slice4 첫 Task로 근본수정**(WELD 진입 시 모드 래치+상태전이 카운터 리셋) | weld slice4 선결 |
 | D5 | 미머지 통합 = **코딩 세션에서 reconcile 선행**(각 브랜치→현 main rebase+`app_reg_tick` 시그니처 semantic 통합+board.c 병합, 빌드+host PASS까지), 순서 **b→d→ch1**(b=독립·최고령, d가 a·c 포함). **머지/태그는 HW 검증 후**(기존 정책 유지) | 코딩 세션 + HW 세션 분리 |
-| D6 | Modbus/ETH 중 **M7만 먼저**(LCD static IP 저장→가동 중 W5500 즉시 반영 경로), M6/M8/M9는 **HMI 착수 시 'modbus-tcp-hardening'** | M7=코딩 세션 / 나머지=HMI 트리거 |
+| D6 | Modbus/ETH 중 **M7만 먼저**(LCD static IP 저장→가동 중 W5500 즉시 반영 경로), M6/M8/M9는 **HMI 착수 시 'modbus-tcp-hardening'** 🔨 **CODE-COMPLETE 2026-07-04**(branch `feat/eth-reapply-m7`, 0-warning+host 7 무회귀) — 남은 것=HW E2E(spec §6 5항목) 후 머지 | M7=코딩 세션 / 나머지=HMI 트리거 |
 
 부수: stale 주석 정정(`app_reg.h:42` "no-op", `app_modbus.c:105/109`, `fw/test/Makefile:1-3`)은 해당 파일을 건드리는 첫 코드 커밋에 동승.
 
@@ -83,7 +83,7 @@ make -C fw/test test                                # 5 스위트 PASS 기대 (r
 
 ### 2.2 다음 작업 후보
 
-**⚠ 2026-07-02부로 코딩 세션 작업이 존재** — 우선순위 = §1.3 결정 큐: ~~D0(C1 1줄)~~✅ → ~~D1(SR_TICKS 60)~~✅ → ~~D3(fram-i2c-robustness)~~✅ → **D6(M7)** → D5(reconcile b→d→ch1). 그 다음이 아래 HW-gated 후보(검증은 HW 세션으로).
+**⚠ 2026-07-02부로 코딩 세션 작업이 존재** — 우선순위 = §1.3 결정 큐: ~~D0(C1 1줄)~~✅ → ~~D1(SR_TICKS 60)~~✅ → ~~D3(fram-i2c-robustness)~~✅ → ~~D6(M7)~~🔨(HW E2E 대기) → **D5(reconcile b→d→ch1)**. 그 다음이 아래 HW-gated 후보(검증은 HW 세션으로).
 
 - **weld 슬라이스4** — TRIGGER + 물리 SW_START + 센서 + 실 SOL_DN GPIO + 안전 abort + config-validation 클램프(LOW-1 LCD `app_lcd_input.c:752` 포함). 사이클/스테핑 자체 E2E도 여기. (samd20 `ref/samd20/main.c:1404-1466`)
 - **B-SEAM OSC 물리 구동** — seek/reset/weld의 실제 `CTRL_OSC*` 주파수 출력(현재 전부 hook stub). 레귤레이션 compute의 마지막 블로커. 실 초음파 rig + 스코프.
