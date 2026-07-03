@@ -10,7 +10,8 @@
 - **D1** (`85811fc`): `SR_TICKS` 50→60 — 레거시 실거동 충실화. samd20 `us_reset_cnt++` 후 `> MAX_US_RESET_CNT(5)`, 0-시작 100ms 단위 = cnt 6 트립 = **600ms/leg**(주석 명목 500ms 아님). RESET dwell/RESET→SEEK 체인/SEEK 해제 3구간 모두. host 테스트 경계 50→60 갱신(TDD RED→GREEN).
 - 검증: 0-warning 빌드(FLASH 42.50%/RAM 16.80%) + host 6스위트 PASS. HW 재검증(LCD 터치 정상경로 + RESET→SEEK 체인 600ms 육안)은 다음 보드 세션에 동승.
 - 감사 문서 커밋(`5ca13b8`): HANDOFF.md 재작성 + NEXT_STEPS §1.3 결정 7건 신설.
-- 다음 = **D3 'fram-i2c-robustness' 슬라이스**(H3 fram status 전파 + H2 I2C1 bus-unstick, spec→plan 절차) → D6(M7) → D5(reconcile b→d→ch1).
+- **D3 'fram-i2c-robustness' CODE-COMPLETE** (branch `feat/fram-i2c-robustness`, 미머지·HW 회귀 게이트): H3=`fram_read_*` `bool(addr,*out)` 전파 + `app_config_load` 기본값 선적용-덮어쓰기(실패 수 반환, **INIT_FLAG 읽기실패=factory-write 금지** — FRAM 덮어쓰기 데이터손실 차단) / H2=init 1회 SCL 9클럭 unstick+STOP / 표면=mon 전용(부팅 `[cfg] fram_fail/unstick/i2c_err`+WARN, 루프 1s err 델타). host 신규 스위트 `test_app_config`(mock-fram) 6시나리오 = 총 7스위트. spec=`specs/2026-07-02-fram-i2c-robustness-design.md`, plan=`plans/2026-07-02-fram-i2c-robustness.md`.
+- 다음 = D3 HW 회귀(정상 부팅 무회귀 + mon `fram_fail=0 unstick=0`) 후 머지 → D6(M7) → D5(reconcile b→d→ch1).
 
 ### 2026-06-28 — i2c-pot 진폭 actuation + OVTIME energy-run 종료 HW 검증·머지 (tag `hw-revA_fw-stage-i2c-pot` / `-ovtime`)
 

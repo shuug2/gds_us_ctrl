@@ -12,11 +12,76 @@
 
 static volatile uint16_t s_err_count;
 
+static uint8_t s_unstick_events;
+
+/* ~10 µs @96 MHz busy-wait — i2c1_init()은 sys_tick 기동 전(main.c:24)이라
+ * tick 지연 불가. I2C slave는 저속 클럭 무제한 허용이라 정밀도 비요구. */
+static void unstick_delay(void)
+{
+    for (volatile uint32_t i = 0u; i < 240u; i++) { }
+}
+
+/* SDA(PB7) stuck-low 복구: SCL(PB6) GPIO-OD 9클럭 + STOP (감사 H2).
+ * HAL_I2C_Init 전, GPIO clock enable 후에만 호출. 실패해도 진행 —
+ * 이후 트랜잭션 실패는 s_err_count로 드러남. */
+static void i2c1_bus_unstick(void)
+{
+    GPIO_InitTypeDef g = {0};
+
+    /* SDA=input으로 버스 상태 관찰, SCL=OD output(idle high) */
+    g.Pin   = GPIO_PIN_7;
+    g.Mode  = GPIO_MODE_INPUT;
+    g.Pull  = GPIO_NOPULL;              /* 외부 10k 풀업 (보드) */
+    HAL_GPIO_Init(GPIOB, &g);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
+    g.Pin   = GPIO_PIN_6;
+    g.Mode  = GPIO_MODE_OUTPUT_OD;
+    g.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOB, &g);
+    unstick_delay();
+
+    if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_7) == GPIO_PIN_SET) {
+        s_unstick_events = 0u;          /* 버스 깨끗 — 통상 경로 */
+        return;
+    }
+
+    uint8_t clocks = 0u;
+    while (clocks < 9u) {               /* 9클럭 = 8data+ACK 최악 케이스 */
+        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);
+        unstick_delay();
+        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
+        unstick_delay();
+        clocks++;
+        if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_7) == GPIO_PIN_SET) {
+            break;
+        }
+    }
+
+    if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_7) != GPIO_PIN_SET) {
+        s_unstick_events = 0xFFu;       /* 복구 실패 — HAL init은 그대로 진행 */
+        return;
+    }
+
+    /* STOP 조건: SCL high 상태에서 SDA low→high */
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, GPIO_PIN_RESET);
+    g.Pin  = GPIO_PIN_7;
+    g.Mode = GPIO_MODE_OUTPUT_OD;
+    HAL_GPIO_Init(GPIOB, &g);
+    unstick_delay();
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, GPIO_PIN_SET);
+    unstick_delay();
+    s_unstick_events = clocks;
+}
+
 void i2c1_init(void)
 {
     /* 1. clocks */
     __HAL_RCC_I2C1_CLK_ENABLE();
     __HAL_RCC_GPIOB_CLK_ENABLE();
+
+    /* 1.5 bus-unstick preflight (감사 H2) — AF 설정 전 GPIO로 SDA stuck 복구.
+     * 아래 §2 HAL_GPIO_Init(AF_OD)이 임시 GPIO 모드를 덮어쓴다. */
+    i2c1_bus_unstick();
 
     /* 2. GPIO PB6/PB7 AF4, open-drain, no internal pull (external 10k to 5V) */
     GPIO_InitTypeDef g = {0};
@@ -65,3 +130,5 @@ HAL_StatusTypeDef i2c1_mem_write(uint8_t dev7, uint8_t mem_addr, const uint8_t *
 }
 
 uint16_t i2c1_err_count(void) { return s_err_count; }
+
+uint8_t i2c1_unstick_events(void) { return s_unstick_events; }
