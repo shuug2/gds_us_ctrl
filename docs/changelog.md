@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### 2026-07-04 — D3 fram-i2c-robustness HW 회귀 PASS + 머지 (tag `hw-revA_fw-stage-fram-robust`)
+
+간이 벤치 HW 세션. `feat/fram-i2c-robustness`(4커밋) 플래시 후 plan 말미 HW 회귀 체크리스트 검증 → main 머지 `be2fac9`(--no-ff) + tag, 브랜치 삭제. 머지 후 main 재검증(0-warning 빌드=플래시 바이너리와 동일, host 7스위트 PASS).
+
+- **HW 회귀 결과**: ① 정상 부팅 + FRAM 저장값 유지(FC03 미러 OUT_POWER=56 등 전부 비기본값 = 폴백 미발동) + LCD 육안 정상 ② 직접런 ceiling 무회귀(START→STATUS `1×4→0`, ~140ms 폴 ≈560ms=ON_TIME 56×10ms 자동정지) ③ 저장→재부팅 리로드(FC06 OUT_POWER 57 write→openocd `reset run`→57 리로드 확인→56 원상복구; SWD halt 금지 규칙 준수).
+- **mon `[cfg]` 부팅 배너 캡처는 생략**(조건부 항목 — RS-485 DE 미제어로 mon 수신 불가 + addr=NONE/물리 전원 재인가 필요; ①③이 FRAM 읽기 정상을 이미 입증).
+- 다음 = D6(M7 static IP 즉시 반영) → D5(reconcile b→d→ch1).
+
 ### 2026-07-02 — 감사 수정 큐 착수: D0(C1 LCD dispatch 가드) + D1(seek/reset 600ms 충실화)
 
 코딩 세션 (보드 불필요, 검증=host+빌드). 2026-07-02 전면 감사(`HANDOFF.md`)의 적용 결정 큐(§1.3 D0~D6) 중 앞 2건 완료. 두 커밋 모두 cpp-reviewer APPROVED (0 Crit/High/Med).
