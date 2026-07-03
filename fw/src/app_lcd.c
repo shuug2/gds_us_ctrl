@@ -51,8 +51,22 @@ void app_lcd_hook_comm_reconfigure(uint8_t speed_idx, uint8_t parity_idx, uint8_
                (unsigned)speed_idx, (unsigned)parity_idx, (unsigned)address);
 }
 
+/* M7: LCD DATA_SAVE가 ether/comm_mode를 커밋했음을 app_eth_tick에 알리는
+ * 1-shot 플래그. hook에서 set, app_lcd_ether_dirty_take()가 consume-and-clear.
+ * (직접 호출 대신 플래그 = app_lcd↔app_eth include 사이클 회피, M1 discipline —
+ * comm_reconfigure hook이 passive인 것과 같은 패턴.) */
+static bool s_ether_dirty = false;
+
+bool app_lcd_ether_dirty_take(void)
+{
+    bool d = s_ether_dirty;
+    s_ether_dirty = false;
+    return d;
+}
+
 void app_lcd_hook_ether_apply(uint8_t mode, const uint8_t ip[4], const uint8_t nm[4], const uint8_t gw[4])
 {
+    s_ether_dirty = true;   /* consumed by app_eth_tick -> eth_reapply (M7) */
     mon_printf("[lcd-hook] ether mode=%u ip=%u.%u.%u.%u nm=%u.%u.%u.%u gw=%u.%u.%u.%u\r\n",
                (unsigned)mode,
                (unsigned)ip[0], (unsigned)ip[1], (unsigned)ip[2], (unsigned)ip[3],

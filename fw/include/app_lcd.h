@@ -151,6 +151,10 @@ void app_lcd_hook_comm_reconfigure(uint8_t speed_idx, uint8_t parity_idx, uint8_
 void app_lcd_hook_ether_apply(uint8_t mode, const uint8_t ip[4], const uint8_t nm[4], const uint8_t gw[4]);
 void app_lcd_hook_horn(bool down);
 
+/* M7: consume-and-clear — LCD ether/comm_mode 커밋 이후 첫 호출만 true.
+ * 소비자 = app_eth_tick (가동 중 netinfo/DHCP 재적용 트리거). */
+bool app_lcd_ether_dirty_take(void);
+
 /* Subsystem entry points (defined in app_lcd_render/input/disp — Tasks 5-9). */
 void app_lcd_change_page(uint8_t page);               /* render + set_page (spec §6) */
 void app_lcd_input_dispatch(const dgus_frame_t *f);   /* panel touch/key handler (spec §7) */
