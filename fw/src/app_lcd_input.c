@@ -501,10 +501,11 @@ static void commit_comm_serial_shadows(void)
     }
 }
 
-/* MULTI-only: commit comm_mode + ether shadows → live cfg, firing the ether
- * hook on ether OR comm_mode change (samd20 main.c:3327-3403 re-ran
- * close_tcps+network_init on save — M7 restores that liveness). HAND/STD do
- * NOT do this. */
+/* Commit comm_mode + ether shadows → live cfg, firing the ether hook on
+ * ether OR comm_mode change (samd20 main.c:3327-3403 re-ran
+ * close_tcps+network_init on save — M7 restores that liveness). HAND does
+ * NOT do this; STD reaches here via the STD-persist deviation (fix-B 0xFF
+ * guard below covers its unseeded-shadow case). */
 static void commit_comm_mode_and_ether(void)
 {
     lcd_app_state_t *state = app_lcd_state();

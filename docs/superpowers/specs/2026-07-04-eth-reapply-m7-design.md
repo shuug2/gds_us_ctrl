@@ -144,7 +144,9 @@ DHCP 재기동 실패는 기존 `DHCP_FAILED` 재시도 루프가 흡수. 칩 �
 2. STATIC→DHCP 전환 저장 → 리스 취득(`[eth] dhcp lease`)+FC03+LCD 리스 IP 표시.
 3. DHCP→STATIC 전환 저장 → static IP 적용 (⚠ 리스가 `ether_ip`에 미러돼 있으므로
    IP 필드를 **직접 입력**할 것 — persist 함정).
-4. ETH→SERIAL 저장 → RTU 응답 + TCP 무응답 / SERIAL→ETH 재전환 → TCP 복귀.
+4. ETH→SERIAL 저장 → RTU 응답 + TCP 무응답 / SERIAL→ETH 재전환 → TCP 복귀
+   (⚠ SERIAL→ETH 방향은 reapply 시점에 RTU가 USART6 점유 중이라 mon 로그 억제 —
+   기능으로 판정, 로그 부재는 정상).
 5. 직접런 ceiling 무회귀 (START→STATUS 1×N→0).
 
 ## 7. 구현 단위 (plan 입력)
