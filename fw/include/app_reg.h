@@ -26,6 +26,7 @@ typedef struct {
     uint16_t limit_out_time;  /* OVTIME 한계 = 초 (0 = OVTIME off) */
     int16_t  freq_cal_val;    /* FREQ_IN 표시 보정 → freq_fsm_compute (slice-B) */
     uint8_t  model_type;      /* 0=hand — legacy ceiling 게이트 (slice-D) */
+    int16_t  cal_val;         /* ch1 표시 전류 보정 (config, ch1 slice) */
 } reg_run_limits_t;
 
 /* Superloop regulation step; gates internally on sys_tick_get_ms() deltas:

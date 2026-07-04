@@ -57,3 +57,12 @@ typedef enum {
 reg_energy_outcome_t reg_energy_termination(uint8_t energy_ctrl, uint32_t curr_energy,
                                             uint32_t limit_energy, uint32_t elapsed_ms,
                                             uint16_t limit_out_time);
+
+/* 출력파워 그래프 표시 전류 — SAMD20 cal_real_val ADC_CURR 포팅
+ * (ref/samd20/main.c:416-433). ch1_avg(소비전류, 10bit-equiv) + cal_val(config)
+ * -> curr_amp. (temp_val>51)?temp_val-37:0 데드밴드/오프셋; int32 중간연산으로
+ * 음수 cal_val 언더플로 가드. 절대 스케일 상수는 6b/HW 보정 대상. */
+uint16_t reg_current_from_adc(uint16_t ch1_avg, int16_t cal_val);
+
+/* curr_amp -> 표시 전력 (samd20 curr_power = curr_amp*22/10, main.c:432). */
+uint16_t reg_power_from_amp(uint16_t curr_amp);

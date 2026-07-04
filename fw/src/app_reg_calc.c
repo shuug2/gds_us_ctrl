@@ -74,3 +74,28 @@ reg_energy_outcome_t reg_energy_termination(uint8_t energy_ctrl, uint32_t curr_e
     }
     return REG_RUN_CONTINUE;
 }
+
+/* ── 출력파워 그래프 표시 전류/전력 (ch1=소비전류) ─────────────────
+ * SAMD20 cal_real_val ADC_CURR (ref/samd20/main.c:416-433) 구조 포팅.
+ * 상수는 6b HW 보정 대상 — 절대 스케일은 실측 후 확정. */
+#define REG_CURR_GAIN_NUM   4u    /* samd20 temp*4 */
+#define REG_CURR_GAIN_DEN   10u   /* samd20 /10 */
+#define REG_CURR_DEADBAND   51    /* samd20 (temp_val > 51) ? */
+#define REG_CURR_OFFSET     37    /* samd20 temp_val - 37 */
+#define REG_POWER_NUM       22u   /* samd20 ×2.2 */
+#define REG_POWER_DEN       10u
+
+uint16_t reg_current_from_adc(uint16_t ch1_avg, int16_t cal_val)
+{
+    int32_t v = (int32_t)ch1_avg * (int32_t)REG_CURR_GAIN_NUM
+              / (int32_t)REG_CURR_GAIN_DEN + (int32_t)cal_val;
+    if (v <= (int32_t)REG_CURR_DEADBAND) {
+        return 0u;                /* 데드밴드 + 음수 cal_val 언더플로 가드 */
+    }
+    return (uint16_t)(v - (int32_t)REG_CURR_OFFSET);
+}
+
+uint16_t reg_power_from_amp(uint16_t curr_amp)
+{
+    return (uint16_t)(((uint32_t)curr_amp * REG_POWER_NUM) / REG_POWER_DEN);
+}

@@ -50,6 +50,7 @@
 typedef struct {
     uint16_t ch0_avg, ch1_avg;        /* committed means (10-bit-equiv domain) */
     uint16_t adc_scaled_value;        /* reg_scale(ch0_avg) */
+    int16_t  cal_val;                 /* config 보정값 (app_reg_tick 주입) — 표시 전류 */
     uint8_t  band;                    /* reg_output_level() 0..21 (held; output deferred) */
 
     uint32_t ch0_acc; uint16_t ch0_cnt;
@@ -250,13 +251,17 @@ static void reg_publish_measure(uint32_t now, int16_t freq_cal_val)
      * running peak during the run; last_power latched on stop (app_reg_command).
      * cycle/freq/energy stay 0 (weld-cycle deferred). */
     uint8_t active = (uint8_t)(g_reg.us_run_status != (uint8_t)US_IDLE);
-    g_measure.curr_amp   = g_reg.ch0_avg;
-    if (active && (g_reg.ch0_avg > g_reg.max_amp)) {
-        g_reg.max_amp = g_reg.ch0_avg;   /* amp peak — same pattern as max_power */
+    /* 표시 전류/전력은 ch1(소비전류)에서 — 레귤레이션(ch0/reg_scale)과 분리.
+     * SAMD20 cal_real_val 포팅 (spec §3). 피크홀드 비교 소스도 ch1 산출값. */
+    uint16_t disp_amp = reg_current_from_adc(g_reg.ch1_avg, g_reg.cal_val);
+    g_measure.curr_amp = disp_amp;
+    if (active && (disp_amp > g_reg.max_amp)) {
+        g_reg.max_amp = disp_amp;
     }
-    g_measure.curr_power = active ? g_reg.adc_scaled_value : 0u;
-    if (active && (g_reg.adc_scaled_value > g_reg.max_power)) {
-        g_reg.max_power = g_reg.adc_scaled_value;
+    uint16_t disp_pwr = reg_power_from_amp(disp_amp);
+    g_measure.curr_power = active ? disp_pwr : 0u;
+    if (active && (disp_pwr > g_reg.max_power)) {
+        g_reg.max_power = disp_pwr;
     }
     /* 에너지 적분: active면 curr_power를 acc에 누산(2ms publish cadence) ->
      * curr_energy = acc/250 (samd20 main.c:434-436 구조). idle엔 curr_power=0이라
@@ -298,6 +303,7 @@ static void reg_publish_measure(uint32_t now, int16_t freq_cal_val)
 void app_reg_tick(const reg_run_limits_t *lim)
 {
     uint32_t now = sys_tick_get_ms();
+    g_reg.cal_val = lim->cal_val;   /* 표시 전류 보정값 주입 (reg_publish_measure 사용) */
 
     /* ~10 ms boot warm-up cadence (M16 Timer1 0xFFB1 equiv, cad-C8). M16-faithful:
      * runs exactly once, from boot, unconditionally (ramp counter zeroed only at
