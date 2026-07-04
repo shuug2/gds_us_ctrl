@@ -69,7 +69,11 @@ void app_weld_tick(void)
     }
 
     /* SETUP 게이트 (slice1 spec §5.4 이연분): setup 페이지에선 step 스킵 =
-     * 사이클 타이머 동결 + 시작 불가 (samd20 timer의 sys_status!=SETUP 게이트). */
+     * 사이클 타이머 동결 + 시작 불가 (samd20 timer의 sys_status!=SETUP 게이트).
+     * 의도된 legacy-충실 거동: 동결 중엔 abort도 미처리 — E-stop은 app_input이
+     * 독립 SOL OFF(app_input.c:46)로 커버하지만, overload/OVTIME은 US만 독립
+     * 정지(app_overload는 SOL 미해제) → mid-cycle SOL은 run 페이지 복귀 시
+     * 레벨-기반 abort가 해제 (리뷰 반영, 결정=plan 순서 유지+문서화). */
     if (app_lcd_in_run_page() == 0u) {
         return;
     }
