@@ -1,112 +1,71 @@
-# Handoff: 감사 큐 D0~D6 전부 종결 (D3 fram-robust + D6 eth-reapply 머지) — 다음 = D5 reconcile
+# Handoff: weld 슬라이스4 CODE-COMPLETE (감사 D2/D4 종결) — 다음 = 스택 HW 검증 → 순서 머지
 
-**Generated**: 2026-07-04 (c 세션 마감)
-**Branch**: `main` (`d9fb326`, **origin 동기 = push 완료**)
-**Status**: Ready — 2026-07-02 감사 결정 큐 **D0~D6 전부 종결**. 다음 = **D5(미머지 reconcile b→d→ch1, 코딩 세션)**
+**Generated**: 2026-07-04 (f 세션 마감)
+**Branch**: `feat/stage-weld-slice4-trigger` (tip `1cb76bd`, ch1' 스택 위, **미머지·push 미실행**)
+**Status**: CODE-COMPLETE — 최종 opus whole-branch cpp-review 승인(0 Critical/0 Important 잔존), Ready-to-merge YES. **머지/태그 = 스택 b'→d'→ch1'→slice4 전체 HW 게이트 뒤.**
 
-> **요약**: 2026-07-04 하루 3세션으로 감사 큐 잔여분을 전부 닫음.
-> ① **D3 'fram-i2c-robustness'** HW 회귀 PASS → 머지 `be2fac9` + tag `hw-revA_fw-stage-fram-robust`.
-> ② **D6 'eth-reapply(M7)'** brainstorming→spec→plan→subagent-driven 4 Task→최종 opus 리뷰(0 Crit/0 Imp)→**HW E2E 6항목 PASS**(인터랙티브: 사용자 LCD + 네트워크/RTU 검증) → 머지 `6467d67` + tag `hw-revA_fw-stage-eth-reapply`.
-> 모든 게이트 GREEN: our-code 0-warning + host 7스위트 PASS. 남은 백로그 = D5(reconcile) + HW-gated(weld slice4/B-SEAM/6b/overload) + HMI-트리거(M6/M8/M9, H4+IWDG).
+> **요약**: weld 슬라이스4(TRIGGER 모드+양손 트리거+안전 abort+사이클 진입 게이팅+감사 D2 클램프 M1~M4+D4/H1 래치)를
+> subagent-driven으로 10 Task 전부 실행. Task별 2-stage 리뷰 전건 Approved.
+> 최종 리뷰가 **I-1**(output_power FRAM 로드 미클램프 — 진폭 언더플로 경로) 1건을 추가 발견 → fix `1cb76bd` + 재리뷰 Resolved.
+> 게이트 GREEN: 클린 reconfigure 빌드 our-code 0-warning FLASH 47.33%/RAM 17.31% + host **13스위트**(기존 12+신규 app_weld_trigger_fsm) PASS.
 
 ## Goal
 
-STM32F410RBT 단일 MCU 통합 펌웨어의 2026-07-02 전면 감사 수정 큐(D0~D6) 실행 완료. 이번 세션 몫 = D3 HW 회귀→머지, D6 설계→구현→HW E2E→머지.
+samd20 공압 프레스 사이클의 물리 계층(양손 트리거/TRIGGER 모드/안전 abort) + 감사 D2/D4 수정을 weld 스테이지에 흡수. spec = `docs/superpowers/specs/2026-07-04-stage-weld-cycle-slice4-trigger-design.md`, plan = `docs/superpowers/plans/2026-07-04-stage-weld-cycle-slice4-trigger.md` (10 Task).
 
-## Completed
+## Completed (코드 12커밋, BASE `e0bc491`)
 
-- [x] **D3 HW 회귀 + 머지** (`be2fac9`, tag `hw-revA_fw-stage-fram-robust`): 부팅 FRAM 저장값 유지(폴백 미발동)+LCD 육안 / ceiling 무회귀 / FC06 write→리셋→리로드. mon `[cfg]` 캡처는 사용자 결정으로 생략(RS-485 DE 미제어, ①③이 FRAM 로드 입증).
-- [x] **D6 eth-reapply(M7) 전체 사이클** (`6467d67`, tag `hw-revA_fw-stage-eth-reapply`): LCD DATA_SAVE의 ether/comm_mode 변경을 재부팅 없이 W5500에 반영(samd20 main.c:3327-3403 거동 복원). 코드 4커밋+리뷰반영 1커밋(bc46671→625e651).
-- [x] **M7 HW E2E 6항목 PASS**: mode-only SERIAL→ETH(G4 실증) / IP .70→.199 즉시 반영(본체) / STATIC→DHCP(리스+LCD 표시, F2) / DHCP→STATIC(직접 입력) / ETH→SERIAL 복귀 / ceiling 무회귀(1×4→0≈560ms).
-- [x] docs: changelog·NEXT_STEPS(§1.3 D3/D6 ✅, §2.2 큐)·RESUME(3개 세션 항목)·메모리(`project-audit-2026-07`)·SDD ledger.
+- [x] `4541ef4` **H1/D4**: WELD 모드 래치(CYL1→WELD 전이 시점 단일 스냅샷 `s_latched_multi/energy`) + 전이 카운터 리셋 — 런중 EN_MULTI/EN_ENERGY 토글 무력화. host 3테스트.
+- [x] `a11d2b8` **abort 입력**: `weld_in_t.abort` — 임의 상태 SOL OFF+READY, WELD면 weld_stop 엣지, cycle_done 미발행. 상태별 host 테스트(step 카운트 {1,4,10,12} 실측 보정 — comp_time 7-tick quirk).
+- [x] `57788aa`+`e31c69e` **TRIGGER 모드**: dn/up 엣지 래치, CYL1=SENSE_DN 무기한 대기(죽은 CYL_TIMEOUT 충실), WELD=trigger_time2/HOLD=trigger_time3, CYL2=legacy 강제 set(main.c:1593) 즉시 exit, run_mode 사이클 래치. `enter_weld()`/`hold_time()` helper로 DELAY/TRIGGER DRY — DELAY byte-equivalence 리뷰어 trace 입증.
+- [x] `51fb9e2` **M1**: `limit_energy==0` = 에너지-도달 체크 off (reg_calc+weld FSM 두 소비자, OVTIME/backstop 유효 유지).
+- [x] `608de22` **트리거 FSM 신설**(`app_weld_trigger_fsm`, 순수): 양손 start(레벨 파생)/in_cycle 재장전(`cycle_started()` 글루 위임=게이팅 실패 시 재장전 벌칙 없음)/safety abort(f_safty∧CYL1∧한손 release)/센서 press 엣지. legacy main.c:1219/1404-1407/1472/1484 대응 리뷰어 독립 대조. host 신규 스위트+Makefile 중복 3줄 정리.
+- [x] `d035802` **진입 게이팅**: `app_reg_start_allowed()`(6-conjunct 읽기 전용) 신설 + START guard 4-break 공용화(equivalence 정적 입증, swallow 비대칭 보존). 직접런↔weld 상호배제 성립.
+- [x] `0aa91ad`+`9e3198d` **글루 배선**: 물리 트리거 스캔→진입 게이팅→abort 합성(estop/overload/reg error/safety)→신필드 주입 + tick `+=` 드리프트 무누적(>10tick 재동기) + **SETUP 게이트**(`app_lcd_in_run_page()` 신설) + M2 mo_out [50,100]. `9e3198d` = SETUP 동결 거동 주석 정정(아래 인간 결정 ①).
+- [x] `9792c5b` **M4**: `cfg_clamp.h` 신설 + LCD LV_* 10케이스 Modbus-동일 클램프+변경시 에코(전수 대조 drift 0) — 구 LV_OUT_POWER/LV_LIMIT_OUT_T `(uint8_t)` 무클램프 절단 버그(LOW-1) 폐쇄.
+- [x] `17a07e3` **M3**: FRAM 로드 comm speed/parity idx OOB→factory(0), `CFG_COMM_*_IDX_MAX` 공용 매크로.
+- [x] `1cb76bd` **I-1(최종 리뷰 발견→fix)**: output_power **FRAM 로드 경로만** 미클램프 — corrupt FRAM 0이면 `weld_amplitude`의 `op-50u` 언더플로로 임의 진폭(77). 로드 성공 시 `cfg_clamp_power` [50,100](RAM-only=M3 패턴)+host 테스트(0→50, 255→100). 재리뷰 Resolved.
+- [x] docs: changelog(슬라이스4 항목)/NEXT_STEPS(§1.2 slice4·§1.3 D2/D4 ✅)/RESUME(f 블록)/HANDOFF(본 문서)/SDD ledger.
+
+## 인간 결정 (이 세션, 2건)
+
+| 결정 | 내용 |
+|------|------|
+| ① SETUP 게이트 ↔ abort 순서 | plan 순서(SETUP 게이트가 abort보다 앞 = setup 페이지 체류 중 weld FSM 완전 동결) **유지+문서화**. 리뷰어 실사로 구현자 rationale 오류 적발: **overload는 SOL을 해제하지 않음**(`io_sol_dn(false)` 호출자 = weld 훅+`app_input.c:46` E-stop뿐; app_overload는 US만 RUN_RELEASE). 잔존 = setup 체류∧overload∧mid-cycle 교집합에서 SOL 유지→run 복귀 시 레벨-abort 해제. legacy samd20도 SETUP에서 timer 전체 동결 = 충실. 주석 `9e3198d`. |
+| ② I-1 fix | output_power FRAM 로드 클램프 추가 승인 (리뷰어 제안 형태 그대로). |
 
 ## Not Yet Done
 
-- [ ] **D5 reconcile (다음 작업, 코딩 세션)**: 미머지 3단위를 현 main(`d9fb326`)에 rebase — 순서 **b→d→ch1**:
-  1. `feat/physical-io-slice-b` (FREQ_IN 측정 — 독립·최고령, 방치위험 1순위)
-  2. `feat/physical-io-slice-d` (물리 명령 입력+E-stop — a⊂c⊂d superset; **board.c OSC OD를 main이 먼저 보유 → reconcile 필요**)
-  3. `feat/output-power-graph-ch1` (표시값 ch1 분리)
-  - **`app_reg_tick` 3-way 시그니처 semantic 통합 필수**: main=ovtime `reg_run_limits_t`(기준) / slice-d=+model_type / ch1=+cal_val
-  - 빌드+host PASS까지가 코딩 세션 몫. **머지/태그는 HW 검증 후**(기존 정책).
-- [ ] 나머지 백로그: D2/D4(weld slice4 일괄), H4+IWDG 별도 슬라이스, HW-gated(B-SEAM/6b/overload), M6/M8/M9(HMI 착수 시) — `docs/NEXT_STEPS.md` §1.2/§1.3.
+- [ ] **스택 HW 검증 세션 (다음 작업)**: 패널 rig에서 spec §7.3 **8항목** + 추가 노트 2건:
+  1. SETUP 체류 중 overload → SOL 유지, run 페이지 복귀 → 해제 (인간 결정 ① 거동 확인)
+  2. LCD LV_* 클램프 에코 스팟체크 (예: DELAY에 600 입력 → 패널 500 스냅)
+  - 검증 규칙 = **mbpoll/LCD 육안만 (SWD halt 금지)**, 브랜치 전환 시 **reconfigure 필수**(GLOB 함정).
+- [ ] **머지+태그**: HW PASS 후 **b'→d'→ch1'→slice4** 순서, 단위별 `--no-ff`+태그 (backup=`backup/pre-d5-*`).
+  - ⚠ **docs 충돌 예상**: 이 브랜치의 docs 갱신(changelog/NEXT_STEPS/RESUME/HANDOFF)은 D5-이전 base 위 — main의 d/e 세션 docs 커밋(`9afa4c3`/`5a677f0` 등)과 충돌 시 양쪽 이력 보존으로 해소(코드 충돌은 없음 — fw/는 스택 선형).
+- [ ] Defer 백로그(차기 정리 커밋 후보): m-2/이월#8 `app_weld_request_start` dormant API+stale 주석 정리, 이월#6 test Makefile BIN_OL/IN/OSC 룰블록 중복, m-1 backstop fault 경로 보조 상태 리셋(또는 spec §3.1 문구 정정). 전체 목록 = `.superpowers/sdd/progress.md`.
+- [ ] 기존 HW-gated: B-SEAM OSC 물리 구동 / 6b signal calibration(에너지 절대 E2E 포함) / overload 보호 슬라이스 / HMI-트리거(M6/M8/M9, H4+IWDG).
 
-## Failed Approaches (Don't Repeat These)
+## Failed Approaches / 절차 노트
 
-코드 차원 실패 없음(전 Task 1회 통과). **벤치 함정 3건** (M7 E2E 중 규명, 시간 소모 큼):
+- 코드 차원 실패 없음 (전 Task 1회 리뷰 통과; Task 7만 Important 1건 → 인간 결정으로 해소).
+- **구현자 rationale 오류 1건**(Task 7): "overload도 독립 SOL OFF" 주장 — opus 리뷰어 grep 실사로 반증. 안전 관련 주장은 리뷰어가 콜사이트 실사할 것.
+- 최종 리뷰어 API 오류 2회 중단 → SendMessage 재개로 완주 (재개 시 검증 상태 유지됨).
+- Task 4/7 리포트 파일이 이전 세션 stale 리포트와 이름 충돌 — 디렉토리가 gitignore라 무해, 덮어씀.
 
-1. **M7 플래시 직후 RTU 무응답 → 펌웨어 회귀로 오인**. 실제 = 직전 D3 세션에서 사용자 LCD 확인 중 **addr=NONE이 FRAM에 저장**돼 있었음. 규명 경로: main 재플래시 이분 실험(main도 무응답=펌웨어 무죄) → SWD 정적 read로 `g_cfg.comm_address=0` 확정. **시그니처**: ping 응답(+SERIAL에서도 eth가 static netinfo 적용) + TCP :502 닫힘 + RTU 무응답 = "SERIAL+addr=NONE".
-2. **빈 IP 스캔을 믿고 .71/.74 사용 → 타 기기 선점으로 판정 불가**. 시험 네트워크(192.168.1.x)가 붐빔 — ping 스캔 직후에도 기기가 나타남. **항상 ARP MAC 대조로 보드(00:08:dc:78:91:71) 여부 확인**. .199처럼 높은 대역이 안전.
-3. **LCD IP 키패드 오입력**: "74" 입력이 "4"로 커밋됨(7 미등록). 저장 전 LCD 화면 값 확인 필수. RAM 검증 = SWD 정적 read `g_cfg+46..49`.
-
-절차 노트: **Task 3 구현자(haiku)가 존재하지 않는 테스트 스위트명을 리포트에 기재**(허위 증거) → 컨트롤러 독립 재검증으로 해소. **haiku 구현자 리포트의 검증 섹션은 신뢰 금지, 직접 재검증할 것.**
-
-## Key Decisions
+## Key Decisions (설계, spec 시점 + 실행 중 확정)
 
 | Decision | Rationale |
 |----------|-----------|
-| M7 = A안(dirty-flag + `app_eth_tick` 재적용) | hook 직접 호출은 app_lcd↔app_eth 사이클(M1 위반), 매-tick netinfo 비교는 DHCP 리스 RAM-미러가 자기-트리거 → 무한 재적용 위험 |
-| `app_modbus_tcp_reset()`(sock0 강제 close) 필수 | 단일소켓 서버 — IP 변경 후 stale ESTABLISHED가 남으면 listen 소켓 부재로 새 IP 접속 영구 차단(F1) |
-| `eth_apply_on_link` DHCP 분기 `s_available=false` 명시 | 부팅 경로에선 무해했지만 재적용(STATIC_UP→DHCP)에선 true 잔존 버그(F2) — 최종 리뷰가 "load-bearing fix"로 확인 |
-| mode-only 변경도 ether hook 발화(G4) | 기존 커밋 로직은 ether 필드 변경시에만 발화 → STATIC↔DHCP 전환이 트리거 없음 |
-| D3 mon `[cfg]` 캡처 생략 | RS-485 DE 미제어로 mon 수신 불가 + 다른 3항목이 FRAM 로드 정상을 입증(사용자 결정) |
+| 사이클 진입 게이팅 (의도된 deviation) | START가 거부될 상태면 사이클 자체 미시작 — SOL만 하강하는 블라인드 사이클 차단 (spec §4.3, 사용자 결정 2026-07-04 e) |
+| A안 = 순수 트리거 FSM 분리 | check_remote_input()의 weld 몫을 host-testable 순수 모듈로 (13번째 스위트) |
+| H1 래치 = CYL1→WELD 전이 시점 | 무장과 exit가 같은 스냅샷 — 1-tick 토글 창 제거 |
+| CYL2 즉시 exit | legacy main.c:1593 강제 set 충실 (SENSE_UP 실대기 필요 판정 시 1줄 제거, spec §3.3) |
+| limit_energy=0 = off | limit_out_time=0=OVTIME off와 동일 의미론 (M1) |
+| in_cycle set = 글루 위임 | 게이팅에 막힌 트리거가 양손 재장전을 강요하지 않도록 (spec §2.3) |
+| I-1 클램프 = RAM-only | M3 comm idx와 동일 패턴 (corrupt FRAM 바이트 write-back 안 함) |
 
-## Current State
+## 상태 스냅샷
 
-**Working**: main = 감사 큐 D0~D6 전부 반영. LCD 저장으로 IP/모드가 가동 중 즉시 전환됨(HW 실증). origin 동기(push 완료).
-
-**Board**: M7 머지 코드 적재(플래시=브랜치 tip, 코드 동일). **SERIAL/addr=1/9600/EVEN, OUT_POWER=56, FRAM ether_ip=192.168.1.199**(이전 .70에서 변경 — ETH 시험 시 참고).
-
-**Uncommitted**: 없음 (untracked `ref/signal/`은 이 세션과 무관, 그대로 둠).
-
-## Files to Know
-
-| File | Why It Matters |
-|------|----------------|
-| `fw/src/app_eth.c` | `eth_reapply()` phase별 재적용 + F2. 4-phase 머신(DOWN/LINKWAIT/STATIC_UP/DHCP_RUN) |
-| `fw/src/app_lcd_input.c` | `commit_comm_mode_and_ether()` — hook 발화 조건 `ether_changed\|\|mode_changed` |
-| `fw/src/app_lcd.c` / `fw/include/app_lcd.h` | `app_lcd_ether_dirty_take()` consume-and-clear (M1 discipline 패턴) |
-| `fw/src/app_modbus_tcp.c` | `app_modbus_tcp_reset()` — sock0 close, FSM이 2 poll 내 재-listen |
-| `docs/superpowers/specs/2026-07-04-eth-reapply-m7-design.md` | M7 설계 정본 (§6 HW E2E 체크리스트 포함) |
-| `.superpowers/sdd/progress.md` | SDD ledger — Task별 커밋/리뷰/Minor defer 목록 |
-
-## Code Context
-
-M7 데이터 흐름 (superloop 순서가 안전성의 근거 — LCD dispatch → `app_eth_tick` → `app_modbus_tick`):
-
-```c
-/* app_lcd.h — LCD 커밋 후 첫 호출만 true */
-bool app_lcd_ether_dirty_take(void);
-
-/* app_eth.c: app_eth_tick() 진입부 */
-if (app_lcd_ether_dirty_take()) { eth_reapply(); }
-/* eth_reapply: STATIC_UP → tcp_reset+re-apply / DHCP_RUN(모드유지) → 리스 보존
- *             DHCP_RUN(이탈) → DHCP_stop+tcp_reset+re-apply / DOWN·LINKWAIT → no-op */
-
-/* app_modbus_tcp.h */
-void app_modbus_tcp_reset(void);   /* close(sock0) — 다음 2 poll 내 재-listen */
-```
-
-D5 reconcile 대상 시그니처 충돌 (semantic 통합 필요):
-
-```c
-/* main(기준, ovtime): */ void app_reg_tick(const reg_run_limits_t *limits);
-/* slice-d:            */ +model_type 주입   /* ch1: */ +cal_val 주입
-```
-
-## Resume Instructions
-
-1. sanity: `git log --oneline -3`(main `d9fb326`) + `make -C fw/test`(7스위트 PASS) + `git tag -l 'hw-revA*'`(`-fram-robust`/`-eth-reapply` 확인).
-2. **D5 착수(코딩 세션, 보드 불필요)**: `docs/NEXT_STEPS.md` §1.3 D5 행 + 메모리 `project-physical-io-layer`/`project-osc-boot-init`/`project-output-power-graph-ch1` 숙지 → brainstorming부터(reconcile 전략: rebase vs merge, 충돌 단위 실측 후 plan).
-   - 순서 b→d→ch1. slice-d rebase 시 **board.c OSC OD 중복**(main이 선보유) reconcile.
-   - 완료 기준 = 3단위 모두 현 main 위에서 빌드+host PASS. 머지/태그는 이후 HW 세션.
-3. 브랜치 전환 시 **cmake reconfigure 필수**: `env -u STM32_TOOLCHAIN cmake -S fw -B fw/build -G Ninja` (GLOB 규칙 — slice 브랜치들은 신규 소스 파일 보유).
-4. HW 세션이면: 검증 규칙 = mbpoll/LCD만, SWD halt 금지(정적 1회 read 예외), serial stty 9600 8E1 리셋 습관.
-
-## Warnings
-
-- ⚠ **보드 FRAM ether_ip=.199로 변경됨** — ETH 시험 시 .70이 아님. DHCP 리스는 .70으로 나옴(서버 기억).
-- ⚠ **시험 네트워크 IP 충돌 잦음** — 보드 판별은 반드시 ARP MAC(00:08:dc:78:91:71).
-- ⚠ **부분실패 잔여 리스크(defer)**: 부팅 시 일부 FRAM read 실패 → 기본값 동작 중 LCD 저장하면 기본값이 FRAM에 굳음(D3 의도된 범위, write-hardening 후속 후보).
-- ⚠ M7 defer Minor 2건: sock0 재-listen은 실제 2 poll(주석 "다음 poll"은 표현 과잉) / `[eth] reapply` 로그는 no-op 경로에서도 출력(phase 필드로 구분 가능).
-- ⚠ vendor wiznet `socket.h` 경고 3건 = pre-existing(full rebuild에서만 노출), our-code 0-warning 판정과 무관.
-- ⚠ 미착수 감사 항목(D2/D4/H4/M6/M8/M9)의 파일:라인 근거 = `docs/NEXT_STEPS.md` §1.3 + 메모리 `project-audit-2026-07` (+git: `git show 49edfb8:HANDOFF.md`).
+- 브랜치 스택: `main`(5a677f0) ← `feat/physical-io-slice-b'` ← `slice-d'` ← `feat/output-power-graph-ch1`(9c7cd4a) ← **`feat/stage-weld-slice4-trigger`(1cb76bd = spec 434f7f5 + plan e0bc491 + 코드 12 + docs)**
+- 게이트: our-code 0-warning FLASH 47.33%/RAM 17.31%, host 13스위트 PASS, 최종 opus 리뷰 0 Crit/0 Imp.
+- push 미실행. 보드 = 이전 세션 상태(SERIAL/addr=1/9600/EVEN, FRAM ether_ip=.199).
