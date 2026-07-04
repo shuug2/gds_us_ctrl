@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### 2026-07-04 — D5 스택 HW 검증 세션: b'→d'→ch1'→slice4 전부 머지+태그 (패널 rig)
+
+패널 rig HW 세션 (인터랙티브: 사용자 LCD/물리버튼 + 컨트롤러 mbpoll/SWD 정적 read). D5 스택 4단위를 순서대로 플래시→검증→`--no-ff` 머지+태그. main 최종 `b571da0`, host 13스위트 PASS, our-code 0-warning.
+
+- **b' FREQ_IN** (머지 `0cc34a8`, tag `hw-revA_fw-stage-physio-b`): 리그 OSC 실신호 **34.46kHz** 측정(런 중 curr_freq 34452~34479, 지터 ±15Hz) + 정지 시 last_freq 유지 + LCD VAR_FREQ ~344 육안 + ceiling 회귀(1×8→0≈560ms). TIM5 캡처/FREQ_CONST 스케일 실증.
+- **d' 물리 명령+E-stop** (머지 `46055c9`, tag `hw-revA_fw-stage-physio-d`): ① B_START hold-to-run(STATUS 0→1→0, 육안 ICON_RUN) ② B_RESET→RESET→SEEK 체인 육안 ③ PC11 SEEK(multi) ④ **E-stop(std)**: PC11 idle-HIGH→즉시 활성(STATUS=0x02, 극성 스펙 일치)+START 차단+multi 복귀 시 RESET 없이 자동 해제. **⚠ EMSW 물리 해제-추종 = 라인 미배선 보류**(host-test 커버, 사용자 동의). ⑤ **의도된 거동 변화 2건 실증**: TOUCH(LCD RUN) hold 중 560ms 미정지(운용 ceiling 제외) / hand 모드 COMM=560ms·REMOTE=누르는 중 자동정지 / multi COMM 런 **30s 절대 캡** 실동작. overload 실동작=기존 이연 유지.
+- **ch1' 표시 소스** (머지 `e973721`, tag `hw-revA_fw-stage-power-ch1`): 회귀 PASS(ceiling+FREQ). **ch1 절대값 표시 E2E = 6b 이연** — 런 중 SWD 정적 read ch1_avg≈2(노이즈 플로어)=리그 전류-sense 아날로그 무신호, 표시 0은 변환 버그 아님(ch0도 0 = 가시적 회귀 없음). 머지 노트에 에너지 적분 교차영향 명기(spec 조건).
+- **slice4 weld 트리거** (머지 `b571da0`, tag `hw-revA_fw-stage-weld4`): ceiling 회귀 + **Modbus OUT_POWER 클램프**(120→100/30→50/56 원복) + **LCD M4 클램프 에코 육안 2건**(delay1 600→500 스냅 / OUT_POWER 49→50 스냅=LOW-1 가드 경로) + work_cnt=0 유지(사이클 dormant 구조 확인). **⚠ 사이클 E2E(§7.3 1~6, 8) = 양손 SW_START1/2·SENSE_DN·f_safty 미배선 게이트 이연**(사용자 결정 — weld1~3 관례와 동일한 회귀-기준 머지; 트리거=물리 입력 전용이라 미배선 상태에서 사이클 발생 불가). SETUP-overload SOL 노트도 배선 후 확인 항목.
+- 벤치/절차 노트: ① RS-485 **첫 write 간헐 무효** — write마다 "Written" 확인 필수 ② Modbus **START(0x1B)와 STOP(0x1C)은 별도 레지스터** — START에 0 write는 no-op(이번 세션 착오로 30s 캡을 우연 실증) ③ 사용자 조작-폴링 협응은 타이밍 실패 잦음 — 육안 관찰 우선+캡처는 보조 ④ SWD 정적 read = `openocd read_memory`(halt 없음) 유효.
+- 남은 미머지 없음(스택 소진). 구 브랜치 `feat/physical-io-slice-a/c`(d'에 흡수된 pre-D5 원본)와 `backup/pre-d5-*` 3개는 참조용 보존. push 미실행.
+
 ### 2026-07-04 — weld 슬라이스4 (TRIGGER+양손 트리거+abort+게이팅+D2 클램프) CODE-COMPLETE — 감사 D2/D4 종결
 
 subagent-driven 코딩 세션 (보드 불필요). plan(`plans/2026-07-04-stage-weld-cycle-slice4-trigger.md`) 10 Task 전부 실행 — Task별 2-stage 리뷰(spec+quality) 전건 Approved + 최종 whole-branch opus cpp-review = **CODE-COMPLETE 승인, Ready-to-merge YES**(머지/태그는 스택 b'→d'→ch1'→slice4 전체 HW 게이트). 브랜치 `feat/stage-weld-slice4-trigger`(ch1' 스택 위, BASE `e0bc491`), 코드 12커밋.
