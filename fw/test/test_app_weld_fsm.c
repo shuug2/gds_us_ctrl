@@ -466,6 +466,90 @@ static void test_multi_off_regression(void)
     CHECK_EQ(t.cycle_done_cnt, 1);
 }
 
+/* H1: WELD 진행 중 multi_ctrl 토글(0->1)이 exit 경로를 바꾸지 못함 —
+ * 시간-exit로 정상 완료해야 함 (감사 H1 근본수정). */
+static void test_h1_multi_toggle_mid_weld_ignored(void)
+{
+    weld_fsm_init();
+    weld_in_t in;
+    memset(&in, 0, sizeof(in));
+    in.limit_delay_time1 = 2u;   /* CYL1/CYL2 = 2 tick */
+    in.limit_delay_time2 = 10u;  /* WELD = 10 tick (시간 모드) */
+    in.limit_delay_time3 = 2u;
+    in.output_power      = 100u;
+    in.limit_mo_out1 = 60u; in.limit_mo_out2 = 80u;
+    in.limit_mo_time1 = 1u;  in.limit_mo_time2 = 2u;  /* 토글이 반영되면 2 tick만에 스테핑 종료 */
+
+    weld_out_t out;
+    in.start = 1u;
+    weld_fsm_step(&in, &out);            /* READY -> CYL1 */
+    in.start = 0u;
+    for (int i = 0; i < 3; i++) { weld_fsm_step(&in, &out); }  /* CYL1 소진 -> WELD 진입 */
+    CHECK_EQ(weld_fsm_status(), WELD_WELD);
+    CHECK_EQ(out.weld_start, 1u);
+
+    in.multi_ctrl = 1u;                  /* 런중 토글 */
+    int amp_changes = 0, stops = 0;
+    for (int i = 0; i < 15 && weld_fsm_status() == WELD_WELD; i++) {
+        weld_fsm_step(&in, &out);
+        amp_changes += out.amp_change;
+        stops       += out.weld_stop;
+    }
+    CHECK_EQ(amp_changes, 0);            /* 스테핑 미발동 = 래치 유효 */
+    CHECK_EQ(stops, 1);                  /* 시간-exit 1회로 정상 HOLD 진입 */
+    CHECK_EQ(weld_fsm_status(), WELD_HOLD);
+}
+
+/* H1: multi로 시작한 WELD는 런중 multi_ctrl=0 토글에도 스테핑 계속. */
+static void test_h1_multi_off_toggle_mid_weld_ignored(void)
+{
+    weld_fsm_init();
+    weld_in_t in;
+    memset(&in, 0, sizeof(in));
+    in.limit_delay_time1 = 2u; in.limit_delay_time2 = 10u; in.limit_delay_time3 = 2u;
+    in.output_power = 100u;
+    in.multi_ctrl = 1u;
+    in.limit_mo_out1 = 60u; in.limit_mo_out2 = 80u;
+    in.limit_mo_time1 = 3u; in.limit_mo_time2 = 6u;
+
+    weld_out_t out;
+    in.start = 1u;
+    weld_fsm_step(&in, &out);
+    in.start = 0u;
+    for (int i = 0; i < 3; i++) { weld_fsm_step(&in, &out); }
+    CHECK_EQ(weld_fsm_status(), WELD_WELD);
+
+    in.multi_ctrl = 0u;                  /* 런중 off 토글 */
+    int amp_changes = 0;
+    for (int i = 0; i < 10 && weld_fsm_status() == WELD_WELD; i++) {
+        weld_fsm_step(&in, &out);
+        amp_changes += out.amp_change;
+    }
+    CHECK_EQ(amp_changes, 1);            /* 2단 전환 발동 = multi 래치 유지 */
+    CHECK_EQ(weld_fsm_status(), WELD_HOLD);
+}
+
+/* H1: 이전 multi 사이클의 s_multi_stage/elapsed가 다음 사이클에 누출되지 않음. */
+static void test_h1_counters_reset_between_cycles(void)
+{
+    weld_fsm_init();
+    weld_in_t in;
+    memset(&in, 0, sizeof(in));
+    in.limit_delay_time1 = 2u; in.limit_delay_time2 = 10u; in.limit_delay_time3 = 2u;
+    in.output_power = 100u;
+    in.multi_ctrl = 1u;
+    in.limit_mo_out1 = 60u; in.limit_mo_out2 = 80u;
+    in.limit_mo_time1 = 3u; in.limit_mo_time2 = 6u;
+
+    trace_t t;
+    run_cycle(&in, &t, 200);             /* multi 사이클 1회 완주 */
+    CHECK_EQ(t.amp_change_cnt, 1);
+
+    run_cycle(&in, &t, 200);             /* 두 번째 사이클 — 카운터 fresh */
+    CHECK_EQ(t.amp_change_cnt, 1);       /* stage 0부터 다시: 전환 정확히 1회 */
+    CHECK_EQ(t.cycle_done_cnt, 1);
+}
+
 int main(void)
 {
     test_init_ready();
@@ -489,6 +573,9 @@ int main(void)
     test_multi_boundary_time1_gt_time2();
     test_multi_amp_vectors();
     test_multi_off_regression();
+    test_h1_multi_toggle_mid_weld_ignored();
+    test_h1_multi_off_toggle_mid_weld_ignored();
+    test_h1_counters_reset_between_cycles();
     if (failures) { printf("test_app_weld_fsm: %d FAILED\n", failures); return 1; }
     printf("test_app_weld_fsm: all passed\n");
     return 0;

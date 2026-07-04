@@ -9,6 +9,8 @@ static uint16_t s_comp_time;        /* weld amplitude-comp counter (samd20) */
 static uint8_t  s_sol_dn;           /* solenoid level held across steps */
 static uint8_t  s_multi_stage;      /* 0 = out1 단계, 1 = out2 단계 (samd20 multi_ctrl_stage) */
 static uint16_t s_multi_elapsed;    /* WELD 진입 후 경과 (10ms/count); time1/time2와 직접 비교 */
+static uint8_t  s_latched_multi;    /* H1: WELD 진입 시 multi_ctrl 스냅샷 (감사 D4) */
+static uint8_t  s_latched_energy;   /* H1: WELD 진입 시 energy_ctrl 스냅샷 */
 
 void weld_fsm_init(void)
 {
@@ -19,6 +21,8 @@ void weld_fsm_init(void)
     s_sol_dn         = 0u;
     s_multi_stage    = 0u;
     s_multi_elapsed  = 0u;
+    s_latched_multi  = 0u;
+    s_latched_energy = 0u;
 }
 
 uint8_t weld_fsm_status(void)
@@ -90,16 +94,23 @@ void weld_fsm_step(const weld_in_t *in, weld_out_t *out)
         if (s_f_status_start == 0u) {
             s_f_status_start = 1u;
             s_sol_dn         = 1u;       /* SOL_DN ON (cylinder descends) */
-        } else if (s_temp_time == 0u) {
+        } else if (s_temp_time == 0u) {          /* WELD_CYL1 전이 블록 */
             s_f_status_start = 0u;
             s_run_status     = WELD_WELD;
+            /* H1: 무장(temp_time 선택)과 WELD 최초진입(진폭 분기)이 같은 값을 보도록
+             * 전이 시점에 단일 스냅샷으로 래치 — 사이 1-tick 토글 창 제거 (감사 D4). */
+            s_latched_multi  = in->multi_ctrl;   /* H1 래치 (전이 시점 = 단일 스냅샷) */
+            s_latched_energy = in->energy_ctrl;
+            s_multi_stage    = 0u;               /* H1 카운터 리셋 */
+            s_multi_elapsed  = 0u;
             /* comp_time은 항상 ldt2에서 유도 (진폭 보정; energy 모드에서도 적용 —
              * samd20 main.c:1546-1547은 energy_ctrl 무관). slice2 §3.2. */
             s_comp_time = (in->limit_delay_time2 > 6u) ? WELD_COMP_FULL
                                                        : in->limit_delay_time2;
             /* temp_time: energy 모드 -> backstop 카운트다운(limit_out_time초 ×100
-             * tick), 시간 모드 -> 기존 ldt2/7 (samd20 main.c:1504). */
-            if (in->energy_ctrl) {
+             * tick), 시간 모드 -> 기존 ldt2/7 (samd20 main.c:1504). s_latched_energy로
+             * 통일 — 무장과 exit가 동일 스냅샷을 사용 (H1). */
+            if (s_latched_energy) {
                 s_temp_time = weld_backstop_ticks(in->limit_out_time);
             } else {
                 s_temp_time = (in->limit_delay_time2 > 6u) ? in->limit_delay_time2
@@ -111,7 +122,8 @@ void weld_fsm_step(const weld_in_t *in, weld_out_t *out)
     case WELD_WELD:
         if (s_f_status_start == 0u) {
             s_f_status_start = 1u;
-            if (in->multi_ctrl) {
+            if (s_latched_multi) {       /* H1: 전이 시점 스냅샷 (in->multi_ctrl 아님 —
+                                             무장-직후 1-tick 토글 창 제거) */
                 s_multi_stage   = 0u;
                 s_multi_elapsed = 1u;  /* weld_start step은 elapsed=1로 시작 (전환 step 포함, slice-1 s_temp_time 정합) */
                 out->amplitude  = weld_mo_amplitude(in->limit_mo_out1);  /* 1단 (comp 미적용) */
@@ -119,9 +131,10 @@ void weld_fsm_step(const weld_in_t *in, weld_out_t *out)
                 out->amplitude  = weld_amplitude(in->output_power, s_comp_time);
             }
             out->weld_start  = 1u;       /* glue: US_CYCLE START + pot write */
-        } else if (in->multi_ctrl) {
+        } else if (s_latched_multi) {
             /* multi: 2단 진폭 스테핑 (samd20 5232-5258). 우선순위 최상 — energy/시간
-             * exit 미발동(아래 else-if 분기 진입 안 함). spec §3.4. */
+             * exit 미발동(아래 else-if 분기 진입 안 함). spec §3.4. H1: 전이 시점
+             * 스냅샷(s_latched_multi) 참조 — 런중 in->multi_ctrl 토글 무시. */
             if (s_multi_elapsed < 0xFFFFu) {
                 s_multi_elapsed++;                   /* 포화 가드 (time2 매우 클 때 wrap 방지) */
             }
@@ -136,9 +149,10 @@ void weld_fsm_step(const weld_in_t *in, weld_out_t *out)
                 s_run_status     = WELD_HOLD;
                 s_temp_time      = in->limit_delay_time3;
             }
-        } else if (in->energy_ctrl) {
+        } else if (s_latched_energy) {
             /* energy 모드: 에너지 도달 -> 정상 종료(samd20 5272); 미도달 +
-             * backstop 만료 -> abort(samd20 5288, 에러 표시는 이연). spec §3.3. */
+             * backstop 만료 -> abort(samd20 5288, 에러 표시는 이연). spec §3.3. H1:
+             * 전이 시점 스냅샷(s_latched_energy) 참조 — 런중 in->energy_ctrl 토글 무시. */
             if (in->curr_energy >= in->limit_energy) {
                 out->weld_stop   = 1u;
                 s_f_status_start = 0u;
@@ -150,6 +164,8 @@ void weld_fsm_step(const weld_in_t *in, weld_out_t *out)
                 s_sol_dn         = 0u;   /* 실린더 즉시 상승 */
                 s_f_status_start = 0u;
                 s_run_status     = WELD_READY;   /* CYL2 미경유, work_cnt++ 없음 */
+                s_latched_multi  = 0u;            /* H1: READY 복귀 지점 클리어 */
+                s_latched_energy = 0u;
             }
         } else if (s_temp_time == 0u) {
             /* slice-1 시간-exit (energy_ctrl off) — 무회귀. */
@@ -178,14 +194,18 @@ void weld_fsm_step(const weld_in_t *in, weld_out_t *out)
             s_f_status_start = 0u;
             s_run_status     = WELD_READY;
             out->cycle_done  = 1u;       /* glue: work_cnt++ */
+            s_latched_multi  = 0u;       /* H1: READY 복귀 지점 클리어 */
+            s_latched_energy = 0u;
         }
         break;
 
     default:
         /* unreachable in normal operation (s_run_status is only ever a WELD_*
          * value); fail-safe on fault — drop the solenoid (cpp-review LOW-2). */
-        s_run_status = WELD_READY;
-        s_sol_dn     = 0u;
+        s_run_status     = WELD_READY;
+        s_sol_dn         = 0u;
+        s_latched_multi  = 0u;          /* H1: READY 복귀 지점 클리어 */
+        s_latched_energy = 0u;
         break;
     }
 
