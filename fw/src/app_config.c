@@ -128,7 +128,9 @@ uint8_t app_config_load(app_config_t *cfg)
     if (fram_read_byte(FRAM_ADDR_TIMEOVER, &b8)) { cfg->limit_out_time = b8; } else { fail++; }
     if (!fram_read_byte(FRAM_ADDR_COMM_ADDR,   &cfg->comm_address))     { fail++; }
     if (!fram_read_byte(FRAM_ADDR_COMM_SPEED,  &cfg->comm_speed_idx))   { fail++; }
+    else if (cfg->comm_speed_idx > CFG_COMM_SPEED_IDX_MAX)  { cfg->comm_speed_idx = 0u; }  /* M3: OOB -> factory */
     if (!fram_read_byte(FRAM_ADDR_COMM_PARITY, &cfg->comm_parity_idx))  { fail++; }
+    else if (cfg->comm_parity_idx > CFG_COMM_PARITY_IDX_MAX) { cfg->comm_parity_idx = 0u; } /* M3: OOB -> factory */
     if (fram_read_u16(FRAM_ADDR_CAL_VAL,      &u16)) { cfg->cal_val      = (int16_t)u16; } else { fail++; }
     if (fram_read_u16(FRAM_ADDR_FREQ_CAL_VAL, &u16)) { cfg->freq_cal_val = (int16_t)u16; } else { fail++; }
     if (!fram_read_byte(FRAM_ADDR_COMM_MODE, &cfg->comm_mode))          { fail++; }

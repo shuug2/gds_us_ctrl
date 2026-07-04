@@ -60,8 +60,8 @@
 #define COMM_PARITY_TXT_LEN  4u
 #define COMM_ADDR_TXT_LEN    4u
 #define COMM_IP_TXT_LEN      16u
-#define COMM_SPEED_IDX_MAX   5u   /* comm_speed_txt[6][6] -> 0..5 */
-#define COMM_PARITY_IDX_MAX  2u   /* comm_parity_txt[3][4] -> 0..2 */
+#define COMM_SPEED_IDX_MAX   CFG_COMM_SPEED_IDX_MAX   /* app_config.h 공용 (M3) */
+#define COMM_PARITY_IDX_MAX  CFG_COMM_PARITY_IDX_MAX
 
 /* Long-press hold threshold. samd20 KEY_HOLD_TH=200 ticks of the 10ms key timer
  * (ref/samd20/define.h:34) => 2000 ms wall-clock (clean STM32 equivalent). */

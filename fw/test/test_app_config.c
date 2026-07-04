@@ -130,6 +130,19 @@ static void test_energy_read_fail_no_writeback(void)
     CHECK_EQ(mock_fram_write_count(), 0);
 }
 
+/* M3(감사 D2): FRAM 로드 comm idx OOB -> factory(0) 클램프 (렌더 테이블 OOB read 차단). */
+static void test_load_comm_idx_oob_clamped(void)
+{
+    app_config_t cfg;
+    mock_fram_reset();
+    mock_fram_poke(FRAM_ADDR_INIT_FLAG, FRAM_INIT_FLAG_MAGIC);   /* 초기화된 FRAM */
+    mock_fram_poke(FRAM_ADDR_COMM_SPEED, 6u);     /* > CFG_COMM_SPEED_IDX_MAX(5) */
+    mock_fram_poke(FRAM_ADDR_COMM_PARITY, 3u);    /* > CFG_COMM_PARITY_IDX_MAX(2) */
+    (void)app_config_load(&cfg);
+    CHECK_EQ(cfg.comm_speed_idx, 0u);             /* factory 기본 */
+    CHECK_EQ(cfg.comm_parity_idx, 0u);
+}
+
 /* M4(감사 D2): config-validation 클램프 헬퍼 — Modbus apply_writes 범위와 동일. */
 static void test_cfg_clamp_helpers(void)
 {
@@ -150,6 +163,7 @@ int main(void)
     test_partial_fail_field_fallback();
     test_energy_clamp_writeback();
     test_energy_read_fail_no_writeback();
+    test_load_comm_idx_oob_clamped();
     test_cfg_clamp_helpers();
     if (failures) { printf("test_app_config: %d FAILED\n", failures); return 1; }
     printf("test_app_config: all passed\n");
