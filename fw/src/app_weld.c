@@ -9,6 +9,7 @@
 #include "i2c_pot.h"      /* i2c_pot_set_dac (U4 진폭, raw DAC) */
 #include "sys_tick.h"
 #include "mon.h"
+#include "io.h"
 
 #define WELD_TICK_MS  10u   /* samd20 temp_time-- cadence */
 
@@ -31,6 +32,7 @@ void app_weld_request_start(void)
 
 void app_weld_hook_sol_dn(bool on)
 {
+    io_sol_dn(on);                 /* PB5 active-LOW (SOL_ON=LOW) */
     mon_printf("[weld] SOL_DN %s\r\n", on ? "ON" : "OFF");
 }
 

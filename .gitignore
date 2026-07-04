@@ -26,3 +26,7 @@ fw/cube/.mxproject
 *.swp
 .DS_Store
 
+# 로직 애널라이저 캡처 (대용량 측정 자료)
+ref/signal/
+*.sal
+

@@ -9,7 +9,11 @@
 #include "app_reg.h"
 #include "app_reg_calc.h"
 #include "app_seek_reset.h"   /* app_seek_reset_request, app_seek_reset_active */
+#include "app_overload.h"   /* app_overload_active (START 차단) */
+#include "app_input.h"      /* app_estop_active (START 차단, E-stop) */
 #include "adc1.h"
+#include "io.h"
+#include "board.h"          /* board_osc4 (PB14 OSC4 발진 게이트) */
 #include "sys_tick.h"
 #include "app_freq_fsm.h"
 #ifdef REG_TRACE
@@ -31,6 +35,13 @@
 #define REG_RAMP_MS      10u   /* M16 Timer1 0xFFB1 ~10.1 ms warm-up cadence (cad-C8) */
 #define RAMP_DONE_COUNT  401u  /* counter >= 401 (0x191) -> state 0 (verified §2.1) */
 #define ON_TIME_UNIT_MS  10u   /* limit_on_time unit: x10 ms (samd20 main.c:769) */
+/* Absolute on-time SAFETY ceiling. Fires for ANY active ultrasonic run
+ * (TOUCH/COMM/REMOTE/CYCLE) in ANY mode, independent of limit_on_time (works
+ * even when limit_on_time==0), NOT panel-editable. Transducer runaway backstop
+ * (lost release edge, stuck remote command). User decision 2026-06-27:
+ * unconditional, all sources incl. weld. */
+#define ON_TIME_SAFETY_MS  30000u   /* 30 s */
+#define MODEL_TYPE_HAND    0u       /* model_type/sys_mode: 0=hand (limit_on_time gate) */
 
 #ifdef REG_TRACE
 #define REG_TRACE_MS     500u  /* slow trace cadence so the mon log stays readable */
@@ -49,6 +60,7 @@ typedef struct {
     uint32_t prev_ramp_ms;           /* 10 ms warm-up cadence gate */
 
     uint8_t  us_run_status;          /* slice 2b: US_IDLE/REMOTE/TOUCH/COMM (FSM owns) */
+    uint8_t  us_out_on;              /* USOUT 마지막 구동 레벨 (전이 감지) */
     uint16_t max_power;              /* running peak of sel during the active run */
     uint16_t last_power;             /* peak latched on stop (us_off, samd20 4180) */
     uint16_t max_amp;                /* running peak of curr_amp during the run */
@@ -70,6 +82,12 @@ typedef struct {
 
 static reg_state_t   g_reg;
 static lcd_measure_t g_measure;
+
+void app_reg_hook_us_output(bool on)
+{
+    io_usout(on);                    /* PB4 active-HIGH = 초음파 출력 enable */
+    board_osc4(on);                  /* PB14 OSC4 active-LOW = 초음파 출력 중 LOW */
+}
 
 /* 자동 정지 공통 (on-time ceiling / energy-reached / OVTIME): 피크 래치 + IDLE.
  * TOUCH 런은 V30 데이터=0 release 페어링 위해 swallow_start 무장 (수동
@@ -133,6 +151,16 @@ void app_reg_command(us_cmd_t cmd, uint8_t src)
              * (samd20 SYS_ERROR가 START 무시). swallow consume 뒤 별도 break로
              * 둬서 위 비대칭(swallow 스킵)을 피함 (seek_reset 가드와 동일 패턴). */
             if (g_reg.error_status != 0u) {
+                break;
+            }
+            /* 과부하 활성 중 START 차단 (SAMD20 SYS_ERROR가 START 막음).
+             * seek_reset_active와 동일 직교 — 별도 break (swallow consume 뒤). */
+            if (app_overload_active() != 0u) {
+                break;
+            }
+            /* E-stop 활성 중 START 차단 (SAMD20 SYS_ESTOP). overload와 동일 직교 —
+             * 별도 break (swallow 대칭 보존). 레벨 기반(E-stop 떼면 자동 해제). */
+            if (app_estop_active() != 0u) {
                 break;
             }
             g_reg.us_run_status = src;   /* US_TOUCH or US_COMM */
@@ -260,6 +288,11 @@ static void reg_publish_measure(uint32_t now, int16_t freq_cal_val)
     g_measure.last_freq = g_reg.last_freq;
     g_measure.us_run_status = g_reg.us_run_status;
     g_measure.error_status  = g_reg.error_status;   /* OVTIME 등 fault → LCD/Modbus */
+    /* USOUT: run 활성(idle 아님)에 출력 enable. 전이에만 hook 구동 (active 재사용). */
+    if (active != g_reg.us_out_on) {
+        g_reg.us_out_on = active;
+        app_reg_hook_us_output(active != 0u);
+    }
 }
 
 void app_reg_tick(const reg_run_limits_t *lim)
@@ -281,22 +314,37 @@ void app_reg_tick(const reg_run_limits_t *lim)
         }
     }
 
-    /* Run on-time ceiling (limit_on_time x10 ms, 0 = off, panel-editable).
-     * COMM runs: samd20-faithful (main.c:5296 applies it to COMM/REMOTE in
-     * SYS_HAND; 2026-06-10 analysis doc authority — REMOTE ceiling lands with
-     * the REMOTE slice, NOT covered here). TOUCH runs: intentional
-     * STM32 safety addition — the V30 RUN button's data=0 quirk can lose the
-     * release edge (infinite run); the M16 itself also force-cleared the run
-     * flag on an internal countdown (g_018F, Timer1 ISR @0x0572).
-     * samd20's multi_ctrl/energy_ctrl run branches (main.c:5234..) belong to
-     * the weld-cycle machine — deferred, spec §8. */
+    /* (1) Absolute on-time SAFETY ceiling — ON_TIME_SAFETY_MS (30 s). Fires for
+     * ANY active ultrasonic run (TOUCH/COMM/REMOTE/CYCLE) in ANY mode,
+     * independent of limit_on_time (fires even when limit_on_time==0), NOT
+     * panel-editable. Transducer runaway backstop. run_start_ms is stamped at
+     * every START edge (incl. US_CYCLE via app_weld), so the 30 s base is valid
+     * for all sources. User decision 2026-06-27: unconditional, all incl. weld. */
     {
-        /* 런 자동 종료. energy 모드면 에너지-도달 정상정지 + OVTIME이 on-time
-         * ceiling을 대체(legacy main.c:5270 분기); 비-energy면 기존 ceiling.
-         * 조건이 TOUCH/COMM만 포함하므로 US_CYCLE(weld WELD)은 자연 제외(spec §5.2).
-         * limit_*은 매 call cfg에서 주입(M1) — 패널 편집 즉시 반영(mid-run 포함). */
         uint8_t rs = g_reg.us_run_status;
-        if ((rs == (uint8_t)US_TOUCH) || (rs == (uint8_t)US_COMM)) {
+        if ((rs == (uint8_t)US_TOUCH) || (rs == (uint8_t)US_COMM) ||
+            (rs == (uint8_t)US_REMOTE) || (rs == (uint8_t)US_CYCLE)) {
+            if ((uint32_t)(now - g_reg.run_start_ms) >= ON_TIME_SAFETY_MS) {
+                reg_stop_run(rs);
+#ifdef REG_TRACE
+                mon_printf("[reg] 30s safety ceiling -> stop\r\n");
+#endif
+            }
+        }
+    }
+
+    /* (2) 런 자동 종료 — energy 모드면 에너지-도달 정상정지 + OVTIME이 운영
+     * ceiling을 대체 (ovtime, legacy main.c:5270 분기; REMOTE는 slice-D가 소스
+     * 추가). 비-energy면 legacy limit_on_time ceiling — slice-D 이중화 결정
+     * (2026-06-27, samd20 main.c:5296-faithful): HAND 모드의 COMM/REMOTE만,
+     * NOT TOUCH (V30 lost-release 리스크는 위 30 s 안전 ceiling이 커버).
+     * US_CYCLE은 양쪽 모두 자연 제외 — WELD 길이는 weld-cycle FSM의
+     * limit_delay_time2가 지배(app_weld). limit_*은 매 call cfg 주입(M1) —
+     * 패널 편집 즉시 반영(mid-run 포함). */
+    {
+        uint8_t rs = g_reg.us_run_status;
+        if ((rs == (uint8_t)US_TOUCH) || (rs == (uint8_t)US_COMM) ||
+            (rs == (uint8_t)US_REMOTE)) {
             uint32_t elapsed = (uint32_t)(now - g_reg.run_start_ms);
             if (lim->energy_ctrl != 0u) {
                 reg_energy_outcome_t oc = reg_energy_termination(
@@ -313,9 +361,11 @@ void app_reg_tick(const reg_run_limits_t *lim)
                                (unsigned long)lim->limit_energy, (unsigned long)elapsed);
 #endif
                 }
-            } else if ((lim->limit_on_time != 0u) &&
+            } else if ((lim->model_type == MODEL_TYPE_HAND) &&
+                       ((rs == (uint8_t)US_COMM) || (rs == (uint8_t)US_REMOTE)) &&
+                       (lim->limit_on_time != 0u) &&
                        (elapsed >= (uint32_t)lim->limit_on_time * ON_TIME_UNIT_MS)) {
-                reg_stop_run(rs);
+                reg_stop_run(rs);   /* COMM/REMOTE: no swallow (legacy) */
 #ifdef REG_TRACE
                 mon_printf("[reg] on-time ceiling (%u x10ms) -> stop\r\n",
                            (unsigned)lim->limit_on_time);

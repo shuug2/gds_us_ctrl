@@ -3,8 +3,10 @@
  * the ~2 ms regulation cadence. Run gate: one M16-faithful boot warm-up
  * (~4 s, commands ignored), then RUN = immediate level-follow with a TOUCH/COMM
  * on-time ceiling (limit_on_time x10 ms). Owns the live lcd_measure_t the LCD
- * display reads. NO physical output yet (OSC drive deferred — B-SEAM). */
+ * display reads. USOUT(PB4) driven from run state this slice; OSC drive
+ * deferred — B-SEAM. */
 #pragma once
+#include <stdbool.h>
 #include <stdint.h>
 #include "app_lcd.h"   /* lcd_measure_t */
 
@@ -23,12 +25,15 @@ typedef struct {
     uint32_t limit_energy;    /* 에너지-도달 정상정지 임계 (curr_energy 비교) */
     uint16_t limit_out_time;  /* OVTIME 한계 = 초 (0 = OVTIME off) */
     int16_t  freq_cal_val;    /* FREQ_IN 표시 보정 → freq_fsm_compute (slice-B) */
+    uint8_t  model_type;      /* 0=hand — legacy ceiling 게이트 (slice-D) */
 } reg_run_limits_t;
 
 /* Superloop regulation step; gates internally on sys_tick_get_ms() deltas:
  * 1 ms both-channel ADC accumulate/average, ~2 ms scale + lookup on the
  * latest ch0_avg + lcd_measure_t publish, ~10 ms boot warm-up advance.
- * The run termination (ceiling 또는 energy/OVTIME)은 매 call 평가 (2ms gate 아님).
+ * The run termination (30s 안전 ceiling / 운영 ceiling / energy/OVTIME)은 매
+ * call 평가 (2ms gate 아님). model_type(0=hand)은 운영 limit_on_time ceiling을
+ * hand 모드로 게이트(samd20-faithful); 절대 30 s 안전 ceiling은 모드 무관.
  * `lim`은 호출자 스택 임시값 — app_reg_tick은 동기 호출이라 보관하지 않음
  * (caller's stack lifetime sufficient; cpp-review N1). */
 void app_reg_tick(const reg_run_limits_t *lim);
@@ -43,3 +48,7 @@ const lcd_measure_t *app_reg_measure(void);
  * SEEK/RESET = no-op this slice (deferred, spec §9). Superloop single-thread —
  * mutates FSM state in place. us_cmd_t comes from the included app_lcd.h. */
 void app_reg_command(us_cmd_t cmd, uint8_t src);
+
+/* run-output(USOUT) 전이 hook: us_run_status idle↔active 변화 시 호출.
+ * 기본 구현이 io_usout 구동 (app_reg.c). */
+void app_reg_hook_us_output(bool on);

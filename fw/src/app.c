@@ -10,15 +10,19 @@
 #include "app_reg.h"
 #include "app_weld.h"
 #include "app_seek_reset.h"
+#include "app_overload.h"
+#include "app_input.h"
 #include "app_modbus.h"
 #include "app_eth.h"
 #include "i2c1.h"    /* i2c1_err_count / i2c1_unstick_events — 부팅·1s 관측 로그 */
+#include "app_buzzer.h"
 
 void app_init(void)
 {
     app_config_t *cfg = app_lcd_cfg();   /* config owned by the LCD subsystem */
 
-    sys_tick_init();
+    /* sys_tick_init()은 main()으로 hoist됨 — OSC 부팅 초기화(app_init 전 실행)가
+     * sys_tick_get_ms()를 필요로 하기 때문. */
     mon_init();
     mon_writeln("[boot] gds_us_ctrl stage-b ready");
 
@@ -94,6 +98,15 @@ void app_loop_iter(void)
      * 트리거 없음 -> READY 휴면(회귀 영향 없음). */
     app_weld_tick();
 
+    /* 2.55 과부하 — 10 ms. assert면 force-stop(이번 iter reg publish 반영) +
+     * deassert면 자동복구 요청(다음 줄 seek_reset_tick이 같은 iter에 처리). */
+    app_overload_tick();
+
+    /* 2.57 물리 명령 입력 + E-stop — 10 ms. B_RESET/SEEK는 다음 줄
+     * seek_reset_tick이 같은 iter 소비; B_START/force-stop은 app_reg_tick에 반영
+     * (app_seek_reset_tick·app_reg_tick 앞 배치). */
+    app_input_tick();
+
     /* 2.6 SEEK/RESET FSM — 10 ms cadence. run_active(us_run_status)를 읽어 RUN
      * 직교; ICON/hook만 emit (app_reg에 명령 안 보냄)이라 reg_tick 앞/뒤 무관 —
      * weld 패턴 일관성 위해 weld_tick 다음에 배치 (1-iter stale run_active 무해). */
@@ -110,6 +123,7 @@ void app_loop_iter(void)
             .limit_energy   = rc->limit_energy,
             .limit_out_time = rc->limit_out_time,
             .freq_cal_val   = rc->freq_cal_val,
+            .model_type     = rc->model_type,
         };
         app_reg_tick(&lim);
     }
@@ -138,4 +152,7 @@ void app_loop_iter(void)
             }
         }
     }
+
+    /* 7. 부저 — 10ms gate. 비블로킹 timed-beep 진행 (트리거는 overload/입력 슬라이스). */
+    app_buzzer_tick();
 }

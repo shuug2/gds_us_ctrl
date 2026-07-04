@@ -78,6 +78,27 @@ static uint8_t run_page_for_mode(uint8_t sys_mode)
     return LCD_RUN_STD;                                 /* 9 (SYS_STD) */
 }
 
+/* 과부하 에러 표시 — app_overload 글루가 assert/deassert 엣지에 호출.
+ * ERR_OVLD 비트만 조작(weld OVTIME 보존), ICON_OL + 경고/런 페이지는 RESET-키
+ * 클리어 경로(이 파일)와 동일 시퀀스. */
+void app_lcd_set_overload(bool on)
+{
+    lcd_app_state_t *state = app_lcd_state();
+
+    if (on) {
+        state->error_status |= ERR_OVLD;
+        dgus_write_u16(ICON_OL, 1);
+        app_lcd_show_error(state->error_status);   /* VP_ERROR_MSG + LCD_WARNING */
+    } else {
+        state->error_status &= (uint8_t)~ERR_OVLD;
+        dgus_write_u16(ICON_OL, 0);
+        if (state->error_status == 0u) {            /* 다른 에러 없으면 런 페이지 복귀 */
+            state->lcd_status = run_page_for_mode(state->sys_mode);
+            dgus_set_page(state->lcd_status);
+        }
+    }
+}
+
 /* Resolve the setup-page-1 id for the active sys_mode (SETUP_PARAM / _MOOHAN). */
 static uint8_t setup1_page_for_mode(uint8_t sys_mode)
 {
