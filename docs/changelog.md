@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+### 2026-07-04 — D5 reconcile 완료: 미머지 3브랜치를 main 위 스택으로 재구축 (b'→d'→ch1', 머지/태그=HW 게이트)
+
+코딩 세션 (보드 불필요). 2026-07-02 감사 큐 마지막 항목 D5 — 미머지 3단위(`feat/physical-io-slice-b` → `feat/physical-io-slice-d` → `feat/output-power-graph-ch1`)를 현 main 위 **선형 스택으로 in-place rebase**(cherry-pick 시퀀스, stale handoff/resume docs 커밋 15개 drop — 전부 docs-only 실측). 원 tip은 `backup/pre-d5-{slice-b,slice-d,ch1}` 브랜치로 보관. spec=`specs/2026-07-04-d5-reconcile-design.md`, plan=`plans/2026-07-04-d5-reconcile.md`.
+
+- **`app_reg_tick` 4-way 시그니처 semantic 통합**: main의 `reg_run_limits_t` struct 주입(ovtime)을 기준으로 단계별 필드 추가 → 최종 7필드(limit_on_time/energy_ctrl/limit_energy/limit_out_time + **freq_cal_val**(b) + **model_type**(d) + **cal_val**(ch1)).
+- **ceiling semantic 통합** (spec §5.2 정본): (1) 절대 30s 안전 ceiling = 전소스(TOUCH/COMM/REMOTE/CYCLE)·전모드 무조건(d) → (2) energy 모드면 에너지-도달 정상정지+OVTIME이 운영 ceiling 대체(main ovtime, 소스에 REMOTE 추가) / 비-energy면 legacy `limit_on_time` ceiling = **hand(model_type=0) && COMM/REMOTE만 — TOUCH 제외**(slice-d 2026-06-27 승인 결정 채택). 자동정지 helper는 `reg_stop_run` 단일 통일(d의 `reg_run_stop_latch` 개명, last_freq 래치 포함).
+- **⚠ 의도된 거동 변화 2건** (HW 세션 회귀 시나리오 갱신 필요): ① TOUCH(LCD RUN) 비-energy 런은 `limit_on_time` ceiling 미적용 — 30s 안전 ceiling만 (기존 "ON_TIME→1s 깜빡" 벤치 시나리오 무효; mbpoll COMM ceiling ~560ms는 hand 모드에서 유지) ② `limit_out_time`(OVTIME)>30s면 30s 안전 ceiling이 먼저 발화.
+- START guard 5-break 통합(전부 별도 break, && 합산 금지): swallow consume → seek_reset → error_status(main) → overload(c) → estop(d). Modbus STATUS 비트 union: US(0x01)+ESTOP(0x02, d)+OVLD(0x04, c)+OVTIME(0x08, main).
+- `board.c` = slice-d 최종판 채택(main의 OD 승격분은 부분집합; heartbeat 완전 제거, `board_osc4/board_reset/board_seek`) — **구 d tip과 byte-identical 검증**. b/d 고유 신규 파일도 원본과 byte-identical.
+- **⚠ 머지 노트 필수 명기(ch1 spec 조건)**: ch1 repoint로 에너지 적분 입력이 ch1(소비전류) 기반으로 이동 → weld 에너지 종료·OVTIME 판정 입력도 ch1. 의도된 교차영향.
+- 검증: 각 단계 tip에서 reconfigure→our-code 0-warning→host PASS (b'=8, d'=12, ch1'=12스위트; 최종 FLASH 46.34%/RAM 17.29%). d' `app_reg.c` 병합 cpp-review = semantic 정본 일치 확인(IMPORTANT 1건은 `board_osc4` hook = **원본 slice-d 코드 그대로**로 판명—무수정 종결) / ch1' cpp-review = **APPROVE**(0 Crit/Imp).
+- defer: 파일 헤더 comment rot 4건(slice-d 자체 유래 pre-existing — "drives NO OSC GPIO" 등, 머지 시 정리 후보) / `reg_power_from_amp` uint16 절단 특성(samd20 fidelity, 6b 재검토).
+- **머지/태그/push 없음** — 3브랜치 모두 HW 검증 게이트 유지(b=FREQ_IN rig, d=패널 rig+E-stop, ch1=실 초음파 부하). **감사 큐 D0~D6 전항목 종결.**
+
 ### 2026-07-04 — D3 fram-i2c-robustness HW 회귀 PASS + 머지 (tag `hw-revA_fw-stage-fram-robust`)
 
 간이 벤치 HW 세션. `feat/fram-i2c-robustness`(4커밋) 플래시 후 plan 말미 HW 회귀 체크리스트 검증 → main 머지 `be2fac9`(--no-ff) + tag, 브랜치 삭제. 머지 후 main 재검증(0-warning 빌드=플래시 바이너리와 동일, host 7스위트 PASS).
