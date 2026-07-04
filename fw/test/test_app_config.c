@@ -143,6 +143,25 @@ static void test_load_comm_idx_oob_clamped(void)
     CHECK_EQ(cfg.comm_parity_idx, 0u);
 }
 
+/* I-1(최종 리뷰): FRAM 로드 output_power OOB -> [50,100] 클램프 (weld_amplitude
+ * 언더플로 가드; LCD clamp_echo_power / Modbus apply_writes 쓰기 클램프와 동일 범위). */
+static void test_load_output_power_oob_clamped(void)
+{
+    app_config_t cfg;
+
+    mock_fram_reset();
+    mock_fram_poke(FRAM_ADDR_INIT_FLAG, FRAM_INIT_FLAG_MAGIC);
+    mock_fram_poke(FRAM_ADDR_OUT_POWER, 0u);      /* < 50 */
+    (void)app_config_load(&cfg);
+    CHECK_EQ(cfg.output_power, 50u);
+
+    mock_fram_reset();
+    mock_fram_poke(FRAM_ADDR_INIT_FLAG, FRAM_INIT_FLAG_MAGIC);
+    mock_fram_poke(FRAM_ADDR_OUT_POWER, 255u);    /* > 100 */
+    (void)app_config_load(&cfg);
+    CHECK_EQ(cfg.output_power, 100u);
+}
+
 /* M4(감사 D2): config-validation 클램프 헬퍼 — Modbus apply_writes 범위와 동일. */
 static void test_cfg_clamp_helpers(void)
 {
@@ -164,6 +183,7 @@ int main(void)
     test_energy_clamp_writeback();
     test_energy_read_fail_no_writeback();
     test_load_comm_idx_oob_clamped();
+    test_load_output_power_oob_clamped();
     test_cfg_clamp_helpers();
     if (failures) { printf("test_app_config: %d FAILED\n", failures); return 1; }
     printf("test_app_config: all passed\n");
