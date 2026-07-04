@@ -46,9 +46,14 @@ const lcd_measure_t *app_reg_measure(void);
  * (US_TOUCH from the panel hook, US_COMM from Modbus — samd20 us_run_status
  * taxonomy). START arms only from US_IDLE; RUN_RELEASE stops only the run its
  * own source started (samd20: comm STOP ==US_COMM, touch release ==US_TOUCH).
- * SEEK/RESET = no-op this slice (deferred, spec §9). Superloop single-thread —
+ * SEEK/RESET = app_seek_reset로 위임(D1 이후). Superloop single-thread —
  * mutates FSM state in place. us_cmd_t comes from the included app_lcd.h. */
 void app_reg_command(us_cmd_t cmd, uint8_t src);
+
+/* START가 지금 수락될 상태인가 — guard와 동일 조건의 읽기 전용 쿼리 (상태 무변경).
+ * slice4 weld 글루가 사이클 진입 게이팅에 사용 (블라인드 사이클 차단, spec §4.3).
+ * swallow_start는 TOUCH 전용 소비라 조건에서 제외 (US_CYCLE에 무관). */
+bool app_reg_start_allowed(void);
 
 /* run-output(USOUT) 전이 hook: us_run_status idle↔active 변화 시 호출.
  * 기본 구현이 io_usout 구동 (app_reg.c). */

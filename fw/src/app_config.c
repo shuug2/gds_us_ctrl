@@ -1,6 +1,7 @@
 /* fw/src/app_config.c — FRAM-backed config: factory defaults (full samd20 map) + load. */
 #include "app_config.h"
 #include "fram.h"
+#include "cfg_clamp.h"
 
 void app_config_factory_defaults(app_config_t *cfg)
 {
@@ -112,6 +113,9 @@ uint8_t app_config_load(app_config_t *cfg)
     if (!fram_read_byte(FRAM_ADDR_MODEL_FREQ, &cfg->model_freq))        { fail++; }
     if (!fram_read_byte(FRAM_ADDR_MODEL_TYPE, &cfg->model_type))        { fail++; }
     if (!fram_read_byte(FRAM_ADDR_OUT_POWER,  &cfg->output_power))      { fail++; }
+    else { cfg->output_power = (uint8_t)cfg_clamp_power(cfg->output_power); }
+                                    /* I-1: FRAM 로드 경로 클램프 — weld_amplitude 언더플로
+                                     * 가드, LCD/Modbus 쓰기 클램프([50,100])와 동일 범위 */
     if (!fram_read_u16 (FRAM_ADDR_ON_TIME,    &cfg->limit_on_time))     { fail++; }
     if (fram_read_byte(FRAM_ADDR_EN_ENERGY, &b8)) { cfg->energy_ctrl = (b8 == 1); } else { fail++; }
     if (fram_read_u32(FRAM_ADDR_ENERGY, &cfg->limit_energy)) {
@@ -128,7 +132,9 @@ uint8_t app_config_load(app_config_t *cfg)
     if (fram_read_byte(FRAM_ADDR_TIMEOVER, &b8)) { cfg->limit_out_time = b8; } else { fail++; }
     if (!fram_read_byte(FRAM_ADDR_COMM_ADDR,   &cfg->comm_address))     { fail++; }
     if (!fram_read_byte(FRAM_ADDR_COMM_SPEED,  &cfg->comm_speed_idx))   { fail++; }
+    else if (cfg->comm_speed_idx > CFG_COMM_SPEED_IDX_MAX)  { cfg->comm_speed_idx = 0u; }  /* M3: OOB -> factory */
     if (!fram_read_byte(FRAM_ADDR_COMM_PARITY, &cfg->comm_parity_idx))  { fail++; }
+    else if (cfg->comm_parity_idx > CFG_COMM_PARITY_IDX_MAX) { cfg->comm_parity_idx = 0u; } /* M3: OOB -> factory */
     if (fram_read_u16(FRAM_ADDR_CAL_VAL,      &u16)) { cfg->cal_val      = (int16_t)u16; } else { fail++; }
     if (fram_read_u16(FRAM_ADDR_FREQ_CAL_VAL, &u16)) { cfg->freq_cal_val = (int16_t)u16; } else { fail++; }
     if (!fram_read_byte(FRAM_ADDR_COMM_MODE, &cfg->comm_mode))          { fail++; }

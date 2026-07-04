@@ -38,6 +38,11 @@ typedef struct {
     uint8_t  limit_mo_out2;      /* 2단 진폭 base 50..100 (cfg; Modbus MULTI_O2) */
     uint16_t limit_mo_time1;     /* 1단 지속 = 0→1 전환 시점 (x10 ms) */
     uint16_t limit_mo_time2;     /* WELD 총 길이 = 종료 시점 (x10 ms, 정상 운용 >= time1) */
+    uint8_t  abort;              /* 1 = 즉시 abort: SOL OFF + READY (E-stop/overload/fault/safety, slice4) */
+    uint16_t limit_trigger_time2; /* TRIGGER WELD duration (x10 ms) — slice4 */
+    uint16_t limit_trigger_time3; /* TRIGGER HOLD duration (x10 ms) — slice4 */
+    uint8_t  dn_edge;            /* 1-shot: SENSE_DN press 엣지 (트리거 FSM 공급) */
+    uint8_t  up_edge;            /* 1-shot: SENSE_UP press 엣지 */
 } weld_in_t;
 
 /* step output — edge flags (weld_start/weld_stop/weld_fault/cycle_done) are 1

@@ -121,6 +121,28 @@ void app_reg_init(void)
     g_reg.main_state = 1u;
 }
 
+/* START가 지금 수락될 상태인가 — app_reg_command의 START guard와 동일 조건의
+ * 읽기 전용 쿼리 (상태 무변경). slice4 weld 글루가 사이클 진입 게이팅에 사용
+ * (블라인드 사이클 차단, spec §4.3). swallow_start는 TOUCH 전용 소비라 조건에서
+ * 제외 (US_CYCLE에 무관). */
+bool app_reg_start_allowed(void)
+{
+    return (g_reg.main_state == 0u) &&                     /* boot warm-up 완료 */
+           (g_reg.us_run_status == (uint8_t)US_IDLE) &&
+           /* SEEK/RESET active 중 START 무시 (spec §3.4). 직교는 새 RUN 시작만
+            * 막고, swallow_start 페어링 동기화는 건드리지 않음 (advisor —
+            * guard를 if 조건에 합치면 swallow consume도 스킵되는 비대칭 발생). */
+           (app_seek_reset_active() == 0u) &&
+           /* fault(OVTIME 등) 중 새 START 막음 — RESET으로 클리어해야 재시작
+            * (samd20 SYS_ERROR가 START 무시). */
+           (g_reg.error_status == 0u) &&
+           /* 과부하 활성 중 START 차단 (SAMD20 SYS_ERROR가 START 막음). */
+           (app_overload_active() == 0u) &&
+           /* E-stop 활성 중 START 차단 (SAMD20 SYS_ESTOP). 레벨 기반
+            * (E-stop 떼면 자동 해제). */
+           (app_estop_active() == 0u);
+}
+
 void app_reg_command(us_cmd_t cmd, uint8_t src)
 {
     switch (cmd) {
@@ -142,26 +164,10 @@ void app_reg_command(us_cmd_t cmd, uint8_t src)
                 g_reg.swallow_start = 0u;
                 break;
             }
-            /* SEEK/RESET active 중 START 무시 (spec §3.4). 직교는 새 RUN 시작만
-             * 막고, 위 swallow_start 페어링 동기화는 건드리지 않음 (advisor —
-             * guard를 if 조건에 합치면 swallow consume도 스킵되는 비대칭 발생). */
-            if (app_seek_reset_active() != 0u) {
-                break;
-            }
-            /* fault(OVTIME 등) 중 새 START 막음 — RESET으로 클리어해야 재시작
-             * (samd20 SYS_ERROR가 START 무시). swallow consume 뒤 별도 break로
-             * 둬서 위 비대칭(swallow 스킵)을 피함 (seek_reset 가드와 동일 패턴). */
-            if (g_reg.error_status != 0u) {
-                break;
-            }
-            /* 과부하 활성 중 START 차단 (SAMD20 SYS_ERROR가 START 막음).
-             * seek_reset_active와 동일 직교 — 별도 break (swallow consume 뒤). */
-            if (app_overload_active() != 0u) {
-                break;
-            }
-            /* E-stop 활성 중 START 차단 (SAMD20 SYS_ESTOP). overload와 동일 직교 —
-             * 별도 break (swallow 대칭 보존). 레벨 기반(E-stop 떼면 자동 해제). */
-            if (app_estop_active() != 0u) {
+            /* guard 4-조건 공용화 (slice4): app_reg_start_allowed()가 단일 진실
+             * 원천. 외측 if의 main_state/US_IDLE 재검사는 중복-참(무해).
+             * swallow consume은 위에 유지 (advisor 비대칭 — spec §4.3). */
+            if (!app_reg_start_allowed()) {
                 break;
             }
             g_reg.us_run_status = src;   /* US_TOUCH or US_COMM */

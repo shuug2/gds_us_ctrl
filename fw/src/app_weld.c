@@ -1,11 +1,15 @@
-/* fw/src/app_weld.c — weld-cycle glue (slice 1). 10 ms-gated FSM advance;
- * out-events -> SOL_DN hook + app_reg US_CYCLE + work_cnt FRAM/LCD. No SETUP
- * gate this slice (no running cycle on HW — slice 4, spec §5.4). */
+/* fw/src/app_weld.c — weld-cycle glue (slice 1~4). 10 ms-gated FSM advance;
+ * out-events -> SOL_DN hook + app_reg US_CYCLE + work_cnt FRAM/LCD. slice 4
+ * adds the SETUP-page gate (run 페이지에서만 진행) + 물리 양손 트리거 스캔/
+ * 사이클 진입 게이팅 + abort 합성 (spec §4, §5.4). */
 #include "app_weld.h"
 #include "app_weld_fsm.h"
-#include "app_lcd.h"      /* app_lcd_cfg, app_lcd_set_work_cnt, US_CYCLE, us_cmd_t */
-#include "app_reg.h"      /* app_reg_command (US_CMD_x and us_cmd_t come via app_lcd.h) */
+#include "app_weld_trigger_fsm.h"  /* weld_trig_in_t/out_t, weld_trigger_fsm_* (slice4) */
+#include "app_lcd.h"      /* app_lcd_cfg, app_lcd_set_work_cnt, app_lcd_in_run_page, US_CYCLE, us_cmd_t */
+#include "app_reg.h"      /* app_reg_command, app_reg_measure, app_reg_start_allowed */
 #include "app_config.h"   /* app_config_t, app_config_save_all */
+#include "app_input.h"    /* app_estop_active (slice4 abort 합성) */
+#include "app_overload.h" /* app_overload_active (slice4 abort 합성) */
 #include "i2c_pot.h"      /* i2c_pot_set_dac (U4 진폭, raw DAC) */
 #include "sys_tick.h"
 #include "mon.h"
@@ -14,12 +18,13 @@
 #define WELD_TICK_MS  10u   /* samd20 temp_time-- cadence */
 
 static uint32_t s_prev_ms;
-static uint8_t  s_start_pending;   /* one-shot latch (slice 4 caller) */
+static uint8_t  s_start_pending;   /* one-shot latch (slice4: 트리거 FSM start_pulse가 채움) */
 static uint8_t  s_sol_last;        /* SOL_DN level edge tracking */
 
 void app_weld_init(void)
 {
     weld_fsm_init();
+    weld_trigger_fsm_init();
     s_prev_ms       = sys_tick_get_ms();
     s_start_pending = 0u;
     s_sol_last      = 0u;
@@ -56,36 +61,82 @@ void app_weld_tick(void)
     if ((uint32_t)(now - s_prev_ms) < WELD_TICK_MS) {
         return;
     }
-    /* slice-4 flag (cpp-review M1): `= now` (vs `+= WELD_TICK_MS`) lets per-tick
-     * superloop slip accumulate across the contiguous weld stages — harmless
-     * slice 1 (host-test only, no actuators), but for slice 4 real-pneumatic
-     * dwell, use `s_prev_ms += WELD_TICK_MS` to match the samd20 timer ISR's
-     * exact 10 ms period. Consistent with app_reg.c's gate for now. */
-    s_prev_ms = now;
+    /* 감사 M1(글루): += 로 드리프트 무누적 (실 공압 dwell 정밀도, samd20 timer ISR
+     * 10ms 주기 재현). 장기 정지(>10 tick 밀림) 후엔 재동기 — catch-up 폭주 방지. */
+    s_prev_ms += WELD_TICK_MS;
+    if ((uint32_t)(now - s_prev_ms) > 10u * WELD_TICK_MS) {
+        s_prev_ms = now;
+    }
+
+    /* SETUP 게이트 (slice1 spec §5.4 이연분): setup 페이지에선 step 스킵 =
+     * 사이클 타이머 동결 + 시작 불가 (samd20 timer의 sys_status!=SETUP 게이트).
+     * 의도된 legacy-충실 거동: 동결 중엔 abort도 미처리 — E-stop은 app_input이
+     * 독립 SOL OFF(app_input.c:46)로 커버하지만, overload/OVTIME은 US만 독립
+     * 정지(app_overload는 SOL 미해제) → mid-cycle SOL은 run 페이지 복귀 시
+     * 레벨-기반 abort가 해제 (리뷰 반영, 결정=plan 순서 유지+문서화). */
+    if (app_lcd_in_run_page() == 0u) {
+        return;
+    }
 
     app_config_t *cfg = app_lcd_cfg();
-    weld_in_t in = {
-        .start             = s_start_pending,
-        .run_mode          = cfg->run_mode,
-        .limit_delay_time1 = cfg->limit_delay_time1,
-        .limit_delay_time2 = cfg->limit_delay_time2,
-        .limit_delay_time3 = cfg->limit_delay_time3,
-        .output_power      = cfg->output_power,
-        .energy_ctrl       = cfg->energy_ctrl ? 1u : 0u,
-        .limit_energy      = cfg->limit_energy,
-        .limit_out_time    = cfg->limit_out_time,
-        .curr_energy       = app_reg_measure()->curr_energy,
-        .multi_ctrl        = cfg->multi_ctrl ? 1u : 0u,
-        .limit_mo_out1     = (uint8_t)cfg->limit_mo_out1,
-        .limit_mo_out2     = (uint8_t)cfg->limit_mo_out2,
-        .limit_mo_time1    = cfg->limit_mo_time1,
-        .limit_mo_time2    = cfg->limit_mo_time2,
+
+    /* 물리 트리거/센서 스캔 (slice4). */
+    weld_trig_in_t tin = {
+        .key1       = io_read_key1(),
+        .key2       = io_read_key2(),
+        .sens_up    = io_read_sens_up(),
+        .sens_dn    = io_read_sens_dn(),
+        .f_safty    = cfg->f_safty,
+        .weld_state = weld_fsm_status(),
     };
-    /* one-shot consumed: cleared every tick after the copy above, regardless of
-     * whether the core acted on it. The core takes `start` ONLY in WELD_READY,
-     * so a request_start() arriving mid-cycle is copied in and immediately
-     * dropped (lost), NOT queued for the next cycle. No production caller this
-     * slice; slice-4's physical SW_START trigger will define real semantics. */
+    weld_trig_out_t tout;
+    weld_trigger_fsm_step(&tin, &tout);
+
+    /* 사이클 진입 게이팅 (spec §4.3, 의도된 deviation): US START가 거부될 상태면
+     * 사이클 자체를 시작하지 않음 — SOL만 하강하는 블라인드 사이클 차단. */
+    if ((tout.start_pulse != 0u) &&
+        (weld_fsm_status() == (uint8_t)WELD_READY) &&
+        app_reg_start_allowed()) {
+        s_start_pending = 1u;
+        weld_trigger_fsm_cycle_started();
+    }
+
+    /* abort 합성 (spec §3.4/§4.2): E-stop/overload/fault + f_safty CYL1 release.
+     * US 정지는 slice-c/d force-stop과 이중 안전. */
+    uint8_t abort_now =
+        ((app_estop_active() != 0u) ||
+         (app_overload_active() != 0u) ||
+         (app_reg_measure()->error_status != 0u) ||
+         (tout.safety_abort_pulse != 0u)) ? 1u : 0u;
+
+    /* M2(감사 D2): mo_out cast 전 [50,100] 클램프 — 상류(LCD/Modbus) 클램프와
+     * belt-and-braces (uint16->uint8 절단 silent 진폭0 차단). */
+    uint16_t mo1 = cfg->limit_mo_out1, mo2 = cfg->limit_mo_out2;
+    if (mo1 > 100u) { mo1 = 100u; } else if (mo1 < 50u) { mo1 = 50u; }
+    if (mo2 > 100u) { mo2 = 100u; } else if (mo2 < 50u) { mo2 = 50u; }
+
+    weld_in_t in = {
+        .start               = s_start_pending,
+        .run_mode            = cfg->run_mode,
+        .limit_delay_time1   = cfg->limit_delay_time1,
+        .limit_delay_time2   = cfg->limit_delay_time2,
+        .limit_delay_time3   = cfg->limit_delay_time3,
+        .limit_trigger_time2 = cfg->limit_trigger_time2,
+        .limit_trigger_time3 = cfg->limit_trigger_time3,
+        .output_power        = cfg->output_power,
+        .energy_ctrl         = cfg->energy_ctrl ? 1u : 0u,
+        .limit_energy        = cfg->limit_energy,
+        .limit_out_time      = cfg->limit_out_time,
+        .curr_energy         = app_reg_measure()->curr_energy,
+        .multi_ctrl          = cfg->multi_ctrl ? 1u : 0u,
+        .limit_mo_out1       = (uint8_t)mo1,
+        .limit_mo_out2       = (uint8_t)mo2,
+        .limit_mo_time1      = cfg->limit_mo_time1,
+        .limit_mo_time2      = cfg->limit_mo_time2,
+        .dn_edge             = tout.dn_edge,
+        .up_edge             = tout.up_edge,
+        .abort               = abort_now,
+    };
     s_start_pending = 0u;
 
     weld_out_t out;

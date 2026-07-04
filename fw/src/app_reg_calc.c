@@ -65,7 +65,9 @@ reg_energy_outcome_t reg_energy_termination(uint8_t energy_ctrl, uint32_t curr_e
                                             uint16_t limit_out_time)
 {
     if (!energy_ctrl)                { return REG_RUN_CONTINUE; }     /* 비-energy → 호출측 on-time ceiling */
-    if (curr_energy >= limit_energy) { return REG_RUN_STOP_ENERGY; } /* 정상 (main.c:5272) — OVTIME보다 우선 */
+    if ((limit_energy != 0u) && (curr_energy >= limit_energy)) { return REG_RUN_STOP_ENERGY; }
+    /* limit_energy==0 = 에너지-도달 체크 off (감사 M1; limit_out_time=0=OVTIME off와
+     * 동일 의미론 — 0 목표의 즉시 무증상 완료 차단, 런은 OVTIME/30s 안전이 바운드). */
     /* legacy(main.c:5288) us_on_time >= limit_out_time*10 — 0=off 가드 없음(있으면
      * energy 모드가 ceiling을 대체하므로 limit_out_time=0이 never-stop이 됨, advisor).
      * 0이면 elapsed>=0 항상 참 → 즉시 OVTIME(degenerate; config-validation 클램프는 slice4). */

@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+### 2026-07-04 — weld 슬라이스4 (TRIGGER+양손 트리거+abort+게이팅+D2 클램프) CODE-COMPLETE — 감사 D2/D4 종결
+
+subagent-driven 코딩 세션 (보드 불필요). plan(`plans/2026-07-04-stage-weld-cycle-slice4-trigger.md`) 10 Task 전부 실행 — Task별 2-stage 리뷰(spec+quality) 전건 Approved + 최종 whole-branch opus cpp-review = **CODE-COMPLETE 승인, Ready-to-merge YES**(머지/태그는 스택 b'→d'→ch1'→slice4 전체 HW 게이트). 브랜치 `feat/stage-weld-slice4-trigger`(ch1' 스택 위, BASE `e0bc491`), 코드 12커밋.
+
+- **H1/D4 근본수정** (`4541ef4`): WELD 모드 래치(`s_latched_multi/energy`)를 CYL1→WELD 전이 시점 단일 스냅샷으로 — 런중 EN_MULTI/EN_ENERGY 토글이 exit 경로를 못 바꿈 + 전이 카운터 리셋. host 3테스트.
+- **abort 입력** (`a11d2b8`): `weld_in_t.abort` — 임의 상태 SOL OFF+READY 복귀, WELD 중이면 weld_stop 엣지, cycle_done 미발행. 각 상태별 host 테스트.
+- **TRIGGER 모드** (`57788aa`+`e31c69e`): dn/up 엣지 래치, CYL1=SENSE_DN 무기한 대기(죽은 CYL_TIMEOUT 충실), WELD=trigger_time2/HOLD=trigger_time3, CYL2=legacy 강제 set(main.c:1593) 즉시 exit, run_mode 사이클 래치. WELD 전이 중복은 `enter_weld()`/`hold_time()` helper로 DRY — DELAY 경로 byte-equivalence 리뷰어 trace 입증.
+- **M1 가드** (`51fb9e2`): `limit_energy==0` = 에너지-도달 체크 off(0 목표 즉시 무증상 완료 차단) — reg_calc+weld FSM 두 소비자, OVTIME/backstop 유효 유지.
+- **트리거 FSM 신설** (`608de22`): 순수 `app_weld_trigger_fsm` — 양손 start(레벨 파생)/in_cycle 재장전(cycle_started 글루 위임=게이팅 실패 시 재장전 벌칙 없음)/safety abort(f_safty∧CYL1∧한손 release)/센서 press 엣지. host 신규 스위트 = **총 13스위트**.
+- **진입 게이팅** (`d035802`): `app_reg_start_allowed()` 신설(6-conjunct 읽기 전용) + START guard 4-break 공용화(equivalence 정적 입증). 직접런↔weld 사이클 상호배제 성립.
+- **글루 배선** (`0aa91ad`+`9e3198d`): 물리 트리거 스캔→진입 게이팅→abort 합성(estop/overload/error/safety)→신필드 주입, tick `+=` 드리프트 무누적+재동기, **SETUP 게이트**(slice1 §5.4 이연분, `app_lcd_in_run_page()` 신설), M2 mo_out [50,100] belt-and-braces. ⚠ **인간 결정**: SETUP 게이트가 abort보다 앞(plan 순서) = 유지+문서화 — setup 체류 중 overload 시 SOL 유지(US는 독립 차단, E-stop은 독립 SOL OFF), run 복귀 시 레벨-abort 해제. HW 체크리스트 명기.
+- **M4 클램프** (`9792c5b`): `cfg_clamp.h` 신설 + LCD LV_* 10케이스 Modbus-동일 [범위] 클램프+변경시 에코 — 리뷰어가 Modbus 10개 bound 전수 대조 drift 0. 구 LV_OUT_POWER/LV_LIMIT_OUT_T 무클램프 (uint8_t) 절단 버그(LOW-1) 폐쇄.
+- **M3 클램프** (`17a07e3`): FRAM 로드 comm speed/parity idx OOB→factory(0) + `CFG_COMM_*_IDX_MAX` 공용 매크로 승격.
+- **I-1 (최종 리뷰 Important→fix `1cb76bd`)**: output_power **FRAM 로드 경로만** 미클램프 발견(쓰기 2경로는 클램프) — corrupt FRAM 0이면 `weld_amplitude` 언더플로로 임의 진폭(77) 가능 → 로드 성공 시 `cfg_clamp_power` [50,100](RAM-only, M3 패턴) + host 테스트. 재리뷰 Resolved.
+- 검증: 클린 reconfigure 빌드 our-code 0-warning **FLASH 47.33%/RAM 17.31%** + host 13스위트 PASS + spec §1.1 In 9항목↔커밋 전수 대조 + deviation 3건(게이팅/M1 0=off/CYL2 즉시) 주석+legacy 인용 확인. cross-module trace 5종 clean(superloop 1-iter 지연 abort=무해 2차 방어선 구조 포함).
+- 이연: 신규 Minor 2(energy-backstop fault 경로 보조 상태 미클리어=현 가드로 무해 / request_start dormant API) + 이월 Minor 11건 전건 defer. HORN·CYL 타임아웃(죽은 코드)·에너지 절대 E2E(6b)·SENSE_UP 실대기 재검토(실 rig)는 spec §1.2 Out.
+- 다음 = **스택 HW 검증 세션**(spec §7.3 8항목 + SETUP-overload SOL 노트 + LCD 클램프 스냅 체크) → 단위별 `--no-ff` 머지+태그(b'→d'→ch1'→slice4).
+
 ### 2026-07-04 — D5 reconcile 완료: 미머지 3브랜치를 main 위 스택으로 재구축 (b'→d'→ch1', 머지/태그=HW 게이트)
 
 코딩 세션 (보드 불필요). 2026-07-02 감사 큐 마지막 항목 D5 — 미머지 3단위(`feat/physical-io-slice-b` → `feat/physical-io-slice-d` → `feat/output-power-graph-ch1`)를 현 main 위 **선형 스택으로 in-place rebase**(cherry-pick 시퀀스, stale handoff/resume docs 커밋 15개 drop — 전부 docs-only 실측). 원 tip은 `backup/pre-d5-{slice-b,slice-d,ch1}` 브랜치로 보관. spec=`specs/2026-07-04-d5-reconcile-design.md`, plan=`plans/2026-07-04-d5-reconcile.md`.

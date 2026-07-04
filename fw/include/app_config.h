@@ -3,6 +3,11 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+/* comm 렌더 테이블 인덱스 상한 (감사 M3 클램프): app_lcd_str.c
+ * comm_speed_txt[6][6] / comm_parity_txt[3][4] 크기와 동기 — 테이블 확장 시 함께. */
+#define CFG_COMM_SPEED_IDX_MAX   5u
+#define CFG_COMM_PARITY_IDX_MAX  2u
+
 typedef struct {
     uint8_t  model_freq;        /* 0..5  (15/20/30/35/40/50 K) */
     uint8_t  model_type;        /* 0=hand 1=multi 2=std */
