@@ -599,6 +599,87 @@ static void test_abort_in_ready_noop(void)
     CHECK_EQ(out.weld_stop, 0u);
 }
 
+/* TRIGGER: 풀 사이클 — CYL1은 dn_edge까지 대기, HOLD=trigger_time3, CYL2 즉시. */
+static void test_trigger_full_cycle(void)
+{
+    weld_fsm_init();
+    weld_in_t in; memset(&in, 0, sizeof(in));
+    in.run_mode          = 1u;    /* MODE_TRIGGER */
+    in.limit_delay_time1 = 50u;   /* TRIGGER에선 미사용이어야 함 */
+    in.limit_trigger_time2 = 3u;  /* WELD 3 tick (comp swap: <=6 -> comp=3, temp=7) */
+    in.limit_trigger_time3 = 2u;  /* HOLD 2 tick */
+    in.output_power = 100u;
+    weld_out_t out;
+
+    in.start = 1u;
+    weld_fsm_step(&in, &out);                 /* READY -> CYL1 */
+    in.start = 0u;
+    CHECK_EQ(weld_fsm_status(), WELD_CYL1);
+
+    for (int i = 0; i < 20; i++) { weld_fsm_step(&in, &out); }
+    CHECK_EQ(weld_fsm_status(), WELD_CYL1);   /* dn 없음 -> 무기한 대기 (타임아웃 없음, 죽은 CYL_TIMEOUT 충실) */
+    CHECK_EQ(out.sol_dn, 1u);
+
+    in.dn_edge = 1u;
+    weld_fsm_step(&in, &out);                 /* dn 소비 -> WELD */
+    in.dn_edge = 0u;
+    CHECK_EQ(weld_fsm_status(), WELD_WELD);
+
+    int stops = 0, dones = 0, hold_steps = 0, cyl2_steps = 0;
+    for (int i = 0; i < 30 && weld_fsm_status() != WELD_READY; i++) {
+        weld_fsm_step(&in, &out);
+        stops += out.weld_stop;
+        dones += out.cycle_done;
+        if (weld_fsm_status() == WELD_HOLD) hold_steps++;
+        if (weld_fsm_status() == WELD_CYL2) cyl2_steps++;
+    }
+    CHECK_EQ(stops, 1);
+    CHECK_EQ(dones, 1);                       /* work_cnt 경로 정상 */
+    CHECK_EQ((cyl2_steps <= 2), 1);           /* CYL2 = up 강제 -> 사실상 즉시 (§3.3) */
+}
+
+/* TRIGGER: READY 중 들어온 dn_edge(stale)는 사이클 시작 시 클리어 (main.c:1478). */
+static void test_trigger_stale_dn_cleared_at_start(void)
+{
+    weld_fsm_init();
+    weld_in_t in; memset(&in, 0, sizeof(in));
+    in.run_mode = 1u;
+    in.limit_trigger_time2 = 3u; in.limit_trigger_time3 = 2u;
+    in.output_power = 100u;
+    weld_out_t out;
+
+    in.dn_edge = 1u;
+    weld_fsm_step(&in, &out);                 /* READY에서 stale 엣지 */
+    in.dn_edge = 0u;
+    in.start = 1u;
+    weld_fsm_step(&in, &out);                 /* 시작 — stale 클리어돼야 함 */
+    in.start = 0u;
+    weld_fsm_step(&in, &out);                 /* CYL1 최초진입(SOL ON) */
+    for (int i = 0; i < 5; i++) { weld_fsm_step(&in, &out); }
+    CHECK_EQ(weld_fsm_status(), WELD_CYL1);   /* stale로 exit하지 않음 */
+}
+
+/* run_mode 래치: DELAY로 시작한 사이클은 런중 TRIGGER 전환에도 DELAY 규칙 유지. */
+static void test_run_mode_latched_at_cycle_start(void)
+{
+    weld_fsm_init();
+    weld_in_t in; memset(&in, 0, sizeof(in));
+    in.run_mode = 0u;
+    in.limit_delay_time1 = 2u; in.limit_delay_time2 = 2u; in.limit_delay_time3 = 2u;
+    in.output_power = 100u;
+    weld_out_t out;
+    in.start = 1u;
+    weld_fsm_step(&in, &out);
+    in.start = 0u;
+    in.run_mode = 1u;                         /* 런중 전환 */
+    int done = 0;                             /* 이어서 그대로 완주 (DELAY 시간 규칙) */
+    for (int i = 0; i < 50; i++) {
+        weld_fsm_step(&in, &out);
+        done += out.cycle_done;
+    }
+    CHECK_EQ(done, 1);                        /* dn_edge 없이 완주 = DELAY 래치 유지 */
+}
+
 int main(void)
 {
     test_init_ready();
@@ -627,6 +708,9 @@ int main(void)
     test_h1_counters_reset_between_cycles();
     test_abort_from_each_state();
     test_abort_in_ready_noop();
+    test_trigger_full_cycle();
+    test_trigger_stale_dn_cleared_at_start();
+    test_run_mode_latched_at_cycle_start();
     if (failures) { printf("test_app_weld_fsm: %d FAILED\n", failures); return 1; }
     printf("test_app_weld_fsm: all passed\n");
     return 0;
