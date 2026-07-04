@@ -15,6 +15,7 @@
 #include "dgus_lcd.h"
 #include "sys_tick.h"
 #include "mon.h"
+#include "cfg_clamp.h"
 
 /*--------------------------------------------------------------
  * samd20 define.h / main.c constants (file-local — verbatim values)
@@ -696,6 +697,20 @@ static void data_save_cancel(void)
     app_lcd_change_page(state->lcd_status);
 }
 
+/* M4: 클램프 + 패널 에코 (클램프 발동 시에만 재전송 — LV_MO_TIME 관례). */
+static uint16_t clamp_echo_max(uint16_t vp, uint16_t v, uint16_t max)
+{
+    uint16_t c = cfg_clamp_max(v, max);
+    if (c != v) { dgus_write_u16(vp, c); }
+    return c;
+}
+static uint16_t clamp_echo_power(uint16_t vp, uint16_t v)
+{
+    uint16_t c = cfg_clamp_power(v);
+    if (c != v) { dgus_write_u16(vp, c); }
+    return c;
+}
+
 /*--------------------------------------------------------------
  * Public entry — VP → action dispatch
  *--------------------------------------------------------------*/
@@ -751,27 +766,27 @@ void app_lcd_input_dispatch(const dgus_frame_t *f)
 
     /*--- delay/trigger limit times -----------------------------------------*/
     case LV_DM_DELAY:
-        cfg->limit_delay_time1 = data16;
+        cfg->limit_delay_time1 = clamp_echo_max(LV_DM_DELAY, data16, 500u);
         break;
     case LV_DM_WELD:
-        cfg->limit_delay_time2 = data16;
+        cfg->limit_delay_time2 = clamp_echo_max(LV_DM_WELD, data16, 500u);
         break;
     case LV_DM_HOLD:
-        cfg->limit_delay_time3 = data16;
+        cfg->limit_delay_time3 = clamp_echo_max(LV_DM_HOLD, data16, 2000u);
         break;
     case LV_TM_WELD:
-        cfg->limit_trigger_time2 = data16;
+        cfg->limit_trigger_time2 = clamp_echo_max(LV_TM_WELD, data16, 500u);
         break;
     case LV_TM_HOLD:
-        cfg->limit_trigger_time3 = data16;
+        cfg->limit_trigger_time3 = clamp_echo_max(LV_TM_HOLD, data16, 2000u);
         break;
 
     /*--- multi-output limits -----------------------------------------------*/
     case LV_MO_OUT1:
-        cfg->limit_mo_out1 = data16;
+        cfg->limit_mo_out1 = clamp_echo_power(LV_MO_OUT1, data16);
         break;
     case LV_MO_OUT2:
-        cfg->limit_mo_out2 = data16;
+        cfg->limit_mo_out2 = clamp_echo_power(LV_MO_OUT2, data16);
         break;
     case LV_MO_TIME1:
         cfg->limit_mo_time1 = data16;
@@ -791,17 +806,18 @@ void app_lcd_input_dispatch(const dgus_frame_t *f)
     /*--- scalar limit edits ------------------------------------------------*/
     case LV_OUT_POWER:
         /* output_power ONLY — NO DAC here. set_pot fires on RUN press + DATA_SAVE
-         * + setup-page entry (spec §7 fidelity; samd20 main.c:3807-3813). */
-        cfg->output_power = (uint8_t)data16;
+         * + setup-page entry (spec §7 fidelity; samd20 main.c:3807-3813).
+         * M4+LOW-1: [50,100]. */
+        cfg->output_power = (uint8_t)clamp_echo_power(LV_OUT_POWER, data16);
         break;
     case LV_MAX_ON_TIME:
-        cfg->limit_on_time = data16;
+        cfg->limit_on_time = clamp_echo_max(LV_MAX_ON_TIME, data16, 2000u);
         break;
     case LV_ENERGY_EDIT:
         cfg->limit_energy = data16;
         break;
     case LV_LIMIT_OUT_T:
-        cfg->limit_out_time = (uint8_t)data16;
+        cfg->limit_out_time = (uint8_t)clamp_echo_max(LV_LIMIT_OUT_T, data16, 10u);
         break;
     case DISP_SAFTY:
         cfg->f_safty = (data16 == 1) ? 1u : 0u;
