@@ -636,6 +636,7 @@ static void test_trigger_full_cycle(void)
     CHECK_EQ(stops, 1);
     CHECK_EQ(dones, 1);                       /* work_cnt 경로 정상 */
     CHECK_EQ((cyl2_steps <= 2), 1);           /* CYL2 = up 강제 -> 사실상 즉시 (§3.3) */
+    CHECK_EQ((hold_steps >= 1), 1);           /* HOLD를 실제로 거침 (trigger_time3) */
 }
 
 /* TRIGGER: READY 중 들어온 dn_edge(stale)는 사이클 시작 시 클리어 (main.c:1478). */
