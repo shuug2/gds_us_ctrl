@@ -78,6 +78,14 @@ static uint8_t run_page_for_mode(uint8_t sys_mode)
     return LCD_RUN_STD;                                 /* 9 (SYS_STD) */
 }
 
+/* slice4 SETUP 게이트: 현재 run 페이지인가 (setup/model 페이지면 0).
+ * samd20 sys_status==SYS_RUN 등가 — 페이지 기반 판정 (sys_status 필드는 미배선). */
+uint8_t app_lcd_in_run_page(void)
+{
+    const lcd_app_state_t *st = app_lcd_state();
+    return (st->lcd_status == run_page_for_mode(st->sys_mode)) ? 1u : 0u;
+}
+
 /* 과부하 에러 표시 — app_overload 글루가 assert/deassert 엣지에 호출.
  * ERR_OVLD 비트만 조작(weld OVTIME 보존), ICON_OL + 경고/런 페이지는 RESET-키
  * 클리어 경로(이 파일)와 동일 시퀀스. */
