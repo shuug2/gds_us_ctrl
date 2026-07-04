@@ -9,6 +9,7 @@
 #include "app_eth.h"
 #include "usart1.h"
 #include "i2c1.h"
+#include "freq_ic.h"
 #include "dgus_lcd.h"
 
 extern void usart6_init(void);   /* drivers/usart.c */
@@ -24,6 +25,7 @@ int main(void) {
     i2c1_init();       /* Stage B: I2C1 @400kHz (PB6/PB7) for FRAM */
     tim11_init();      /* 1 kHz IRQ enabled, base not started yet */
     board_init();      /* GPIO out + 3 confirmed OSC channels idle-HIGH (off) */
+    freq_ic_init();    /* FREQ_IN(PA0/TIM5_CH1) 입력캡처 — HW only, sys_tick 불요 */
     dgus_init();       /* Stage A: DGUS 프로토콜 레이어 상태 클리어 */
     app_init();        /* sys_tick start, mon banner */
     app_reg_init();    /* Stage D: ADC1 + regulation state (needs sys_tick up) */

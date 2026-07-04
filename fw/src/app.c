@@ -109,6 +109,7 @@ void app_loop_iter(void)
             .energy_ctrl    = rc->energy_ctrl ? 1u : 0u,
             .limit_energy   = rc->limit_energy,
             .limit_out_time = rc->limit_out_time,
+            .freq_cal_val   = rc->freq_cal_val,
         };
         app_reg_tick(&lim);
     }

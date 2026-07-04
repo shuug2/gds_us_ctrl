@@ -2,6 +2,7 @@
 #include "stm32f4xx_hal.h"
 #include "periph.h"
 #include "sys_tick.h"
+#include "app_freq_fsm.h"
 
 void NMI_Handler(void)        { while (1) {} }
 void HardFault_Handler(void)  { while (1) {} }   /* TODO Stage A: register dump via mon_printf */
@@ -20,8 +21,18 @@ void TIM1_TRG_COM_TIM11_IRQHandler(void) {
     HAL_TIM_IRQHandler(&htim11);
 }
 
+void TIM5_IRQHandler(void) {
+    HAL_TIM_IRQHandler(&htim5);
+}
+
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
     if (htim->Instance == TIM11) {
         sys_tick_handle_irq();
+    }
+}
+
+void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) {
+    if (htim->Instance == TIM5) {
+        freq_fsm_on_capture(HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1));
     }
 }

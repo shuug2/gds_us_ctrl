@@ -11,6 +11,7 @@
 #include "app_seek_reset.h"   /* app_seek_reset_request, app_seek_reset_active */
 #include "adc1.h"
 #include "sys_tick.h"
+#include "app_freq_fsm.h"
 #ifdef REG_TRACE
 #include "mon.h"
 #endif
@@ -57,6 +58,7 @@ typedef struct {
                                       * timeout-stopped run (V30 data=0 quirk) */
     uint32_t acc_energy;             /* 전력 적분기 (run-start 리셋; samd20 acc_energy) */
     uint32_t last_energy;            /* run-stop 시 curr_energy 래치 (samd20 last_energy) */
+    uint16_t last_freq;              /* run-stop 시 curr_freq 래치 (samd20 us_off last_freq=curr_freq) */
     uint8_t  error_status;           /* ERR_* (OVTIME 등); RESET이 클리어. publish됨 */
 
     uint32_t prev_acq_ms;
@@ -77,6 +79,7 @@ static void reg_stop_run(uint8_t rs)
     g_reg.last_power    = g_reg.max_power;
     g_reg.last_amp      = g_reg.max_amp;
     g_reg.last_energy   = g_measure.curr_energy;
+    g_reg.last_freq     = g_measure.curr_freq;   /* freq 래치 — last_energy 패턴(max 없음) */
     g_reg.us_run_status = (uint8_t)US_IDLE;
     if (rs == (uint8_t)US_TOUCH) {
         g_reg.swallow_start = 1u;
@@ -155,6 +158,7 @@ void app_reg_command(us_cmd_t cmd, uint8_t src)
             g_reg.last_power    = g_reg.max_power;
             g_reg.last_amp      = g_reg.max_amp;
             g_reg.last_energy   = g_measure.curr_energy;   /* stopped-display 미러 (slice2) */
+            g_reg.last_freq     = g_measure.curr_freq;   /* freq 래치 — last_energy 패턴(max 없음) */
             g_reg.us_run_status = (uint8_t)US_IDLE;
         } else if ((src == (uint8_t)US_TOUCH) && (g_reg.swallow_start != 0u)) {
             /* Any touch RUN_RELEASE arriving while IDLE after a ceiling stop
@@ -212,7 +216,7 @@ static void reg_acquire_step(void)
     }
 }
 
-static void reg_publish_measure(uint32_t now)
+static void reg_publish_measure(uint32_t now, int16_t freq_cal_val)
 {
     /* slice 2b run-gated: curr_power = live setpoint (0 when idle); max_power =
      * running peak during the run; last_power latched on stop (app_reg_command).
@@ -249,6 +253,11 @@ static void reg_publish_measure(uint32_t now)
     g_measure.max_amp  = g_reg.max_amp;
     g_measure.last_amp = g_reg.last_amp;
     g_measure.last_energy = g_reg.last_energy;
+    /* FREQ_IN: 매 publish에 측정 (SAMD20 calc_freq처럼 run 게이팅 없음 — 무신호면
+     * FSM이 0 반환). 표시(VAR_FREQ)/Modbus(MB_REG_DISP_FREQ)는 on?curr:last로
+     * 자체 게이팅(기존 배선). slice-B Task 3. */
+    g_measure.curr_freq = freq_fsm_compute(freq_cal_val);
+    g_measure.last_freq = g_reg.last_freq;
     g_measure.us_run_status = g_reg.us_run_status;
     g_measure.error_status  = g_reg.error_status;   /* OVTIME 등 fault → LCD/Modbus */
 }
@@ -341,7 +350,7 @@ void app_reg_tick(const reg_run_limits_t *lim)
     /* Publish runs only on the ~2 ms gate above: a ceiling/release stop that
      * fires earlier in this same call reaches g_measure up to ~2 ms later —
      * bounded and invisible (disp renders each VP-group at a ~40 ms cadence). */
-    reg_publish_measure(now);
+    reg_publish_measure(now, lim->freq_cal_val);
 
 #ifdef REG_TRACE
     if ((uint32_t)(now - g_reg.trace_ms) >= REG_TRACE_MS) {
