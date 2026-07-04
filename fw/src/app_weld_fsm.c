@@ -76,6 +76,26 @@ void weld_fsm_step(const weld_in_t *in, weld_out_t *out)
 {
     memset(out, 0, sizeof(*out));
 
+    /* abort (slice4 §3.4): 임의 상태 -> SOL OFF + READY. WELD 중이면 US 정지 엣지
+     * (글루 US_CYCLE RUN_RELEASE — slice-c/d force-stop과 이중 안전). work_cnt 미발행.
+     * legacy: E-stop main.c:1415 / SYS_ERROR 1664-1665. */
+    if ((in->abort != 0u) && (s_run_status != WELD_READY)) {
+        if (s_run_status == WELD_WELD) {
+            out->weld_stop = 1u;
+        }
+        s_sol_dn         = 0u;
+        s_run_status     = WELD_READY;
+        s_f_status_start = 0u;
+        s_temp_time      = 0u;
+        s_multi_stage    = 0u;
+        s_multi_elapsed  = 0u;
+        s_latched_multi  = 0u;
+        s_latched_energy = 0u;
+        out->run_status  = s_run_status;
+        out->sol_dn      = s_sol_dn;
+        return;
+    }
+
     /* 10 ms elapsed: active timer counts down (samd20 timer temp_time--). */
     if (s_temp_time > 0u) {
         s_temp_time--;

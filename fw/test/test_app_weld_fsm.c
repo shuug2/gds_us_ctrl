@@ -550,6 +550,55 @@ static void test_h1_counters_reset_between_cycles(void)
     CHECK_EQ(t.cycle_done_cnt, 1);
 }
 
+/* abort: 각 상태에서 -> SOL OFF + READY + work_cnt 미발행; WELD에서만 weld_stop. */
+static void test_abort_from_each_state(void)
+{
+    /* CYL1/WELD/HOLD/CYL2 도달 step 수 — 실측 보정(brief 원안 {1,4,6,9}은 comp_time
+     * quirk 미반영: ldt2<=6이면 WELD가 최소 7 step 점유(WELD_COMP_FULL) 하므로
+     * HOLD는 step10, CYL2는 step12에 진입 (trace 실측, task-2-report.md 참조). */
+    static const int steps_to_state[] = {1, 4, 10, 12};
+    static const uint8_t expect_state[] = {WELD_CYL1, WELD_WELD, WELD_HOLD, WELD_CYL2};
+    for (int s = 0; s < 4; s++) {
+        weld_fsm_init();
+        weld_in_t in;
+        memset(&in, 0, sizeof(in));
+        in.limit_delay_time1 = 2u; in.limit_delay_time2 = 2u; in.limit_delay_time3 = 2u;
+        in.output_power = 100u;
+        weld_out_t out;
+        in.start = 1u;
+        weld_fsm_step(&in, &out);
+        in.start = 0u;
+        for (int i = 1; i < steps_to_state[s]; i++) { weld_fsm_step(&in, &out); }
+        CHECK_EQ(weld_fsm_status(), expect_state[s]);
+        uint8_t was_weld = (weld_fsm_status() == WELD_WELD);
+
+        in.abort = 1u;
+        weld_fsm_step(&in, &out);
+        CHECK_EQ(weld_fsm_status(), WELD_READY);
+        CHECK_EQ(out.sol_dn, 0u);
+        CHECK_EQ(out.cycle_done, 0u);
+        CHECK_EQ(out.weld_stop, was_weld ? 1u : 0u);
+        in.abort = 0u;
+
+        /* abort 후 재시작 정상 */
+        trace_t t;
+        run_cycle(&in, &t, 200);
+        CHECK_EQ(t.cycle_done_cnt, 1);
+    }
+}
+
+/* abort: READY에서는 no-op. */
+static void test_abort_in_ready_noop(void)
+{
+    weld_fsm_init();
+    weld_in_t in; memset(&in, 0, sizeof(in));
+    in.abort = 1u;
+    weld_out_t out;
+    weld_fsm_step(&in, &out);
+    CHECK_EQ(weld_fsm_status(), WELD_READY);
+    CHECK_EQ(out.weld_stop, 0u);
+}
+
 int main(void)
 {
     test_init_ready();
@@ -576,6 +625,8 @@ int main(void)
     test_h1_multi_toggle_mid_weld_ignored();
     test_h1_multi_off_toggle_mid_weld_ignored();
     test_h1_counters_reset_between_cycles();
+    test_abort_from_each_state();
+    test_abort_in_ready_noop();
     if (failures) { printf("test_app_weld_fsm: %d FAILED\n", failures); return 1; }
     printf("test_app_weld_fsm: all passed\n");
     return 0;
