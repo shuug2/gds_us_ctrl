@@ -146,6 +146,16 @@ static void test_reg_energy_termination(void) {
     CHECK_EQ(reg_energy_termination(1, 100, 100, 999999u, 10), REG_RUN_STOP_ENERGY);
 }
 
+/* M1(감사): energy_ctrl=1 + limit_energy=0 -> 즉시 무증상 "정상완료" 금지.
+ * 0 = 에너지-도달 체크 off (limit_out_time=0=OVTIME off 패턴과 동일 의미론). */
+static void test_energy_limit_zero_no_instant_stop(void)
+{
+    CHECK_EQ(reg_energy_termination(1u, 0u, 0u, 0u, 10u), REG_RUN_CONTINUE);
+    CHECK_EQ(reg_energy_termination(1u, 99999u, 0u, 0u, 10u), REG_RUN_CONTINUE);
+    /* OVTIME은 계속 유효 */
+    CHECK_EQ(reg_energy_termination(1u, 0u, 0u, 10000u, 10u), REG_RUN_FAULT_OVTIME);
+}
+
 /* 출력파워 그래프 표시 전류/전력 (ch1=소비전류). 절대 보정은 6b — 여기선
  * 데드밴드/오프셋/단조성/언더플로 가드/×2.2 비율 등 구조만 검증.
  * 상수: GAIN 4/10, DEADBAND 51, OFFSET 37, POWER 22/10. */
@@ -184,6 +194,7 @@ int main(void) {
     test_energy_from_acc();
     test_energy_integration_steps();
     test_reg_energy_termination();
+    test_energy_limit_zero_no_instant_stop();
     test_reg_current_from_adc();
     test_reg_power_from_amp();
     if (failures) { printf("%d check(s) FAILED\n", failures); return 1; }

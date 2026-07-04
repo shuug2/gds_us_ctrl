@@ -284,6 +284,33 @@ static void test_backstop_floor_zero(void)
     }
 }
 
+/* M1(감사): energy_ctrl=1 + limit_energy=0 -> 즉시 무증상 "정상완료" 금지.
+ * limit_out_time=1(backstop=100 tick)로 abort 종료해야 함. */
+static void test_weld_energy_limit_zero_no_instant_stop(void)
+{
+    weld_fsm_init();
+    weld_in_t in; memset(&in, 0, sizeof(in));
+    in.limit_delay_time1 = 2u; in.limit_delay_time2 = 10u; in.limit_delay_time3 = 2u;
+    in.output_power = 100u;
+    in.energy_ctrl = 1u; in.limit_energy = 0u; in.curr_energy = 0u;
+    in.limit_out_time = 1u;                   /* backstop 1s = 100 tick */
+    weld_out_t out;
+    in.start = 1u;
+    weld_fsm_step(&in, &out);
+    in.start = 0u;
+    for (int i = 0; i < 3; i++) { weld_fsm_step(&in, &out); }
+    CHECK_EQ(weld_fsm_status(), WELD_WELD);
+    weld_fsm_step(&in, &out);
+    CHECK_EQ(out.weld_stop, 0u);              /* 즉시 정상완료 금지 */
+    int faults = 0;
+    for (int i = 0; i < 150 && weld_fsm_status() == WELD_WELD; i++) {
+        weld_fsm_step(&in, &out);
+        faults += out.weld_fault;
+    }
+    CHECK_EQ(faults, 1);                      /* backstop abort로 종료 */
+    CHECK_EQ(weld_fsm_status(), WELD_READY);
+}
+
 /* multi 스테핑: out1=75 -> 1단 진폭 63 at weld_start, time1(=5) step에서 amp_change
  * +2단 진폭(out2=100 -> 127), time2(=12) step에서 weld_stop+HOLD, 정상 사이클 완주. */
 static void test_multi_stepping(void)
@@ -695,6 +722,7 @@ int main(void)
     test_time_exit_skipped_when_energy();
     test_backstop_abort();
     test_backstop_floor_zero();
+    test_weld_energy_limit_zero_no_instant_stop();
     test_multi_stepping();
     test_multi_overrides_energy();
     test_multi_overrides_delay();

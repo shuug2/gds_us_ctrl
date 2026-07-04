@@ -207,7 +207,7 @@ void weld_fsm_step(const weld_in_t *in, weld_out_t *out)
             /* energy 모드: 에너지 도달 -> 정상 종료(samd20 5272); 미도달 +
              * backstop 만료 -> abort(samd20 5288, 에러 표시는 이연). spec §3.3. H1:
              * 전이 시점 스냅샷(s_latched_energy) 참조 — 런중 in->energy_ctrl 토글 무시. */
-            if (in->curr_energy >= in->limit_energy) {
+            if ((in->limit_energy != 0u) && (in->curr_energy >= in->limit_energy)) {
                 out->weld_stop   = 1u;
                 s_f_status_start = 0u;
                 s_run_status     = WELD_HOLD;
