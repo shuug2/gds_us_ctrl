@@ -33,6 +33,7 @@
 | 6 | **사이클 진입 게이팅**: `app_reg_start_allowed()` 신설 — START가 거부될 상태면 사이클 자체 미시작 (**의도된 deviation**, §4.3) | 사용자 결정 2026-07-04 |
 | 7 | **D2 클램프 M1~M4** (§6) | 감사 결정 D2 |
 | 8 | 글루 tick `s_prev_ms += WELD_TICK_MS` + 재동기 가드 | 코드 주석 예고(`app_weld.c:59-63`), 감사 M1(글루) |
+| 9 | **SETUP 게이트** (slice1 spec §5.4 이연분): setup 페이지에서는 weld step 자체 스킵(타이머 동결 + 시작 불가) — `app_lcd_in_run_page()` 접근자 신설(`run_page_for_mode` 재사용) | slice1 spec §5.4, samd20 timer `sys_status!=SETUP` 게이트 |
 
 ### 1.2 Out (이연)
 
@@ -185,9 +186,11 @@ if ((uint32_t)(now - s_prev_ms) > 10u * WELD_TICK_MS) s_prev_ms = now;  /* 재�
 bool app_reg_start_allowed(void);   /* 읽기 전용 — 소비/상태 변경 없음 */
 ```
 
-START guard 5-break와 **동일 조건**: warm-up 완료 && `us_run_status==US_IDLE` &&
-seek/reset 비활성 && `error_status==0` && overload 비활성 && E-stop 비활성 &&
-swallow 미대기. 구현은 guard 본문과 **공용 static helper**로 묶어 드리프트 차단.
+START guard와 **동일 조건**: warm-up 완료(`main_state==0`) && `us_run_status==US_IDLE` &&
+seek/reset 비활성 && `error_status==0` && overload 비활성 && E-stop 비활성.
+**swallow는 조건에서 제외** — 구현 확인 결과 swallow_start는 `src==US_TOUCH` 전용
+소비(`app_reg.c:136`)라 US_CYCLE START에 무관. 구현은 guard 본문의 4개 break를 이
+함수 호출로 치환해(swallow consume은 그 앞에 유지) 드리프트 차단.
 
 **deviation 근거**: samd20은 M_START 직결이라 guard가 없었다. 포팅 후 guard가 US_CYCLE
 START를 삼키면 "SOL만 하강하는 블라인드 사이클"이 발생 — 사용자 결정(2026-07-04)으로
