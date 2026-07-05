@@ -137,6 +137,9 @@ mb_tcp_fr_t mb_tcp_frame_peek(const uint8_t *buf, uint16_t len, uint16_t *frame_
    후 FC03 read-back으로 **OUT_POWER=50(클램프)·ON_TIME=100 둘 다 적용** 확인
    — 워크-종료 이월(두 번째 write는 다음 poll에서 apply)이 유실 없이 동작함을
    입증. ⚠ FC03-only 파이프라인은 이 결함을 못 잡음(리뷰 지적).
+   **+ [FC06][FC03 같은 세그먼트]**: FC06 클램프 write + 같은 reg FC03을 한
+   세그먼트로 → FC03 응답이 다음 poll(mirror 후)로 지연돼 **클램프된 값**을
+   반환하는지 확인 (재리뷰 이월 노트 — stale 미러 스냅샷 아님을 입증).
 2. **M8**: ETH 연결(ESTABLISHED, SWD `Sn_SR` read=0x17) → LCD comm_mode→SERIAL
    저장 → `Sn_SR`=CLOSED(0x00) 확인 + 피어 소켓 종료 관측 → ETH 재전환 →
    재연결 정상.
