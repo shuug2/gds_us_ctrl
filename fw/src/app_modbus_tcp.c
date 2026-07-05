@@ -109,9 +109,14 @@ void app_modbus_tcp_poll(void)
     }
 
     /* 워커: 완전 프레임을 순차 응답(TX 누적), poll당 상한으로 슈퍼루프 시간
-     * 바운드. FC06 apply는 프레임별 순차 — 뒤 프레임의 decode가 앞 write의
-     * 반영을 보는 기존 단일-프레임 순서와 동일 (respond-then-apply 계약은
-     * "에코가 decode 시점 캡처"라 send 타이밍과 무관, 구 :78-82 주석). */
+     * 바운드. FC06을 만나면 그 프레임까지 처리(응답 append + apply_writes)
+     * 하고 워크를 즉시 종료한다 — apply_writes는 holding[] vs cfg 1-change
+     * -per-call else-if 체인이라, 클램프된 write는 holding에 raw 잔여를
+     * 남기고 그 잔여는 poll 뒤 mirror_live()만 재동기함. 같은 poll에서
+     * 두 번째 FC06까지 처리하면 잔여를 먼저 재발견해 반환 → 뒤 write가
+     * 조용히 유실(whole-branch review HIGH). 잔여 프레임은 누적 버퍼로
+     * 다음 poll에 이월되고, 그 사이 mirror_live()가 holding을 cfg와
+     * 재동기하므로 RTU와 동일한 "poll당 최대 1 write-apply" 불변식이 됨. */
     uint16_t tx_len = 0u;
     uint16_t off = 0u;
     uint8_t  frames = 0u;
@@ -132,15 +137,28 @@ void app_modbus_tcp_poll(void)
         }
         uint16_t out_len = 0u;
         uint8_t  fc = 0u;
+        bool     wrote = false;
         if (mb_tcp_build_response(app_modbus_core(), &s_acc[off], frame_len,
                                   &s_txacc[tx_len], &out_len, &fc)) {
             tx_len = (uint16_t)(tx_len + out_len);
             if (fc == 0x06u) {
                 app_modbus_apply_writes();
+                wrote = true;
             }
         }
         off = (uint16_t)(off + frame_len);
         frames++;
+        if (wrote) {
+            /* FC06 뒤는 이번 poll에서 처리하지 않음: apply_writes는
+             * one-change-per-call 체인 + 클램프 잔여(holding=raw vs
+             * cfg=클램프) 재동기가 poll 뒤 mirror_live()뿐이라, 같은
+             * poll에서 두 번째 FC06을 apply하면 잔여 재발견으로 굶겨
+             * write가 조용히 유실됨(whole-branch review HIGH). 잔여
+             * 프레임은 누적 버퍼로 다음 poll 이월 — mirror가 사이에
+             * 돌아 RTU와 동일한 1-write-per-mirror 사이클. read-
+             * after-write stale도 함께 차단. */
+            break;
+        }
     }
     if (off != 0u) {
         s_acc_len = (uint16_t)(s_acc_len - off);
