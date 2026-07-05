@@ -37,6 +37,30 @@ void app_weld_request_start(void)
     s_start_pending = 1u;          /* consumed next tick; READY-only in core */
 }
 
+/* E-stop 진입 엣지 전용 즉시 abort (app_input 글루가 호출) — run-page 게이트와
+ * 무관. legacy는 EMSW 핸들러가 입력 스캔에서 직접 SOL/M_START를 끊고 해제 시
+ * RUN_READY를 강제(main.c:1409-1425)한 구조의 등가. E-stop 진입이 LCD_WARNING
+ * 페이지 전환(app_lcd_set_estop)을 동반하면 아래 tick이 SETUP 게이트로 동결돼
+ * abort 미처리→해제 후 유령 재개가 되므로, 여기서 페이지 무관으로 정리한다.
+ * abort 경로는 in.abort+현재 상태만 읽음(app_weld_fsm.c:119-137) — zeroed in 안전. */
+void app_weld_abort_now(void)
+{
+    weld_in_t  in = {0};
+    weld_out_t out;
+
+    in.abort = 1u;
+    weld_fsm_step(&in, &out);
+
+    if (out.sol_dn != s_sol_last) {
+        s_sol_last = out.sol_dn;
+        app_weld_hook_sol_dn(out.sol_dn != 0u);
+    }
+    if (out.weld_stop) {
+        app_reg_command(US_CMD_RUN_RELEASE, (uint8_t)US_CYCLE);
+    }
+    /* cycle_done/weld_start/amp_change는 abort 경로에서 미발행. */
+}
+
 void app_weld_hook_sol_dn(bool on)
 {
     io_sol_dn(on);                 /* PB5 active-LOW (SOL_ON=LOW) */

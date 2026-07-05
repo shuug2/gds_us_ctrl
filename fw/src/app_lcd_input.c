@@ -16,6 +16,8 @@
 #include "sys_tick.h"
 #include "mon.h"
 #include "cfg_clamp.h"
+#include "app_input.h"     /* app_estop_active — 런 페이지 복귀 가드 */
+#include "app_overload.h"  /* app_overload_active — 런 페이지 복귀 가드 */
 
 /*--------------------------------------------------------------
  * samd20 define.h / main.c constants (file-local — verbatim values)
@@ -87,6 +89,16 @@ uint8_t app_lcd_in_run_page(void)
     return (st->lcd_status == run_page_for_mode(st->sys_mode)) ? 1u : 0u;
 }
 
+/* 런 페이지 복귀 공용 가드 — 활성 안전상태(E-stop/overload)나 잔여 에러가 있으면
+ * 경고 페이지 유지. ⚠ state->error_status의 OVLD 비트는 app_lcd_tick의 reg 미러가
+ * 매 iter 덮어써 휘발성(app_lcd.c:193-200) — 라이브 접근자가 정본. E-stop에 막혀
+ * 경고가 유지될 때는 호출측이 VP 텍스트를 "E-STOP"으로 재기록한다. */
+static bool lcd_may_restore_run_page(void)
+{
+    return (app_estop_active() == 0u) && (app_overload_active() == 0u) &&
+           (app_lcd_state()->error_status == 0u);
+}
+
 /* 과부하 에러 표시 — app_overload 글루가 assert/deassert 엣지에 호출.
  * ERR_OVLD 비트만 조작(weld OVTIME 보존), ICON_OL + 경고/런 페이지는 RESET-키
  * 클리어 경로(이 파일)와 동일 시퀀스. */
@@ -101,10 +113,33 @@ void app_lcd_set_overload(bool on)
     } else {
         state->error_status &= (uint8_t)~ERR_OVLD;
         dgus_write_u16(ICON_OL, 0);
-        if (state->error_status == 0u) {            /* 다른 에러 없으면 런 페이지 복귀 */
+        if (lcd_may_restore_run_page()) {
             state->lcd_status = run_page_for_mode(state->sys_mode);
             dgus_set_page(state->lcd_status);
+        } else if (app_estop_active() != 0u) {
+            dgus_write_text(VP_ERROR_MSG, "E-STOP");   /* 경고 유지 — 원인 갱신 */
         }
+    }
+}
+
+/* E-stop 표시 — app_input 글루가 enter/release 엣지에 호출. legacy는
+ * sys_status=SYS_ESTOP 전이에서 VP_ERROR_MSG="E-STOP"+LCD_WARNING(do_control,
+ * main.c:4209-4215), 해제 시 init_lcd_mode()로 런 페이지 복귀(4238-4241).
+ * E-stop은 error_status 비트가 아님(레벨추종) — 비트 무조작. 복귀는 다른 에러
+ * 활성 시 보류(overload off 경로와 동일 가드; legacy는 sys_status 단일값이라
+ * 등가 상황 없음). */
+void app_lcd_set_estop(bool on)
+{
+    lcd_app_state_t *state = app_lcd_state();
+
+    if (on) {
+        /* 동시 에러(OVLD 등) 활성이어도 텍스트는 E-STOP 우선 (최상위 안전 상태). */
+        dgus_write_text(VP_ERROR_MSG, "E-STOP");
+        state->lcd_status = LCD_WARNING;
+        dgus_set_page(state->lcd_status);
+    } else if (lcd_may_restore_run_page()) {
+        state->lcd_status = run_page_for_mode(state->sys_mode);
+        dgus_set_page(state->lcd_status);
     }
 }
 
@@ -135,8 +170,12 @@ static void handle_key_multi(uint16_t data16)
             state->error_status &= (uint8_t)~(ERR_OVLD | ERR_OUTERR);
             dgus_write_u16(ICON_OL, 0);
             dgus_write_u16(ICON_OUTERR, 0);
-            state->lcd_status = run_page_for_mode(state->sys_mode);
-            dgus_set_page(state->lcd_status);           /* samd20 uses set_lcd_page (no rebuild) */
+            if (lcd_may_restore_run_page()) {
+                state->lcd_status = run_page_for_mode(state->sys_mode);
+                dgus_set_page(state->lcd_status);       /* samd20 uses set_lcd_page (no rebuild) */
+            } else if (app_estop_active() != 0u) {
+                dgus_write_text(VP_ERROR_MSG, "E-STOP");   /* 경고 유지 — 원인 갱신 */
+            }
         }
     } else if (data16 == 2) {                           /* SEEK */
         app_lcd_hook_us_command(US_CMD_SEEK);
@@ -181,8 +220,12 @@ static void handle_key_error_reset(uint16_t data16)
     /* Stage D owns us/measure state; input only raises the command. */
     if (state->error_status & ERR_OVTIME) {
         state->error_status = 0;                        /* samd20 zeroes the whole word here */
-        state->lcd_status = run_page_for_mode(state->sys_mode);
-        dgus_set_page(state->lcd_status);               /* samd20 uses set_lcd_page (no rebuild) */
+        if (lcd_may_restore_run_page()) {
+            state->lcd_status = run_page_for_mode(state->sys_mode);
+            dgus_set_page(state->lcd_status);           /* samd20 uses set_lcd_page (no rebuild) */
+        } else if (app_estop_active() != 0u) {
+            dgus_write_text(VP_ERROR_MSG, "E-STOP");    /* 경고 유지 — 원인 갱신 */
+        }
     }
 }
 

@@ -10,6 +10,8 @@
 void app_weld_init(void);            /* boot: reset FSM + tick gate */
 void app_weld_tick(void);            /* superloop: 10 ms-gated advance + effects */
 void app_weld_request_start(void);   /* one-shot cycle trigger (slice 4 caller) */
+void app_weld_abort_now(void);       /* E-stop 진입 엣지 즉시 abort — run-page 게이트
+                                        무관 (app_input 호출; legacy main.c:1409-1425) */
 
 /* SOL_DN solenoid hook (slice 1: mon log; slice 4: PB5 GPIO). */
 void app_weld_hook_sol_dn(bool on);

@@ -176,4 +176,9 @@ void app_lcd_set_overload(bool on);
  * 글루가 레벨 변화 엣지에 호출 (samd20 check_remote_input main.c:1230-1265). */
 void app_lcd_weld_sensor_text(bool on);
 
+/* E-stop 표시 — app_input 글루가 enter/release 엣지에 호출. on="E-STOP"+
+ * LCD_WARNING 페이지 / off=런 페이지 복귀(다른 에러 활성 시 보류).
+ * legacy do_control SYS_ESTOP 전이 (samd20 main.c:4209-4215, 4238-4241). */
+void app_lcd_set_estop(bool on);
+
 uint8_t app_lcd_in_run_page(void);   /* 1 = run 페이지 (slice4 weld SETUP 게이트) */

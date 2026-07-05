@@ -7,7 +7,8 @@
 #include "app_input_fsm.h"
 #include "io.h"          /* io_read_start/reset/estop_seek, io_sol_dn */
 #include "app_reg.h"     /* app_reg_command, app_reg_measure */
-#include "app_lcd.h"     /* app_lcd_cfg, us_cmd_t, US_* */
+#include "app_lcd.h"     /* app_lcd_cfg, us_cmd_t, US_*, app_lcd_set_estop */
+#include "app_weld.h"    /* app_weld_abort_now (E-stop 진입 즉시 abort) */
 #include "sys_tick.h"
 
 #define INPUT_TICK_MS  10u
@@ -39,11 +40,22 @@ void app_input_tick(void)
     in.model_type = app_lcd_cfg()->model_type;
 
     input_out_t ev = input_fsm_step(&in);   /* 매 tick 실행: bak/엣지 항상 갱신 */
+    uint8_t prev_estop = s_estop_active;
     s_estop_active = ev.estop_active;
 
-    /* E-stop 진입 엣지: SOL OFF 1-shot (io_sol_dn idempotent). */
+    /* E-stop 진입 엣지: SOL OFF 1-shot (io_sol_dn idempotent) + weld 즉시
+     * abort(페이지 무관 — LCD_WARNING 전환 후 weld tick 동결 레이스 차단) +
+     * E-STOP 경고 페이지 (legacy EMSW 핸들러+do_control, main.c:1409-1425/
+     * 4209-4215). */
     if (ev.estop_enter != 0u) {
         io_sol_dn(false);
+        app_weld_abort_now();
+        app_lcd_set_estop(true);
+    }
+    /* 해제 엣지: 런 페이지 복귀 (legacy 4238-4241 init_lcd_mode 등가; 레벨추종
+     * 자동 클리어 — RESET 불필요, 런 재시작 안 함은 기존 그대로). */
+    if ((prev_estop != 0u) && (s_estop_active == 0u)) {
+        app_lcd_set_estop(false);
     }
 
     if (s_estop_active != 0u) {
