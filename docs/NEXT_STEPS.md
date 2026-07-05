@@ -2,7 +2,8 @@
 
 > CLAUDE.md 에 명시된 first-load 문서. 새 세션 시작 시 본 파일을 가장 먼저 읽고 진행 상황 + 다음 작업을 확인.
 >
-> **본 문서 최신화: 2026-07-02** — 전면 감사(포팅 충실성+코드 품질) 반영: §1.1 표에 i2c-pot/ovtime 추가, **§1.3 적용 결정 7건(D0~D6) 신설**. "코딩 가능 스테이지 전부 완료" 전제 폐기 — HW 없는 수정 큐 존재(§2.2). 발견 상세 = 루트 `HANDOFF.md`(2026-07-02).
+> **본 문서 최신화: 2026-07-05** — weld 사이클 E2E 전항목 PASS(풀배선 벤치) + 벤치 수정 6커밋(§1.1 표 하단): 클럭 **HSI→HSE**(주파수/타이밍 편차 원천 제거), 전류 표시 실동작(rig-fit), RESET/SEEK 물리 구동(**스윕 주체=보드측 실증** — B-SEAM 최대 미지수 해소), E-stop LCD/부저, SENSOR ON/OFF, overload 아이콘-only. HW-gated 백로그 대폭 축소(§1.2/§2.2). 보드 상태=§2.3-a. ⚠ push 미실행.
+> (직전 최신화 2026-07-02 — 전면 감사 반영: §1.1 표에 i2c-pot/ovtime 추가, §1.3 적용 결정 7건(D0~D6) 신설. 발견 상세 = git 이력의 HANDOFF 2026-07-02판.)
 > (직전 최신화 2026-06-20 — weld 슬라이스3 + SEEK/RESET HW 검증·머지·푸시 완료.) 변경 이력 = `docs/changelog.md`(최신 위), 세션별 상태 로그 = `docs/superpowers/RESUME.md`(SessionStart 자동 로드).
 >
 > **⚠⚠ git 히스토리 재작성됨 (2026-06-20)**: `git filter-repo`로 전체 282커밋 author 이메일을 `nogari@gmail.com`으로 재작성(shuug2 GitHub 연결용) → **모든 커밋 해시 변경**. 본 문서·RESUME·changelog·메모리에 적힌 옛 해시(`f6a7eee`/`49ca2c7`/`d32d014` 등)는 **더 이상 존재하지 않음**(`git show` 시 "Not a valid object name"). **안정 레퍼런스 = 태그**; 현재 해시는 `git log --oneline`로 확인. origin = `git@github.com:shuug2/gds_us_ctrl.git`(SSH, filter-repo가 origin 제거 후 재추가). main `1fa5938`(이후 HANDOFF 커밋으로 진행) = origin 동기. 이메일 인증(shuug2 Settings→Emails)은 사용자 미완료(소급 적용).
@@ -28,8 +29,9 @@
 | I2C_POT 진폭 | U4 디지털 포텐셔미터(@0x28) 실구동 — set_pot(%)/set_amp(raw) 공용 `drivers/i2c_pot.c` + 부팅 초기값 (HW ACK PASS) | `hw-revA_fw-stage-i2c-pot` |
 | OVTIME | energy 직접런 종료 쌍(에너지-도달 정상정지 + ERR_OVTIME fault) — `app_reg_tick`이 `reg_run_limits_t` 주입 구조로 변경(이후 머지의 기준) | `hw-revA_fw-stage-ovtime` |
 | Physical IO b/d | FREQ_IN 측정(TIM5, 실신호 34.46kHz 실증) + 물리 명령 B_START/B_RESET/PC11(SEEK\|EMSW 이중역할)+E-stop 레벨-추종+overload 인프라+OSC boot-init+buzzer/SOL/USOUT (HW: 버튼/체인/E-stop 활성·차단·자동해제 PASS; EMSW 물리 해제-추종=미배선 보류, overload 실동작=이연) | `hw-revA_fw-stage-physio-b` / `-physio-d` |
-| 표시 ch1 분리 | curr_amp/power/energy 표시·에너지 적분 입력을 ch1(소비전류)로 (절대값 E2E=6b — 리그 전류-sense 무신호 실측) | `hw-revA_fw-stage-power-ch1` |
-| Weld slice4 | TRIGGER 모드+양손 트리거 FSM+안전 abort+진입 게이팅+SETUP 게이트+D2 클램프 M1~M4+I-1+H1/D4 래치 (HW: 회귀+클램프 에코 PASS; **사이클 E2E=양손/센서 배선 게이트**) | `hw-revA_fw-stage-weld4` |
+| 표시 ch1 분리 | curr_amp/power/energy 표시·에너지 적분 입력을 ch1(소비전류)로 — ✅ **2026-07-05 실동작**(도메인 정합×6+gain 7/5 rig-fit+EMA+피크/유지 표시, 600mA 앵커; 정밀 보정=6b) | `hw-revA_fw-stage-power-ch1` + `3d2f414` |
+| Weld slice4 | TRIGGER 모드+양손 트리거 FSM+안전 abort+진입 게이팅+SETUP 게이트+D2 클램프 M1~M4+I-1+H1/D4 래치 — ✅ **사이클 E2E 전항목 PASS 2026-07-05**(§7.3 1~6·8+SETUP 게이트, 풀배선 벤치) | `hw-revA_fw-stage-weld4` |
+| 벤치 수정 2026-07-05 | SENSOR ON/OFF 동적 갱신(`b19823a`) · E-stop 경고 페이지+복귀 가드(`cbbfe19`) · E-stop 부저+overload 아이콘-only(`c3b3f27`) · **RESET/SEEK 물리 OSC 구동**(`29803ae`, 스윕 주체=보드측 실증) · **클럭 HSI→HSE**(`e72dbe4`, 주파수/타이밍 편차 원천 제거) · 전류 표시(`3d2f414`) — 전건 cpp-review APPROVE | main 직접 커밋 |
 
 > ⚠ `hw-revA_fw-stage-c2a`는 **없음** — pre-refactor slice 2a는 1s PHY-폴 버그 보유라 태그하지 않음. `-c2b`가 static+DHCP 전부 커버.
 
@@ -42,9 +44,9 @@
 
 > ⚠ **2026-07-02 감사로 전제 변경**: "코딩 가능한 계층 전부 완료"는 더 이상 사실이 아님 — 전면 코드 리뷰(CRITICAL 1+HIGH 4+MEDIUM 9)로 **HW 없이 가능한 수정 작업이 새로 생김**. 상세 발견 = 루트 `HANDOFF.md`(2026-07-02), 적용 결정 = 아래 **§1.3**. 아래 기존 목록은 여전히 HW-gated.
 
-- **weld 사이클 E2E (slice4 이연분)** — ✅ slice4 자체는 **MERGED 2026-07-04**(`b571da0`, tag `hw-revA_fw-stage-weld4`) — 잔여 = **양손 SW_START1/2(PC12/PB11)·SENSE_DN/UP(PA11/PA12)·f_safty 배선 후** spec §7.3 1~6·8(DELAY/TRIGGER 사이클, 재장전, safety/E-stop abort, RESET 체인 게이팅, 사이클 타이밍/스테핑/energy exit) + SETUP-overload SOL 거동 노트 + EMSW 물리 해제-추종(d' 이월). 트리거=물리 전용이라 미배선 상태에서 사이클 dormant.
-- **B-SEAM OSC 물리 구동** — 레귤레이션 compute의 마지막 블로커(OSC 출력 바인딩; 분석 §6 "명령 3선 active-LOW 레벨 미러" 가설, 스코프 측정으로 확정). seek/reset/weld의 실제 `CTRL_OSC*` 주파수 거동은 전부 hook stub(mon 로그)만 — 여기서 검증.
-- **6b signal calibration** — `>>2` 정규화 + 2.56V↔3.3V 도메인 실측 보정, ch0/scaled 물리단위, ADC offset·gain, OSC 비트매핑·극성. weld energy 누산 절대 E2E + divisor(`REG_ENERGY_DIV=250`)도 여기(벤치 DISP_POWER=0 무신호).
+- ~~**weld 사이클 E2E (slice4 이연분)**~~ — ✅ **전항목 PASS 2026-07-05** (풀배선 벤치): §7.3 1~6·8 + SETUP 게이트/동결 + EMSW 해제-추종(d' 이월) 전부 종결. SETUP-overload SOL 노트는 9-b 동결·재개 실물 확인으로 갈음.
+- **B-SEAM OSC 물리 구동** — **대부분 선행 완료 2026-07-05**: RESET/SEEK 라인 실구동 머지(`29803ae`) + "명령 3선 active-LOW 레벨 미러" 가설 **실증**(RESET 592ms→SEEK 591ms 레그 + FREQ_IN 스윕-정착 34115→34508Hz = **스윕 주체=OSC 보드측 확정** — 최대 미지수 해소). 잔여 = 스코프 파형 정밀 관측(안전 극성/폴라리티 sanity), PB12(OSC2) 용도(출력 구동 금지 유지), 진폭 추종.
+- **6b signal calibration** — **범위 축소 2026-07-05**: 주파수 보정 **불필요화**(HSE 전환으로 0.01% 일치, freq_cal_val=0 유지), 전류 1차 캘리브레이션 완료(600mA 앵커, gain 7/5 + cal_val 트림 경로 확립). 잔여 = 전류 정밀/다점 보정, ch0(레귤레이션) 도메인·물리단위, weld energy 누산 절대 E2E + divisor(`REG_ENERGY_DIV=250`), ADC offset, **EMA↔에너지 적분 디커플링**(`3d2f414` 리뷰 MEDIUM — 표시 EMA가 energy-exit 판정에 물림, 적분은 비필터 값으로 분리; 명시 이연 결정).
   - **(하위 항목) #7 출력이상 ERR_OUTERR 포팅** — samd20 출력이상 검출(`curr_amp <= USOUT_TH(25)` ×`USOUT_ERR_CNT_MAX(8)`, multi 모드, main.c:4318-4338)은 **트리거 `re_outerr_issued=1`이 주석처리(4333)=legacy에서 비활성**. 실 `curr_amp`(ADC 측정 진폭)에 의존하므로 **6b 종속** — 6b로 진폭 절대 보정이 서야 검출 임계가 의미를 가짐. 살리려면 ① 트리거 주석 해제 ② 실 curr_amp. fault 표면 인프라(error_status/ICON_OUTERR/`MB_STATUS_OUTERR=0x10`/RESET 복구)는 이미 main에 완비(미공급). 분석 = `docs/superpowers/specs/2026-06-28-ovtime-energy-run-design.md` §1·§8.
 - **overload 보호** — CON_OVLD(PC0) 입력 + 보호 동작. OVLD→RESET→자동 SEEK 복구 = **seek-reset FSM 재사용** 설계됨.
 
@@ -86,16 +88,24 @@ make -C fw/test test                                # 5 스위트 PASS 기대 (r
 
 ### 2.2 다음 작업 후보
 
-**2026-07-04부로 §1.3 결정 큐 전항목 종결**: ~~D0~~✅ ~~D1~~✅ ~~D3~~✅ ~~D6(M7)~~✅ ~~D5(reconcile)~~✅. 다음 = **D5 스택 HW 검증→단위별 머지/태그**(b'→d'→ch1' 순; ⚠ 거동 변화 2건 = TOUCH 운영 ceiling 제외/OVTIME>30s 캡 — 회귀 시나리오 갱신) 또는 아래 HW-gated 후보.
+**2026-07-05부로 weld 사이클 E2E 종결** (§1.2 참조 — HW-gated 백로그 대폭 축소). 남은 후보:
 
-- **weld 슬라이스4** — TRIGGER + 물리 SW_START + 센서 + 실 SOL_DN GPIO + 안전 abort + config-validation 클램프(LOW-1 LCD `app_lcd_input.c:752` 포함). 사이클/스테핑 자체 E2E도 여기. (samd20 `ref/samd20/main.c:1404-1466`)
-- **B-SEAM OSC 물리 구동** — seek/reset/weld의 실제 `CTRL_OSC*` 주파수 출력(현재 전부 hook stub). 레귤레이션 compute의 마지막 블로커. 실 초음파 rig + 스코프.
-- **6b signal calibration** — 진폭/주파수/에너지 절대 보정 + weld energy 누산 절대 E2E + divisor(`REG_ENERGY_DIV=250`). 실 rig.
-- **overload 보호** — CON_OVLD(PC0) → RESET → 자동 SEEK 복구(seek-reset FSM 재사용).
+- **B-SEAM 잔여** — 스코프 파형 정밀 관측 + PB12 용도 + 진폭 추종 (RESET/SEEK 구동·스윕 주체는 2026-07-05 해소).
+- **6b signal calibration 잔여** — 전류 정밀/다점 보정, ch0 도메인, weld energy 절대 E2E + divisor (주파수는 HSE로 불필요화).
+- **overload 실동작** — PB13 입력 실신호 → 정지/릴레이/부저/RESET→SEEK 복구 체인 E2E (인프라 완비, 실신호 게이트). + 리뷰 노트: handle_key_multi RESET의 OVLD/OUTERR 비트 테스트 휘발성(LOW, 후속).
+- **[HW 불요] modbus-tcp-hardening (M6/M8/M9)** — HMI 트리거 발화 상태 유지 (2026-07-05 세션은 벤치 우선으로 미착수).
+- **HMI SP1 Task 8 실보드 E2E** — gds_us_hmi 폴더 세션 (RS-485 어댑터 연결 필요).
 - **[2026-07-05 신규·HW 불요] modbus-tcp-hardening (M6/M8/M9)** — D6의 잔존 조건 "HMI 착수 시"가 **발화**(PC HMI SP1이 `~/dev/work/gds_us_hmi`에서 구현 완료, Task 8 E2E만 잔여). HMI SP2(FC06 쓰기) 전 처리 권장 + "RS-485 첫 write 간헐 무효" FW 원인 조사 포함. 상세 복원 = 2026-07-02 감사 HANDOFF(git 이력).
 - **[2026-07-05] HMI SP1 Task 8 실보드 E2E** — 벤치 세션 최우선 후보. 진입 = gds_us_hmi 폴더 세션 + 그쪽 HANDOFF.md (이 repo 아님).
 - 진입 절차 = **§3** (brainstorming → spec → writing-plans → subagent-driven → finishing).
 - ⚠ 머지/푸시 정책 변경: 이제 origin(SSH) 사용 — 머지 후 `git push origin main` + 태그 푸시(§6).
+
+### 2.3-a 보드 현 상태 (2026-07-05 마감 — 최신)
+
+- **main `3d2f414` 플래시됨** (클럭 HSE 포함). **풀배선 리그**: 양손 SW_START1/2(PC12/PB11)·SENSE_DN/UP(PA11/PA12)·EMSW(PC11)·B_START/B_RESET + 실 혼/실린더 + 전류 sense(PB1, 600mA→~15mV). RS-485 어댑터 미접속(세션 내내 — 관측=LCD 육안+SWD).
+- **테스트 잔재 설정**: TIMEOVER=2s, delay1=76(760ms), delay2=184, delay3=50, trigger2/3=109/90, OUT_POWER=100, f_safty=1, EN_MULTI=0/EN_ENERGY=0, model_type=multi(1), mo 60/90/100/150, cal_val=2, freq_cal_val=0(**HSE라 0 유지가 정답**). 운영 투입 전 복원 필요.
+- ⚠ 빌드마다 bss 주소 이동 — SWD read 전 현재 ELF에서 `arm-none-eabi-gdb -batch -ex "p/x &심볼"` 재확보 필수. 비침습 샘플러 = openocd TCL 루프(read_memory, halt 없음, ~1.4ms/샘플).
+- ⚠ push 미실행 (6커밋 + docs) — 사람 터미널에서 `git push origin main`.
 
 ### 2.3 보드 현 상태 (2026-06-20 마감 시점)
 

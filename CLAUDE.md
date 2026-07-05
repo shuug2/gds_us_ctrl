@@ -104,7 +104,7 @@ cmake --build build --target flash
 
 **먼저 `docs/NEXT_STEPS.md`를 읽고 진행 상황과 다음 작업을 확인.**
 
-**현재 진행 (2026-07-05)**: Phase 1+2 · LCD full port · Stage D(ATmega16 흡수) · Stage C(Modbus RTU+TCP) · weld-cycle 슬라이스1~4 · SEEK/RESET · I2C_POT · OVTIME · fram-robust · eth-reapply(M7) · physical-io b/d · 표시 ch1 분리 전부 main 머지 완료 — 감사 큐 D0~D6 종결, **미머지 브랜치 없음, push 완료(origin 동기화)**. **PC HMI SP1**은 별도 repo(`~/dev/work/gds_us_hmi`)에서 Task 1~7 구현+최종 리뷰 완료(미머지, **Task 8 실보드 E2E = 벤치 게이트**) — HMI 작업은 그 폴더 세션에서. 남은 것 = **벤치 E2E(HMI Task 8 우선)** + **weld 사이클 E2E(양손 SW_START1/2·SENSE·f_safty 배선 게이트)** + EMSW 해제-추종 + HW-gated deferred(B-SEAM OSC 물리 구동[준비사항=루트 HANDOFF 표] · 6b calibration[ch1 절대값 포함] · overload 실동작) + **[HW 불요·신규] modbus-tcp-hardening M6/M8/M9**(트리거 "HMI 착수" 발화 — HMI SP2 전 권장). 상세 진입 = 루트 `HANDOFF.md`(2026-07-05판) + `docs/NEXT_STEPS.md`, 세션별 상태 = `docs/superpowers/RESUME.md`(자동 로드), 변경 이력 = `docs/changelog.md`.
+**현재 진행 (2026-07-05 b)**: 전 스테이지 main 머지 + **weld 사이클 E2E 전항목 PASS**(풀배선 벤치, §7.3 1~6·8+SETUP 게이트+EMSW 해제-추종 종결) + **벤치 수정 6커밋**(전건 cpp-review 통과): SENSOR ON/OFF 동적 갱신 · E-stop 경고 페이지/부저+복귀 가드 · overload 아이콘-only 정정 · **RESET/SEEK 물리 OSC 구동**(스윕 주체=보드측 실증 — B-SEAM 최대 미지수 해소) · **클럭 HSI→HSE(16MHz X-tal)**(주파수 0.01% 일치, freq_cal=0) · **소비전류 표시 실동작**(rig-fit, 600mA 앵커). **⚠ push 미실행**(6커밋+docs, 사람 터미널). 남은 것 = **B-SEAM 잔여**(파형 정밀·PB12·진폭 추종) + **6b 잔여**(전류 다점·ch0 도메인·에너지 절대+**EMA↔에너지 적분 디커플링**[리뷰 MEDIUM 명시 이연]) + **overload 실동작** + **[HW 불요] modbus-tcp-hardening M6/M8/M9** + **HMI Task 8**(별도 repo, RS-485 필요). 상세 진입 = 루트 `HANDOFF.md`(2026-07-05 b판) + `docs/NEXT_STEPS.md`, 세션별 상태 = `docs/superpowers/RESUME.md`(자동 로드), 변경 이력 = `docs/changelog.md`.
 
 해소된 핵심 질문 (V30 회로도 + ATmega16 분석으로 확정):
 1. ATmega16 PA4 = 초음파 출력개시 신호 입력 / PC0 = overload 출력 / PC1·PC4 = 초음파 보드 신호 입력
@@ -116,4 +116,4 @@ cmake --build build --target flash
 - W5500 (SPI1), DGUS LCD (USART1), I2C EEPROM 모두 유지
 - Modbus Serial OR TCP 택일 모드 — **구현 완료**(RTU=USART6 점유 / TCP=W5500, `comm_mode`로 택일)
 - CubeMX UI 미사용, HAL/CMSIS는 `fw/vendor/` in-tree 카피 (Phase 1+2 spec 결정)
-- MCU 클럭 96 MHz (HSI ×12, source of truth는 `fw/src/clock.c`)
+- MCU 클럭 96 MHz — **HSE(16MHz X-tal) PLL, HSI 폴백** (2026-07-05 HSI→HSE 전환; source of truth는 `fw/src/clock.c`, HSE_VALUE는 CMake 주입)

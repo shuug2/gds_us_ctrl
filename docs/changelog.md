@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+### 2026-07-05 — weld 사이클 E2E 전항목 PASS + 벤치 발견 수정 6커밋 (클럭 HSE·전류 표시 실동작 포함)
+
+풀배선 벤치 세션 (양손 SW_START1/2·SENSE_DN/UP·EMSW 배선 완료, RS-485 미접속 → 관측=LCD 육안+SWD 정적 read/TCL 샘플러). **spec §7.3 weld 사이클 E2E 전항목 종결** + 벤치에서 발견된 결함/갭 6건을 즉석 수정-리뷰-플래시-재검증 (모두 main 직접 커밋, cpp-reviewer 전건 APPROVE).
+
+- **⚠ 세션 개시 발견**: 보드 플래시가 **구형(stage-b~d 시절) 펌웨어**였음(weld/eth/mb 문자열 전무 — 벡터테이블 대조로 확정) → 현 main 재플래시. 양손 press 무반응의 근본 원인. 교훈 = **벤치 첫 단계에 플래시↔ELF 벡터 대조**.
+- **weld E2E PASS**: §7.3-1 DELAY 사이클(SOL→US→SOL↑→work_cnt++) / -2 TRIGGER(SENSE_DN 게이트 US + CYL2 즉시완료 §3.3 사용자 수용) / -3 재장전 / -4 safety abort(f_safty, 한손 release→SOL 즉시↑, cnt 불변) / -5 E-stop abort+EMSW 레벨추종(활성 차단+해제 자동클리어, d' 이월 종결) / -6 RESET 체인 게이팅(체인 중 SOL 무반응) / -8 타이밍 실측(SWD 1.4ms 샘플러: delay1/2/3 및 CYL2=delay1 재사용 전구간 -1.3% 균일=HSI 편차, multi 스테핑 tick=time1/time2 절대 임계 실증, energy 백스톱 1976ms≈2s+HOLD/CYL2 생략+cnt 불변) / SETUP 게이트(9-a 차단, 9-b 동결·재개).
+- **fix(lcd) `b19823a`**: TRIGGER 모드 SENSOR ON/OFF 동적 갱신 포팅 누락 (legacy check_remote_input 1230-1265 LCD 부수효과) — 글루 레벨 미러 + 렌더 함수.
+- **fix(lcd) `cbbfe19`**: E-stop 경고 페이지 미표시 — app_lcd_set_estop(E-STOP+LCD_WARNING/해제 복귀) + app_weld_abort_now(페이지 무관 즉시 abort=WARNING 전환 동결 레이스 차단, legacy 1409-1425 등가) + **리뷰 HIGH 반영** 런페이지 복귀 공용 가드 4지점(라이브 접근자 — error_status OVLD 비트는 미러 휘발성).
+- **fix(lcd,input) `c3b3f27`**: E-stop 부저 점멸(legacy SYS_ESTOP 2125-2136, 250/500ms) + **overload 아이콘-only 정정**(legacy 4218-4227: OVLD/OUTERR=텍스트+아이콘만, LCD_WARNING 전환은 OVTIME 전용 — slice-c 포팅 편차; deassert 복귀는 WARNING 표시 중일 때만=setup 납치 방지).
+- **feat(seek-reset) `29803ae`**: RESET/SEEK 물리 OSC 라인 구동 — hook stub 해제(board_reset PB10/board_seek PB2 레벨 미러). 근거=B-SEAM 표 매핑 확정+legacy do_control 4245-4280(레벨 미러만=스윕은 OSC 보드 몫). **HW 실증**: RESET 592ms→+3ms→SEEK 591ms + FREQ_IN 34115→34508Hz 스윕-정착 = **스윕 주체=보드측 확정**(B-SEAM 최대 미지수 해소). 릴레이/시크음 육안.
+- **feat(clock) `e72dbe4`**: SYSCLK **HSI→HSE(16MHz X-tal)** + HSI 폴백 — HSI 실측 +1.39%가 주파수 표시 underread(-479Hz)와 전 타이밍 -1.3%의 단일 원인(스코프 34.98kHz 대조). HSE_VALUE=16MHz CMake 주입(vendor 무편집). 검증: RCC 레지스터+curr_freq 34984Hz=스코프 0.01%+LCD 34.9 표시. **freq_cal_val 보정 불필요화**.
+- **feat(reg) `3d2f414`**: 소비전류 표시 실동작 — PB1 신호는 정상 도달(600mA→~15mV 초소신호), 스케일 3중 불일치 해소: ① ch1 raw 12-bit×6 legacy ADC 도메인 정합(2.23V+4×누산=×5.92; 구 >>2 10-bit는 1카운트≈128mA 해상도 불능) ② GAIN 4/10→7/5 rig-fit(앵커 600mA↔ch1≈65→표시 0.60A; 유휴 데드밴드 보존) ③ EMA α=1/8·50ms(τ≈400ms) ④ VAR_AMP legacy 게이팅(런=max 피크/정지=last 유지, 4167·4191). HW: 완만 상승·0.6A 안착·정지 후 유지·유휴 0.
+- 벤치 노트: ① openocd TCL 루프 = **비침습 1.4ms 주기 RAM 샘플러**(halt 없음) 확립 — 타이밍/스윕/캘리브레이션 실측의 핵심 도구 ② LCD 터치+B_START 동시 무반응 웨지 1회 → 물리 전원사이클로 해소 ③ 빌드마다 bss 주소 이동 — SWD read 전 **현재 ELF에서 주소 재확보 필수**(중간에 stale 주소 오판독 1회) ④ 보드 테스트 잔재 설정 남음(TIMEOVER=2s/delay1=76/delay2=184/OUT_POWER=100/f_safty=1/model_type=multi/EN_ENERGY=OFF).
+- 이연 유지: 에너지 절대값·divisor·정밀 전류/ch0 보정·OUTERR(6b) / B-SEAM 잔여=파형 정밀 관측·PB12 용도·진폭 추종(스윕 주체는 해소됨) / push=사람 터미널.
+
 ### 2026-07-04 — D5 스택 HW 검증 세션: b'→d'→ch1'→slice4 전부 머지+태그 (패널 rig)
 
 패널 rig HW 세션 (인터랙티브: 사용자 LCD/물리버튼 + 컨트롤러 mbpoll/SWD 정적 read). D5 스택 4단위를 순서대로 플래시→검증→`--no-ff` 머지+태그. main 최종 `b571da0`, host 13스위트 PASS, our-code 0-warning.

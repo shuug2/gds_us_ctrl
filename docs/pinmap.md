@@ -6,7 +6,7 @@
 |------|------|
 | MCU | STM32F410RBTx |
 | Core | ARM Cortex-M4F |
-| SYSCLK | **96 MHz** (HSI 16 MHz × 12 PLL ÷ 2 — Phase 1 결정) |
+| SYSCLK | **96 MHz** (**HSE 16 MHz X-tal** /M8 ×N96 /P2 — 2026-07-05 HSI→HSE 전환 `e72dbe4`, HSI 폴백 보유; 구 Phase 1 = HSI ×12) |
 | APB1 | 48 MHz |
 | APB2 | 96 MHz |
 | Flash | 128 KB |
@@ -77,7 +77,7 @@
 | Pin | Net Name | Signal | 설명 |
 |-----|----------|--------|------|
 | PB0 | ADC_SENS_OUT | ADC1_IN8 | mega16 PA0 = 출력세기 피드백 (reg_scale 입력; **레거시 vestigial** — 2026-06-20 정정) |
-| PB1 | ADC_CURR | ADC1_IN9 | **SAMD20 PA02 = 소비전류** (전류/전력/에너지 source) — "ADC_OSC" 오라벨 정정 (2026-06-20) |
+| PB1 | ADC_CURR | ADC1_IN9 | **SAMD20 PA02 = 소비전류** (전류/전력/에너지 source) — "ADC_OSC" 오라벨 정정 (2026-06-20). **실측 확정 2026-07-05**: 600mA→~15mV 초소신호 정상 도달 (rig-fit gain 7/5 + ×6 도메인 정합 `3d2f414`) |
 
 ### USART1 — LCD 통신
 
