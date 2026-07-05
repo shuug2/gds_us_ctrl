@@ -33,13 +33,13 @@
 /* US-on gate. The display picks curr/max while the ultrasonic output is on, else
  * the last-cycle hold values.
  *
- * samd20 gates send_val_data on a dedicated boolean `us_on_status == ON` (ON==1).
- * lcd_measure_t has no separate us_on_status — it collapses onto `us_run_status`,
- * documented as an FSM state (US_IDLE/REMOTE/TOUCH/COMM). The faithful gate is
- * therefore "not idle" (!= US_IDLE == 0), NOT "== 1": any active run state counts
- * as on. With the all-zero stub both readings are identical (idle/last path, all
- * zeros). Stage D, when it fills us_run_status with real FSM states, gets the
- * intended curr/max display for every non-idle state. */
+ * samd20 gates send_val_data on a dedicated boolean `us_on_status == ON` (ON==1),
+ * which the legacy sets for RUN *and* SEEK/RESET (main.c:4253/4280/4308). This
+ * used to collapse onto `us_run_status != US_IDLE` here, which lost the
+ * SEEK/RESET live window (sweep freq/current showed stale last_*). Restored:
+ * app_reg publishes lcd_measure_t.us_on_status = run-active OR seek/reset-active
+ * (2026-07-05). ICON_RUN below intentionally stays on us_run_status — legacy
+ * drives it only from the run edge handler (main.c:4302), never for SEEK/RESET. */
 /* Bar buffers — file-static, computed once on the compute step then sent in chunks
  * (samd20 globals level_buf[20] / out_time_buf[20]). uint16_t so the 5-element
  * dgus_write_u16_array carries one word per LCD bar slot. */
@@ -153,7 +153,7 @@ static void disp_compute_time(uint8_t current_time)
  * 고정이 stale이었음; 정지 후 직전 런 피크 유지 = 사용자 벤치 확인 거동). */
 static void disp_send_val(const lcd_measure_t *m)
 {
-    bool     on = (m->us_run_status != US_IDLE);
+    bool     on = (m->us_on_status != 0u);   /* run OR seek/reset (samd20 4167-4177) */
     uint16_t vals[3];
     uint16_t freq;
     uint32_t energy;

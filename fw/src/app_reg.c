@@ -73,6 +73,8 @@ typedef struct {
     uint32_t acc_energy;             /* 전력 적분기 (run-start 리셋; samd20 acc_energy) */
     uint32_t last_energy;            /* run-stop 시 curr_energy 래치 (samd20 last_energy) */
     uint16_t last_freq;              /* run-stop 시 curr_freq 래치 (samd20 us_off last_freq=curr_freq) */
+    uint8_t  sr_disp_active;         /* seek/reset 표시 라이브 엣지 추적 (samd20
+                                      * bak_reset/seek_status 등가) */
     uint8_t  error_status;           /* ERR_* (OVTIME 등); RESET이 클리어. publish됨 */
 
     uint32_t prev_acq_ms;
@@ -272,16 +274,42 @@ static void reg_publish_measure(uint32_t now, int16_t freq_cal_val)
      * running peak during the run; last_power latched on stop (app_reg_command).
      * cycle/freq/energy stay 0 (weld-cycle deferred). */
     uint8_t active = (uint8_t)(g_reg.us_run_status != (uint8_t)US_IDLE);
+    /* SEEK/RESET 중 측정값 라이브 표시 (samd20 us_on_status 복원): on-엣지에
+     * 피크/에너지 제로화(main.c:4253-4256/4280-4282), off-엣지에 last_* 스냅샷
+     * 래치(main.c:4263-4268/4288-4293). last_freq는 legacy 충실로 래치하지
+     * 않음(seek off에 freq 래치 없음 — 종료 후 이전 런 주파수로 복귀).
+     * RESET→SEEK 자동 체인은 하나의 active 윈도우(체인 경계 latch/re-zero
+     * 생략 — legacy와 미세 편차, 피크가 체인 전체에 걸쳐 연속). */
+    uint8_t sr = app_seek_reset_active();
+    if (sr != g_reg.sr_disp_active) {
+        if (sr != 0u) {
+            g_reg.max_amp     = 0u;
+            g_reg.max_power   = 0u;
+            g_reg.last_energy = 0u;
+            g_reg.acc_energy      = 0u;
+            g_measure.curr_energy = 0u;
+        } else {
+            g_reg.last_amp    = g_measure.curr_amp;
+            g_reg.last_power  = g_measure.curr_power;
+            g_reg.last_energy = g_measure.curr_energy;
+            g_reg.acc_energy      = 0u;
+            g_measure.curr_energy = 0u;
+        }
+        g_reg.sr_disp_active = sr;
+    }
+    uint8_t live = (uint8_t)(active || (sr != 0u));
     /* 표시 전류/전력은 ch1(소비전류)에서 — 레귤레이션(ch0/reg_scale)과 분리.
-     * SAMD20 cal_real_val 포팅 (spec §3). 피크홀드 비교 소스도 ch1 산출값. */
+     * SAMD20 cal_real_val 포팅 (spec §3). 피크홀드 비교 소스도 ch1 산출값.
+     * 피크 추적/curr_power는 live 게이트 — seek/reset 중에도 갱신 (samd20은
+     * ADC 경로 무게이트 추적 + 엣지 제로화, main.c:428-433). */
     uint16_t disp_amp = reg_current_from_adc(g_reg.ch1_avg, g_reg.cal_val);
     g_measure.curr_amp = disp_amp;
-    if (active && (disp_amp > g_reg.max_amp)) {
+    if (live && (disp_amp > g_reg.max_amp)) {
         g_reg.max_amp = disp_amp;
     }
     uint16_t disp_pwr = reg_power_from_amp(disp_amp);
-    g_measure.curr_power = active ? disp_pwr : 0u;
-    if (active && (disp_pwr > g_reg.max_power)) {
+    g_measure.curr_power = live ? disp_pwr : 0u;
+    if (live && (disp_pwr > g_reg.max_power)) {
         g_reg.max_power = disp_pwr;
     }
     /* 에너지 적분: active면 curr_power를 acc에 누산(2ms publish cadence) ->
@@ -313,6 +341,7 @@ static void reg_publish_measure(uint32_t now, int16_t freq_cal_val)
     g_measure.curr_freq = freq_fsm_compute(freq_cal_val);
     g_measure.last_freq = g_reg.last_freq;
     g_measure.us_run_status = g_reg.us_run_status;
+    g_measure.us_on_status  = live;   /* 표시 라이브 게이트 (LCD VAR_ / Modbus DISP_) */
     g_measure.error_status  = g_reg.error_status;   /* OVTIME 등 fault → LCD/Modbus */
     /* USOUT: run 활성(idle 아님)에 출력 enable. 전이에만 hook 구동 (active 재사용). */
     if (active != g_reg.us_out_on) {

@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### 2026-07-05 c — SEEK/RESET 중 측정값 라이브 표시 (samd20 us_on_status 게이트 복원)
+
+RESET/SEEK 동작 중 LCD VAR_POWER/AMP/FREQ/ENERGY와 Modbus DISP_* 가 이전 런의 last_* stale 값을 표시하던 문제 수정 — legacy는 RESET/SEEK on-엣지에 `us_on_status=ON`으로 표시를 라이브 전환(main.c:4253/4280)하는데, 포트가 `us_run_status != US_IDLE`(RUN 전용)로 collapse해 SEEK 스윕 주파수/전류가 안 보였음.
+
+- `lcd_measure_t.us_on_status` 필드 복원 = run-active OR `app_seek_reset_active()` (app_reg publish).
+- app_reg가 seek/reset 활성 엣지 자체 검출: on-엣지 max_amp/max_power/last_energy/acc/curr_energy 제로화(legacy 4253-4256/4280-4282), off-엣지 last_amp=curr_amp·last_power=curr_power·last_energy=curr_energy 스냅샷 래치(legacy 4263-4268/4288-4293).
+- 피크 추적·curr_power 게이트 `active`→`live` 확장(seek/reset 중 갱신; legacy ADC 경로는 무게이트 추적+엣지 제로화). 에너지 적분은 run 전용 유지(기존 승인 편차 — seek 중 표시 0).
+- 표시 게이트 교체: LCD `disp_send_val` + Modbus DISP_* 4종 → `us_on_status`. ICON_RUN·STATUS bit0·LV_TIME 바는 `us_run_status` 유지(legacy 동일).
+- 의도적 편차(사용자 선택): off-엣지 last_freq 래치 없음 = legacy 충실(종료 후 이전 런 주파수로 복귀). RESET→SEEK 체인은 하나의 active 윈도우(체인 경계 latch/re-zero 생략 — 미세 편차 주석 명기).
+- 검증: 0-warning 빌드(FLASH 47.94%) + host 14스위트 PASS + cpp-reviewer **APPROVE(0 findings)** — 슈퍼루프 순서(seek_reset_tick→reg_tick)·부팅 엣지 무발화·RUN 경로 무변경 확인. 벤치 육안(SEEK 중 VAR_FREQ 스윕-정착 표시)은 다음 보드 세션.
+
 ### 2026-07-05 — weld 사이클 E2E 전항목 PASS + 벤치 발견 수정 6커밋 (클럭 HSE·전류 표시 실동작 포함)
 
 풀배선 벤치 세션 (양손 SW_START1/2·SENSE_DN/UP·EMSW 배선 완료, RS-485 미접속 → 관측=LCD 육안+SWD 정적 read/TCL 샘플러). **spec §7.3 weld 사이클 E2E 전항목 종결** + 벤치에서 발견된 결함/갭 6건을 즉석 수정-리뷰-플래시-재검증 (모두 main 직접 커밋, cpp-reviewer 전건 APPROVE).

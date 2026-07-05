@@ -128,6 +128,10 @@ typedef struct {
     uint32_t curr_energy, last_energy;
     uint8_t  us_on_time_200m;               /* 0..200 → LV_TIME bar fill */
     uint8_t  us_run_status;                 /* US_IDLE/REMOTE/TOUCH/COMM */
+    uint8_t  us_on_status;                  /* 1 = 측정값 라이브 표시 (run OR
+                                             * seek/reset active) — samd20
+                                             * us_on_status 게이트 복원
+                                             * (main.c:4167/4253/4280) */
     uint8_t  sig_run_status, sig_seek_status, sig_reset_status;
     uint8_t  error_status;                  /* ERR_* bitmask — app_reg publish (OVTIME 등) */
 } lcd_measure_t;

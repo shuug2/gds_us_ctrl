@@ -69,13 +69,15 @@ static void mirror_live(void)
     g_mb.holding[MB_REG_MULTI_O1]    = cfg->limit_mo_out1;
     g_mb.holding[MB_REG_MULTI_O2]    = cfg->limit_mo_out2;
     g_mb.holding[MB_REG_TIMEOVER]    = cfg->limit_out_time;
-    /* DISP_*: running shows the live peak, stopped shows the latched last
-     * (samd20 main.c:4564-4567 us_on_status mirror; freq/energy honest 0 —
-     * machinery deferred, spec §3.1). */
-    g_mb.holding[MB_REG_DISP_POWER]  = running ? m->max_power : m->last_power;
-    g_mb.holding[MB_REG_DISP_AMP]    = running ? m->max_amp   : m->last_amp;
-    g_mb.holding[MB_REG_DISP_FREQ]   = running ? m->curr_freq : m->last_freq;
-    g_mb.holding[MB_REG_DISP_ENERGY] = running ? (uint16_t)m->curr_energy
+    /* DISP_*: live shows the running peak, stopped shows the latched last
+     * (samd20 main.c:4564-4567 us_on_status mirror). us_on_status = run OR
+     * seek/reset active — SEEK/RESET 중에도 라이브 (legacy 4253/4280). STATUS
+     * bit0(아래 running)는 run 전용 유지. */
+    uint8_t disp_on = m->us_on_status;
+    g_mb.holding[MB_REG_DISP_POWER]  = disp_on ? m->max_power : m->last_power;
+    g_mb.holding[MB_REG_DISP_AMP]    = disp_on ? m->max_amp   : m->last_amp;
+    g_mb.holding[MB_REG_DISP_FREQ]   = disp_on ? m->curr_freq : m->last_freq;
+    g_mb.holding[MB_REG_DISP_ENERGY] = disp_on ? (uint16_t)m->curr_energy
                                                : (uint16_t)m->last_energy;
     g_mb.holding[MB_REG_MODEL_FREQ]  = cfg->model_freq;    /* read-only: mirror */
     g_mb.holding[MB_REG_MODEL_TYPE]  = cfg->model_type;    /* overwrites writes */
