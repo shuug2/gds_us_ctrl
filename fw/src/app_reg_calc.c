@@ -79,14 +79,18 @@ reg_energy_outcome_t reg_energy_termination(uint8_t energy_ctrl, uint32_t curr_e
 
 /* ── 출력파워 그래프 표시 전류/전력 (ch1=소비전류) ─────────────────
  * SAMD20 cal_real_val ADC_CURR (ref/samd20/main.c:416-433) 구조 포팅.
- * GAIN은 legacy 관례대로 보드 실측 맞춤값(legacy 원본 4/10도 그 보드 실측 —
- * 주석 이력 /260·/5 참조): 2026-07-05 벤치 rig-fit = 전류계 600mA ↔
- * ch1(legacy 도메인) ≈65 → 표시 ≈60(0.60A, 10mA 단위) 앵커. 유휴(ch1≈29)는
- * 29×1.4+cal ≤ 51 → 0 (데드밴드 보존). 미세 트림 = cal_val(LCD CAL 필드). */
-#define REG_CURR_GAIN_NUM   7u    /* rig-fit ×1.4 (samd20 원본 4/10) */
-#define REG_CURR_GAIN_DEN   5u
-#define REG_CURR_DEADBAND   51    /* samd20 (temp_val > 51) ? */
-#define REG_CURR_OFFSET     37    /* samd20 temp_val - 37 */
+ * 2026-07-05 c 사용자 결정: legacy −37 오프셋 제거 = 순수 비례 표시
+ * (OFFSET 0). GAIN은 legacy 관례대로 보드 실측 맞춤값(legacy 원본 4/10도
+ * 그 보드 실측 — 주석 이력 /260·/5 참조): RUN 정착 상태 전류계 600mA ↔
+ * ch1(legacy 도메인) ≈126 → 표시 59+cal(보드 1)=60 = 0.60A(10mA 단위) 앵커.
+ * (같은 날 초기 fit 7/5·−37의 ch1≈65 앵커는 EMA τ400ms 미정착 오측 —
+ * RUN 정착 실측 표시 1.4A/실제 0.6A로 판명, 유휴 ch1=29는 양일 동일.)
+ * DEADBAND 20 = 유휴 잔류(v=13) + 마진; 표시 플로어 ≈0.21A, 그 이하는 0.
+ * 미세 트림 = cal_val(LCD CAL 필드). */
+#define REG_CURR_GAIN_NUM   59u   /* rig-fit ×0.468 (samd20 원본 4/10) */
+#define REG_CURR_GAIN_DEN   126u
+#define REG_CURR_DEADBAND   20    /* 유휴 노이즈 플로어 (구 samd20 51은 −37 도메인) */
+#define REG_CURR_OFFSET     0     /* legacy 'temp_val − 37' 제거 (사용자 결정) */
 #define REG_POWER_NUM       22u   /* samd20 ×2.2 */
 #define REG_POWER_DEN       10u
 

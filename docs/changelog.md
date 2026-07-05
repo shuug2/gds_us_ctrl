@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### 2026-07-05 c-2 — 표시 전류 전달함수 재정의: RUN 실측 재앵커 + legacy −37 오프셋 제거
+
+전일(3d2f414) rig-fit(7/5·−37)이 RUN 정착 상태에서 표시 1.4A/전류계 0.6A로 판명 — SWD 진단(cfg.cal_val=1, 유휴 ch1=29=전일 동일)으로 신호 경로 이상 배제, **전일 앵커(ch1≈65)가 EMA τ400ms 미정착 오측**으로 확정. RUN 정착 실측(600mA↔ch1≈126)으로 재앵커.
+
+- 1차 재-fit GAIN 7/5→23/30(오프셋 유지) 후, 사용자 결정으로 **legacy −37 오프셋 제거(순수 비례)** 확정: 최종 GAIN **59/126**·OFFSET **0**·DEADBAND 51→**20**(구 51은 −37 도메인 — 유지 시 0.51A 이하 전부 0 절단; 신 20=유휴 v=13+마진, 표시 플로어 ≈0.21A).
+- 앵커: 126×59/126=59 정확 +cal(보드 1)=60 → **0.60A**. 유휴 0 표시 유지.
+- 중간 구간 곡선 변화 명시(오프셋 제거 부작용): 앵커 아래는 구 곡선보다 높게 읽힘 — 다점 정밀은 6b(2점 fit에 낮은 부하 실측점 필요).
+- TDD(벡터 전면 갱신+앵커 직접 벡터 (126,1)→60) + host 전 스위트 PASS + 0-warning + cpp-reviewer 2회 **APPROVE**(중간 23/30판+최종판; LOW 주석 표기 1건 반영).
+
 ### 2026-07-05 c — SEEK/RESET 중 측정값 라이브 표시 (samd20 us_on_status 게이트 복원)
 
 RESET/SEEK 동작 중 LCD VAR_POWER/AMP/FREQ/ENERGY와 Modbus DISP_* 가 이전 런의 last_* stale 값을 표시하던 문제 수정 — legacy는 RESET/SEEK on-엣지에 `us_on_status=ON`으로 표시를 라이브 전환(main.c:4253/4280)하는데, 포트가 `us_run_status != US_IDLE`(RUN 전용)로 collapse해 SEEK 스윕 주파수/전류가 안 보였음.

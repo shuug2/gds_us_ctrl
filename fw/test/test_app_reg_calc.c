@@ -157,23 +157,26 @@ static void test_energy_limit_zero_no_instant_stop(void)
 }
 
 /* 출력파워 그래프 표시 전류/전력 (ch1=소비전류). 절대 보정은 6b — 여기선
- * 데드밴드/오프셋/단조성/언더플로 가드/×2.2 비율 등 구조만 검증.
- * 상수: GAIN 7/5 (rig-fit 2026-07-05), DEADBAND 51, OFFSET 37, POWER 22/10. */
+ * 데드밴드/단조성/언더플로 가드/×2.2 비율 등 구조만 검증.
+ * 상수: GAIN 59/126 + OFFSET 0 (2026-07-05 c 사용자 결정: legacy −37 오프셋
+ * 제거 = 순수 비례; RUN 실측 600mA↔ch1≈126 앵커, 구 7/5·−37은 EMA 미정착
+ * 오측 앵커), DEADBAND 20 (유휴 v≈14 + 마진), POWER 22/10. */
 static void test_reg_current_from_adc(void) {
-    /* idle / 데드밴드 이하 -> 0 (v = ch1*7/5 + cal) */
+    /* idle / 데드밴드 이하 -> 0 (v = ch1*59/126 + cal) */
     CHECK_EQ(reg_current_from_adc(0,  0), 0);     /* v=0           */
-    CHECK_EQ(reg_current_from_adc(29, 0), 0);     /* v=40 <=51 (실측 유휴) */
-    CHECK_EQ(reg_current_from_adc(36, 0), 0);     /* v=50  경계 ->0 */
-    CHECK_EQ(reg_current_from_adc(37, 0), 0);     /* v=51  경계 ->0 */
-    /* 데드밴드 직상 -> v-37 */
-    CHECK_EQ(reg_current_from_adc(38, 0), 16);    /* v=53  -> 16   */
-    CHECK_EQ(reg_current_from_adc(65, 0), 54);    /* v=91  -> 54 (600mA 앵커 근방) */
-    CHECK_EQ(reg_current_from_adc(100, 0), 103);  /* v=140 -> 103  */
-    /* 단조 증가: 16 < 54 < 103 (위 벡터로 확인됨) */
+    CHECK_EQ(reg_current_from_adc(29, 0), 0);     /* v=13 <=20 (실측 유휴) */
+    CHECK_EQ(reg_current_from_adc(43, 0), 0);     /* v=20  경계 ->0 */
+    CHECK_EQ(reg_current_from_adc(44, 0), 0);     /* v=20  경계 ->0 */
+    /* 데드밴드 직상 -> v 그대로 (오프셋 0) */
+    CHECK_EQ(reg_current_from_adc(45, 0), 21);    /* v=21  -> 21   */
+    CHECK_EQ(reg_current_from_adc(126, 0), 59);   /* v=59 (600mA 앵커; 126*59/126 정확) */
+    CHECK_EQ(reg_current_from_adc(126, 1), 60);   /* 앵커 직접 벡터: 보드 실측 cal=1 -> 0.60A */
+    CHECK_EQ(reg_current_from_adc(150, 0), 70);   /* v=70          */
+    /* 단조 증가: 21 < 59 < 70 (위 벡터로 확인됨) */
     /* cal_val 양수: 데드밴드 입력을 활성대역으로 끌어올림 */
-    CHECK_EQ(reg_current_from_adc(29, 20), 23);   /* v=40+20=60 -> 23 */
+    CHECK_EQ(reg_current_from_adc(29, 10), 23);   /* v=13+10=23 -> 23 */
     /* cal_val 음수: 활성 입력을 데드밴드 아래로 */
-    CHECK_EQ(reg_current_from_adc(38, -5), 0);    /* v=53-5=48 <=51   */
+    CHECK_EQ(reg_current_from_adc(45, -5), 0);    /* v=21-5=16 <=20   */
     /* 음수 cal 언더플로 가드: uint wrap 없이 0 */
     CHECK_EQ(reg_current_from_adc(0, -100), 0);   /* v=-100 -> 0      */
 }
