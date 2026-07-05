@@ -11,7 +11,7 @@ RESET/SEEK 동작 중 LCD VAR_POWER/AMP/FREQ/ENERGY와 Modbus DISP_* 가 이전 
 - 피크 추적·curr_power 게이트 `active`→`live` 확장(seek/reset 중 갱신; legacy ADC 경로는 무게이트 추적+엣지 제로화). 에너지 적분은 run 전용 유지(기존 승인 편차 — seek 중 표시 0).
 - 표시 게이트 교체: LCD `disp_send_val` + Modbus DISP_* 4종 → `us_on_status`. ICON_RUN·STATUS bit0·LV_TIME 바는 `us_run_status` 유지(legacy 동일).
 - 의도적 편차(사용자 선택): off-엣지 last_freq 래치 없음 = legacy 충실(종료 후 이전 런 주파수로 복귀). RESET→SEEK 체인은 하나의 active 윈도우(체인 경계 latch/re-zero 생략 — 미세 편차 주석 명기).
-- 검증: 0-warning 빌드(FLASH 47.94%) + host 14스위트 PASS + cpp-reviewer **APPROVE(0 findings)** — 슈퍼루프 순서(seek_reset_tick→reg_tick)·부팅 엣지 무발화·RUN 경로 무변경 확인. 벤치 육안(SEEK 중 VAR_FREQ 스윕-정착 표시)은 다음 보드 세션.
+- 검증: 0-warning 빌드(FLASH 47.94%) + host 14스위트 PASS + cpp-reviewer **APPROVE(0 findings)** — 슈퍼루프 순서(seek_reset_tick→reg_tick)·부팅 엣지 무발화·RUN 경로 무변경 확인. **벤치 육안 4항목 PASS**(같은 세션, 플래시 후): ① RESET 체인 중 주파수 스윕-정착 라이브 ② SEEK 단발 주파수·전류 라이브 ③ 종료 후 이전 런 주파수 복귀(선택 편차 정상) ④ RUN 무회귀(ICON_RUN·피크·정지 유지).
 
 ### 2026-07-05 — weld 사이클 E2E 전항목 PASS + 벤치 발견 수정 6커밋 (클럭 HSE·전류 표시 실동작 포함)
 
