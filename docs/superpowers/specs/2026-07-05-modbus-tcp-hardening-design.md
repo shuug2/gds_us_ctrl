@@ -47,9 +47,9 @@ mb_tcp_fr_t mb_tcp_frame_peek(const uint8_t *buf, uint16_t len, uint16_t *frame_
 
 - 누적 버퍼 선두에서 완전 프레임 1개의 wire 길이(`6 + be16(buf[4..5])`)를 판정.
 - `len < 6` → NEED_MORE. proto id(buf[2..3]) != 0 또는 length 필드 < 2 또는
-  length 필드 > 1+MB_FRAME_MAX → **DESYNC** (호출측이 누적 버퍼 전체 폐기 —
-  스트림 재동기는 마스터 재시도에 위임). 그 외 `len < frame_len` → NEED_MORE,
-  충족 → OK.
+  length 필드 > MB_FRAME_MAX(=`mb_tcp_build_response :20`의 수용 경계와 동일) →
+  **DESYNC** (호출측이 누적 버퍼 전체 폐기 — 스트림 재동기는 마스터 재시도에
+  위임). 그 외 `len < frame_len` → NEED_MORE, 충족 → OK.
 - 기존 `mb_tcp_build_response`는 무변경 (완전 프레임 1개 입력 계약 유지 — 워커가
   그 계약을 상류에서 보장하는 구조).
 
@@ -59,10 +59,14 @@ mb_tcp_fr_t mb_tcp_frame_peek(const uint8_t *buf, uint16_t len, uint16_t *frame_
   `s_acc_len`. poll마다 `recv`는 남은 공간만큼(`RX_RSR` 클램프), 누적 뒤 워커
   루프.
 - **워커 루프**: poll당 최대 `MB_TCP_FRAMES_PER_POLL=4` 프레임 —
-  `mb_tcp_frame_peek` OK → `mb_tcp_build_response`(슬라이스) → send → FC06이면
-  `app_modbus_apply_writes()` → 오프셋 전진. NEED_MORE → 루프 종료 후 잔여
-  `memmove` 선두 이동. DESYNC → `s_acc_len=0` (폐기). 상한 도달 시 잔여는 다음
-  poll(2ms cadence)로 자연 이월.
+  `mb_tcp_frame_peek` OK → `mb_tcp_build_response`(슬라이스) → 응답을 TX 누적
+  버퍼에 append → FC06이면 `app_modbus_apply_writes()`(프레임별 순차, 기존
+  respond-then-apply 계약 유지) → 오프셋 전진. 루프 종료 후 **단일 send** —
+  벤더 논블로킹 send는 직전 send의 SENDOK(피어 ACK) 미도래 시 SOCK_BUSY를
+  반환하므로(socket.c:531-550 확인) 프레임별 연속 send는 2번째부터 드롭됨;
+  MBAP 응답 스트림은 자체 구분되므로 코얼레스드 1-send가 정확+안전.
+  NEED_MORE → 잔여 `memmove` 선두 이동. DESYNC → `s_acc_len=0` (폐기, 이미
+  빌드된 응답은 send). 상한 도달 시 잔여는 다음 poll로 자연 이월.
 - **논블로킹 전환**: `socket(..., SF_IO_NONBLOCK)`. `send()` 반환 관측 — 전송
   바이트 != out_len(SOCK_BUSY 포함) → **응답 드롭** + mon 로그 1줄(마스터
   재시도가 Modbus 표준 회복 경로; 재전송 큐 없음 = KISS).
