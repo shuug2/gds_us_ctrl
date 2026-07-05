@@ -5,6 +5,7 @@
 #include "app_seek_reset_fsm.h"
 #include "app_reg.h"      /* app_reg_measure (us_run_status 조회) */
 #include "dgus_lcd.h"     /* ICON_RESET, ICON_SEEK */
+#include "board.h"        /* board_reset (PB10), board_seek (PB2) — OSC 라인 */
 #include "sys_tick.h"
 #include "mon.h"
 
@@ -41,8 +42,16 @@ uint8_t app_seek_reset_active(void)
 
 void app_seek_reset_hook_signal(uint8_t which, bool on)
 {
-    /* 물리 OSC 구동 stub (B-SEAM). 실제 CTRL_OSC* 핀 구동은 reset_signal/
-     * seek_signal 레벨로 후속 바인딩. */
+    /* 실 OSC 라인 구동 (2026-07-05 벤치, stub 해제) — legacy do_control이
+     * sig_reset/seek_status 엣지에 M_RESET/M_SEEK 레벨 미러만 하는 구조
+     * (samd20 main.c:4245-4280, 스윕 생성 코드 없음 = 스윕 주체는 OSC 보드).
+     * 매핑/극성 = HANDOFF B-SEAM 표 확정분 (active-LOW OD, boot-init과 공유).
+     * 파형/스윕 정밀 관측은 B-SEAM 스코프 세션에 유지. */
+    if (which == SR_CMD_RESET) {
+        board_reset(on);
+    } else {
+        board_seek(on);
+    }
     mon_printf("[sr] %s signal %s\r\n",
                (which == SR_CMD_RESET) ? "RESET" : "SEEK", on ? "ON" : "OFF");
 }
@@ -58,8 +67,10 @@ void app_seek_reset_tick(void)
     seek_reset_in_t in = {
         .cmd        = s_pending_cmd,
         /* g_measure는 직전 iter의 app_reg_tick 게시값 (이 tick은 reg_tick 앞) —
-         * 1-iter stale run_active. 이 스테이지 hook stub 한정 무해 (cpp-review
-         * Minor 1); B-SEAM 실 OSC 핀 구동 시 RUN-중-신호 윈도우 재검토. */
+         * 1-iter stale run_active. 실 핀 구동 후 재검토(2026-07-05): 잔여 창 =
+         * 같은 10ms iter 안에 START와 RESET/SEEK가 동시 도착하는 경우뿐(수동
+         * 조작 동시성, 발생 확률 무시 가능; legacy도 단일 루프 스캔 동급) —
+         * 수용, B-SEAM 스코프 세션에서 실측 재평가. */
         .run_active = (uint8_t)(app_reg_measure()->us_run_status != (uint8_t)US_IDLE),
     };
     /* one-shot 소비: 매 tick 클리어 (무시돼도 드롭, weld s_start_pending 패턴). */
