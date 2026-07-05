@@ -79,9 +79,12 @@ reg_energy_outcome_t reg_energy_termination(uint8_t energy_ctrl, uint32_t curr_e
 
 /* ── 출력파워 그래프 표시 전류/전력 (ch1=소비전류) ─────────────────
  * SAMD20 cal_real_val ADC_CURR (ref/samd20/main.c:416-433) 구조 포팅.
- * 상수는 6b HW 보정 대상 — 절대 스케일은 실측 후 확정. */
-#define REG_CURR_GAIN_NUM   4u    /* samd20 temp*4 */
-#define REG_CURR_GAIN_DEN   10u   /* samd20 /10 */
+ * GAIN은 legacy 관례대로 보드 실측 맞춤값(legacy 원본 4/10도 그 보드 실측 —
+ * 주석 이력 /260·/5 참조): 2026-07-05 벤치 rig-fit = 전류계 600mA ↔
+ * ch1(legacy 도메인) ≈65 → 표시 ≈60(0.60A, 10mA 단위) 앵커. 유휴(ch1≈29)는
+ * 29×1.4+cal ≤ 51 → 0 (데드밴드 보존). 미세 트림 = cal_val(LCD CAL 필드). */
+#define REG_CURR_GAIN_NUM   7u    /* rig-fit ×1.4 (samd20 원본 4/10) */
+#define REG_CURR_GAIN_DEN   5u
 #define REG_CURR_DEADBAND   51    /* samd20 (temp_val > 51) ? */
 #define REG_CURR_OFFSET     37    /* samd20 temp_val - 37 */
 #define REG_POWER_NUM       22u   /* samd20 ×2.2 */

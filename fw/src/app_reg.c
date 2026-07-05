@@ -48,7 +48,8 @@
 #endif
 
 typedef struct {
-    uint16_t ch0_avg, ch1_avg;        /* committed means (10-bit-equiv domain) */
+    uint16_t ch0_avg, ch1_avg;        /* committed means (ch0=10-bit-equiv,
+                                         ch1=legacy 2.23V/4×누산 도메인 — acquire 노트) */
     uint16_t adc_scaled_value;        /* reg_scale(ch0_avg) */
     int16_t  cal_val;                 /* config 보정값 (app_reg_tick 주입) — 표시 전류 */
     uint8_t  band;                    /* reg_output_level() 0..21 (held; output deferred) */
@@ -230,6 +231,8 @@ const lcd_measure_t *app_reg_measure(void)
     return &g_measure;
 }
 
+static uint32_t s_ch1_filt_x16;   /* ch1 표시 EMA 상태 (×16 고정소수 — acquire 노트) */
+
 /* One ADC conversion on BOTH channels, normalize, accumulate, and commit the
  * mean when the per-channel sample count is reached. Paced at REG_ACQ_MS. */
 static void reg_acquire_step(void)
@@ -242,10 +245,22 @@ static void reg_acquire_step(void)
         g_reg.ch0_cnt = 0u;
     }
 
-    uint16_t s1 = (uint16_t)(adc1_read(ADC1_CH_OSC) >> ADC_NORM_SHIFT);
+    /* ch1(소비전류): raw 12-bit 누산 → legacy ADC 도메인 평균으로 커밋.
+     * SAMD20 ADC = 2.23V ref(VCC/1.48) + 4샘플 누산(divide 없음) → 카운트/V가
+     * 우리 12-bit/3.3V의 ×5.92 — ×6 근사(오차 +1.4%, cal/gain 보정에 흡수)로
+     * 정합해 cal_real_val 상수(4/10·51·37)를 verbatim 유지 (2026-07-05 벤치:
+     * 600mA→~15mV 초소신호 — 구 >>2 10-bit 경로는 1카운트≈128mA로 해상도 불능,
+     * 12-bit 50평균×6은 sub-count 유지). 절대 스케일 확정 = 6b/실측 gain. */
+    uint16_t s1 = adc1_read(ADC1_CH_OSC);
     g_reg.ch1_acc += s1;
     if (++g_reg.ch1_cnt >= CH1_SAMPLES) {
-        g_reg.ch1_avg = (uint16_t)(g_reg.ch1_acc / CH1_SAMPLES);
+        uint32_t avg = (g_reg.ch1_acc * 6u) / CH1_SAMPLES;
+        /* 표시 안정화 EMA (사용자 요청 2026-07-05): α=1/8 per 50ms 커밋 →
+         * τ≈400ms — 전류가 천천히 추종 + 노이즈 스파이크의 피크 래칫 완화.
+         * ×16 고정소수(잔여분 보존), 유휴↔런 전이 손실 없음(연속 필터). */
+        int32_t d = (int32_t)(avg << 4) - (int32_t)s_ch1_filt_x16;
+        s_ch1_filt_x16 = (uint32_t)((int32_t)s_ch1_filt_x16 + d / 8);
+        g_reg.ch1_avg = (uint16_t)(s_ch1_filt_x16 >> 4);
         g_reg.ch1_acc = 0u;
         g_reg.ch1_cnt = 0u;
     }

@@ -1,5 +1,7 @@
 /* fw/drivers/adc1.c — ADC1 peripheral init + polled read.
- * Pins: PB0 = ADC1_IN8 (ADC_SENS_OUT), PB1 = ADC1_IN9 (ADC_OSC). pinmap §52-57. */
+ * Pins: PB0 = ADC1_IN8 (ADC_SENS_OUT), PB1 = ADC1_IN9 (ADC_CURR). pinmap §52-57.
+ * 2026-07-05 벤치 실측: 소비전류 신호는 PB1에 옴 — 단 600mA에 ~15mV 초소신호
+ * (ch1_avg 3카운트와 일치 = ADC 정상, 스케일 문제). 절대 보정 = 6b/cal 경로. */
 #include "stm32f4xx_hal.h"
 #include "periph.h"
 #include "clock.h"   /* Error_Handler */

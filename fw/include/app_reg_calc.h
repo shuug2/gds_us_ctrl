@@ -59,7 +59,8 @@ reg_energy_outcome_t reg_energy_termination(uint8_t energy_ctrl, uint32_t curr_e
                                             uint16_t limit_out_time);
 
 /* 출력파워 그래프 표시 전류 — SAMD20 cal_real_val ADC_CURR 포팅
- * (ref/samd20/main.c:416-433). ch1_avg(소비전류, 10bit-equiv) + cal_val(config)
+ * (ref/samd20/main.c:416-433). ch1_avg(소비전류, legacy 2.23V/4×누산 도메인 —
+ * app_reg acquire가 raw 12-bit×6으로 정합 산출) + cal_val(config)
  * -> curr_amp. (temp_val>51)?temp_val-37:0 데드밴드/오프셋; int32 중간연산으로
  * 음수 cal_val 언더플로 가드. 절대 스케일 상수는 6b/HW 보정 대상. */
 uint16_t reg_current_from_adc(uint16_t ch1_avg, int16_t cal_val);

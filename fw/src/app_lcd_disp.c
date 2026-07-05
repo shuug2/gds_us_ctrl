@@ -148,9 +148,9 @@ static void disp_compute_time(uint8_t current_time)
  *   temp_buf[2] = freq/100= (us_on ? curr_freq : last_freq) / 100
  *   VAR_ENERGY  = us_on ? curr_energy : last_energy
  *
- * NOTE: lcd_measure_t has no max_amp/last_amp split — only curr_amp. Both branches
- * use curr_amp for the VAR_AMP slot (stub → 0 either way; Stage D may add the split).
- *--------------------------------------------------------------*/
+ * NOTE(2026-07-05): max_amp/last_amp split는 power-ch1 슬라이스가 measure에
+ * 공급 — VAR_AMP도 legacy(4167) 게이팅으로 정합 (구 "split 없음" 시절 curr_amp
+ * 고정이 stale이었음; 정지 후 직전 런 피크 유지 = 사용자 벤치 확인 거동). */
 static void disp_send_val(const lcd_measure_t *m)
 {
     bool     on = (m->us_run_status != US_IDLE);
@@ -159,7 +159,7 @@ static void disp_send_val(const lcd_measure_t *m)
     uint32_t energy;
 
     vals[0] = on ? m->max_power : m->last_power;        /* VAR_POWER */
-    vals[1] = m->curr_amp;                              /* VAR_AMP — no max/last split */
+    vals[1] = on ? m->max_amp   : m->last_amp;          /* VAR_AMP (samd20 4167) */
     freq    = on ? m->curr_freq : m->last_freq;
     vals[2] = (uint16_t)(freq / 100u);                  /* VAR_FREQ = freq/100 */
     dgus_write_u16_array(VAR_POWER, vals, 3);
