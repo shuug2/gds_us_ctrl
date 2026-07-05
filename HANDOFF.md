@@ -1,47 +1,70 @@
-# Handoff: D5 스택 HW 검증 + 전단위 머지 완료 (b'→d'→ch1'→slice4, 태그 4개) — 다음 = push + weld 사이클 E2E 배선 세션
+# Handoff: 2026-07-05 세션 — HMI SP1 구현 완료(별도 repo) · FW 무변경 · 다음 = 벤치 E2E 세션
 
-**Generated**: 2026-07-04 (g 세션 마감)
-**Branch**: `main` (`b571da0`, **origin ahead 61+ — push 미실행, 사람 SSH**)
-**Status**: 미머지 스택 소진 — HW-게이트 백로그는 배선/rig 종속분만 잔존.
+**Generated**: 2026-07-05 (세션 마감)
+**Branch**: `main` (코드 무변경, **origin 동기화 완료** — 7-04 handoff의 "push 미실행"은 stale, 이미 push됨)
+**Status**: FW = HW-게이트 백로그만 잔존. **다음 세션 = 벤치 E2E** (HMI SP1 Task 8 우선).
 
-> **요약**: 하루 2세션. ⑴ weld 슬라이스4 subagent-driven 10 Task 실행(CODE-COMPLETE, 최종 opus 리뷰 0 Crit/0 Imp, I-1 발견→fix).
-> ⑵ 패널 rig HW 세션 — D5 스택 4단위를 순서대로 플래시→검증→`--no-ff` 머지+태그:
-> b'(`0cc34a8`, `-physio-b`) / d'(`46055c9`, `-physio-d`) / ch1'(`e973721`, `-power-ch1`) / slice4(`b571da0`, `-weld4`).
-> 게이트 GREEN: main host 13스위트 PASS + our-code 0-warning. 감사 D0~D6 + D2/D4 코드·머지 전부 종결.
+> **요약**: 이 세션은 FW 코드를 건드리지 않았다. ⑴ **PC HMI(`~/dev/work/gds_us_hmi`, 별도 repo)** — Modbus 계약 재동기화(펌웨어 `e9de17a` 기준) → SP1 brainstorm 종결(QML·단일장치·스파이크-우선) → spec/plan → **Task 1~7 subagent-driven 구현 + 최종 리뷰 "Ready to merge: Yes"** (tip `c196c73`, 미머지; 스파이크로 실보드 FC03 왕복 실증, OUT_POWER=56). 잔여 = **Task 8 실보드 E2E 5항목(벤치 게이트) 후 머지 = SP1 종료**. ⑵ FW 측 확인 2건: LCD RESET/SEEK→OSC는 hook stub(의도된 이연, B-SEAM 게이트) 재확인 / **B-SEAM 준비사항 정리**(아래 표). ⑶ **M6/M8/M9 트리거 발화** — 잔존 조건 "HMI 착수 시"가 성립 → modbus-tcp-hardening이 HW-불요 FW 코딩 후보로 부상.
 
-## HW 검증 결과 (패널 rig, 인터랙티브)
+## Goal (다음 세션)
 
-- **b' FREQ_IN**: 리그 OSC 실신호 **34.46kHz** 측정(런 중 34452~34479Hz, ±15Hz) + 정지 시 last_freq 유지 + LCD VAR_FREQ ~344 육안 + ceiling 회귀 PASS.
-- **d' 물리 명령+E-stop**: B_START hold-to-run(STATUS 0→1→0 실측+ICON_RUN) / B_RESET→RESET→SEEK 체인 육안 / PC11 SEEK(multi) / **E-stop(std)**: idle-HIGH 즉시 활성(STATUS=0x02, 극성 스펙 일치)+START 차단+multi 복귀 자동 해제(RESET 불필요). **거동 변화 2건 실증**: TOUCH 운용 ceiling 제외(hold 중 계속 동작) / hand COMM=560ms·REMOTE=누르는 중 자동정지 / multi COMM 30s 절대 캡 실동작.
-- **ch1'**: 회귀 PASS. ch1 절대값 표시 = **6b 이연** — 런 중 SWD 정적 read `ch1_avg≈2`(노이즈 플로어) = 리그 전류-sense 아날로그 무신호(ch0도 0 → 가시적 회귀 없음). 에너지 적분 교차영향은 머지 커밋에 명기(spec 조건).
-- **slice4**: ceiling 회귀 + Modbus OUT_POWER 클램프(120→100/30→50/원복) + **LCD M4 클램프 에코 육안**(delay1 600→500 / OUT_POWER 49→50=LOW-1 경로) + work_cnt=0(사이클 dormant 구조).
+**벤치 E2E**: ① HMI SP1 Task 8 (5항목, gds_us_hmi 폴더 세션) → PASS 시 gds_us_hmi main 머지. ② 같은 벤치에서 여유 시 FW weld 사이클 E2E(배선 필요) 또는 B-SEAM 측정(스코프 필요).
 
-## 보류/이연 (배선·rig 게이트 — 다음 HW 세션 몫)
+## Completed (이 세션)
 
-- [ ] **weld 사이클 E2E** (spec §7.3 1~6·8): 양손 SW_START1/2(PC12/PB11)+SENSE_DN/UP(PA11/PA12)+f_safty **배선 후** — DELAY/TRIGGER 사이클, 재장전, safety abort, E-stop abort, RESET 체인 게이팅, 사이클 타이밍/multi 스테핑 tick/energy exit. + **SETUP-overload SOL 거동 노트**(setup 체류∧overload 시 SOL 유지→run 복귀 해제 — 인간 승인된 legacy-충실 거동 확인).
-- [ ] **EMSW 물리 해제-추종** (d' 이월): E-stop 라인 배선 후 누름=해제/뗌=재활성 레벨-추종 확인 (활성·차단·자동해제는 이번에 검증됨, host-test 커버).
-- [ ] overload 실동작(합성 곤란, slice-c부터 이연) / B-SEAM OSC 물리 구동 / 6b calibration(ch1 절대값+에너지 절대 E2E 포함).
-- [ ] push (사람 SSH — main ahead 61+ 커밋 + 태그 4개 신규).
+- [x] HMI 계약 재동기화 — `gds_us_hmi/docs/2026-06-14-pc-hmi-brainstorm-summary.md` §3 = `e9de17a` 기준 (주소/클램프 불변, RESET·SEEK 실동작, STATUS 4비트 활성, work_cnt dormant, write read-back 필수 노트)
+- [x] HMI SP1 Task 1~7 + 리뷰 루프(계획 코드 결함 5건 수정) + 최종 전체-브랜치 리뷰 — **상세 정본 = `~/dev/work/gds_us_hmi/HANDOFF.md`**
+- [x] LCD RESET/SEEK→OSC 확인: FSM/아이콘 완성, `app_seek_reset_hook_signal()`=stub(mon 로그), 물리 PB10/PB2는 boot-init만 구동 — **버그 아님, B-SEAM 이연 그 자체** (`fw/src/app_seek_reset.c:42-48`)
+- [x] B-SEAM 준비사항 최신화 (정본 = `docs/superpowers/analysis/2026-06-20-bseam-osc-signal-chain-and-port-fidelity.md` §5/§6 + 아래 델타)
 
-## Failed Approaches / 벤치 함정 (반복 금지)
+## Not Yet Done (FW 백로그 — 기존 + 신규 1건)
 
-1. **Modbus START(0x1B)와 STOP(0x1C)은 별도 레지스터** — START 레지스터에 0 write는 no-op(정지 아님). 이 착오로 "정지 불능"을 버그로 오인해 SWD 정적 read까지 감(런 소스 US_COMM 확인) — 실은 레지스터 오용이었고, 그 사이 **30s 절대 캡이 우연히 실증**됨. STOP = `-r 29`(wire 0x1C)에 1 write.
-2. **RS-485 첫 write 간헐 무효** — 같은 명령 재시도로 해소. 매 write마다 "Written N references" 출력 확인 필수.
-3. **사용자 조작↔컨트롤러 폴링 협응은 타이밍 실패 잦음**(3회 실패) — LCD 모델 전환 등 준비 시간이 캡처 창을 소진. **육안 관찰을 1차 판정으로**, 캡처는 보조. 협응 필요 시 90s+ 창.
-4. mbpoll `-r`은 1-based(wire+1): OUT_POWER=wire6→`-r 7` (한 번 `-r 8`=ON_TIME 오기록 — 원복 완료).
-5. SWD 정적 read는 `openocd -c "init; echo [read_memory ADDR 32 N]; shutdown"` (halt 없음, `mdw`는 무출력).
+- [ ] **HMI SP1 Task 8 E2E** (벤치) — 최우선. 진입 = gds_us_hmi 폴더 세션 + 그쪽 HANDOFF.md
+- [ ] weld 사이클 E2E — 양손 SW_START1/2(PC12/PB11)·SENSE_DN/UP(PA11/PA12)·f_safty **배선 게이트** (spec §7.3 1~6·8 + SETUP-overload SOL 노트 + EMSW 해제-추종 d' 이월)
+- [ ] B-SEAM OSC 물리 구동 — 실 rig+스코프 (아래 준비사항)
+- [ ] 6b calibration(ch1 절대값·에너지 절대 E2E 포함) / overload 실동작 — rig 게이트
+- [ ] **[신규·HW 불요] modbus-tcp-hardening (M6/M8/M9)** — "HMI 착수 시" 조건 발화. HMI SP2(FC06 쓰기) 전 처리 권장. 겸사: **"RS-485 첫 write 간헐 무효"의 FW 측 원인 조사** 포함. 상세 복원 = 2026-07-02 감사 HANDOFF(git 이력, `git log --oneline --all -- HANDOFF.md`로 해당 시점 검색) + `docs/superpowers/specs/2026-07-04-eth-reapply-m7-design.md:129`
 
-## Key Decisions (이 세션)
+## Failed Approaches (Don't Repeat These)
 
-| Decision | Rationale |
-|----------|-----------|
-| slice4 = 회귀-기준 머지 (사이클 E2E 이연) | weld1~3 관례 동일; 트리거=물리 입력 전용이라 미배선 상태에서 사이클 발생 불가(dormant) — 사용자 승인 |
-| ch1' = 6b-이연 머지 | 전류-sense 무신호 실측(ch1_avg≈2); 파이프라인은 host-test; 스택 구조상 slice4 머지 선행 조건 |
-| EMSW 해제-추종 보류 | 라인 미배선; 활성/차단/자동해제(모드 복귀)는 검증 완료 — 사용자 승인 |
-| docs 충돌 = 양쪽 이력 보존 | changelog 두 항목 병존, NEXT_STEPS D4=slice4판+D5=main판, RESUME f-블록 삽입, HANDOFF=신판 채택 |
+- 이 세션 FW 측 없음. HMI 측(QVariant include 함정, screencapture 권한, 계획 코드 결함 4건 = "계획이 아닌 소스가 정본")은 `gds_us_hmi/HANDOFF.md`에 기록.
+- 7-04 벤치 함정 5건(START/STOP 별도 레지스터, 첫 write 무효, 조작-폴링 협응, mbpoll -r 1-based, SWD 정적 read 형식)은 **Warnings로 승계** — 다음 벤치 세션에서 그대로 유효.
+
+## B-SEAM 준비사항 (요약 — 정본은 분석 문서 §5/§6)
+
+**2026-06-20 분석 이후 델타**: F2(U4 I2C_POT 진폭 실구동) **해소·머지됨**(6-28) / 3채널 매핑(RUN→PB14, SEEK→PB2, RESET→PB10, active-LOW 레벨 미러) **확정 — 측정 게이트 아님** / OD 전기설정·boot-init 머지 / PB1=ch1 소비전류 repoint 머지.
+
+| 구분 | 내용 |
+|---|---|
+| HW 준비물 | **스코프**(⚠ 파워단 고전압·비접지 가능 → 차동/절연 프로브, GND 클립 전 확인) + **실 트랜스듀서/혼 달린 rig**(공진=음향 부하 의존) + 관측 채널(addr=NONE 또는 ETH; SWD 정적 1회·halt 금지) + (최단경로) **동작 원본 M16 보드 가용 여부 확인** |
+| 남은 측정 미지수 | ① **SEEK/RESET 스윕 주체**(보드-side vs MCU 생성 — 코드 규모 좌우, 최대 미지수) ② active 지속시간/파형(600ms 레벨 미러 가설) ③ PB12(OSC2) 방향/용도(유일 미확정 — 출력 구동 금지) ④ 폴라리티 sanity ⑤ (겸사) PB0/PB1 ADC 도메인 → 6b 선행 데이터 |
+| 안전 | 부팅 OSC off 극성 / **PB12·PB13 출력 구동 금지** / 최소 진폭+짧은 on-time부터 |
+| HW 없이 가능 | spec 골격(스윕 주체 2-시나리오 분기) + 코드 동승분: `app_modbus.c` set_pot stale guard→live accessor(리뷰 예약), `app_seek_reset.c` 1-iter stale run_active 재검토, boot-init↔런타임 핀 소유권 조율, stale 주석 3건 |
+| ⚠ 선행조건 | 분석 §7-1: **사용자 오프라인 검토(Artifact) 피드백 반영 후 spec** — 검토 여부 사용자 확인 필요 |
 
 ## Current State
 
-- **main `b571da0`** = 감사 큐 전체 + physical-io b/d + ch1 + weld slice4 전부 반영. 미머지 브랜치 없음(잔존 `feat/physical-io-slice-a/c`는 d'에 흡수된 pre-D5 원본, `backup/pre-d5-*` 3개와 함께 참조용 — 삭제는 사용자 판단).
-- **보드**: merged main과 동일 코드(slice4 tip 플래시본) 적재. multi 모드/SERIAL/addr=1/9600/EVEN, OUT_POWER=56(원복 확인), FRAM ether_ip=.199. 리그: OSC 신호 상시 공급(PA0), 패널 버튼 B_START/B_RESET/PC11 배선, **weld 양손/센서/EMSW 미배선**.
-- 다음 세션 진입 = `docs/NEXT_STEPS.md` §1.2 + 이 문서. 세션 로그 = `docs/superpowers/RESUME.md`(g 블록). SDD ledger = `.superpowers/sdd/progress.md`.
+- **FW main**: `e9de17a`(+이 docs 커밋), working tree clean, origin 동기화, 태그 `-weld4`까지. 미머지 브랜치 없음(`feat/physical-io-slice-a/c`+`backup/pre-d5-*`는 참조 보존).
+- **보드**: merged main 코드 적재, **SERIAL/addr=1/9600/EVEN/multi**, OUT_POWER=56, FRAM ether_ip=.199. 리그: OSC 신호 상시(PA0), B_START/B_RESET/PC11 배선, weld 양손/센서/EMSW 미배선.
+- **HMI**: branch `feat/sp1-connection-readonly-monitor` tip `c196c73`(+handoff `26048e9`), 미머지, 테스트 17슬롯 green, Qt 6.11.1 설치. RS-485 어댑터 `/dev/tty.usbserial-AB0MLYXA`.
+
+## Resume Instructions (다음 세션)
+
+**A. 벤치 E2E (권장)** — `~/dev/work/gds_us_hmi/`에서 세션 시작 → `HANDOFF.md` 읽기 → Task 8 E2E 5항목(단계별 절차·기대값은 그 문서에) → 전부 PASS → finishing-a-development-branch로 main 머지 = SP1 종료.
+1. 보드 전원 ON, `mbpoll -m rtu -a 1 -b 9600 -P even -t 4 -r 1 -c 8 -1 /dev/tty.usbserial-AB0MLYXA` — Expected: reg7=OUT_POWER≈56 (첫 폴 1회 타임아웃 후 성공은 기지 현상)
+2. `cd ~/dev/work/gds_us_hmi && cmake --build build && ./build/gds_us_hmi` → E2E-①연결/폴링 ②LCD 터치 START 표시 ③전원 OFF→"무응답"→ON 복귀 ④어댑터 분리(미연결 vs 무응답 **기록**) ⑤30분+leaks 2회
+
+**B. HW 없으면** — 이 repo에서 modbus-tcp-hardening(M6/M8/M9) brainstorming부터 (§3 절차, M6/M8/M9 상세는 git 이력에서 복원).
+
+**C. FW 벤치 잡히면** — weld 사이클 E2E 배선 세션 또는 B-SEAM 측정(위 준비사항 + §7-1 선행조건 확인 후).
+
+## Warnings (벤치 함정 승계 + 신규)
+
+1. **Modbus START(0x1B)·STOP(0x1C) 별도 레지스터** — START에 0 write = no-op. STOP = `-r 29`에 1 write.
+2. **RS-485 첫 write 간헐 무효** — 매 write "Written" 확인, 재시도. (FW 원인 조사는 M6/M8/M9 슬라이스에)
+3. **조작↔폴링 협응 실패 잦음** — 육안 1차 판정, 협응 필요 시 90s+ 창.
+4. mbpoll `-r`은 1-based(wire+1): OUT_POWER=wire6→`-r 7`.
+5. SWD 정적 read = `openocd -c "init; echo [read_memory ADDR 32 N]; shutdown"` (halt 금지).
+6. HMI E2E-② 중 앱이 포트 점유 → mbpoll 동시 사용 불가, START는 LCD 터치로.
+7. LCD RESET/SEEK의 OSC 무동작은 **의도된 이연** — B-SEAM 전까지 고치려 하지 말 것.
+8. 펌웨어에서 레지스터/STATUS 의미 변경 머지 시 **HMI 계약 문서 §3 재동기화 필수**.

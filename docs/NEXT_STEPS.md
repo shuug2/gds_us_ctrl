@@ -92,6 +92,8 @@ make -C fw/test test                                # 5 스위트 PASS 기대 (r
 - **B-SEAM OSC 물리 구동** — seek/reset/weld의 실제 `CTRL_OSC*` 주파수 출력(현재 전부 hook stub). 레귤레이션 compute의 마지막 블로커. 실 초음파 rig + 스코프.
 - **6b signal calibration** — 진폭/주파수/에너지 절대 보정 + weld energy 누산 절대 E2E + divisor(`REG_ENERGY_DIV=250`). 실 rig.
 - **overload 보호** — CON_OVLD(PC0) → RESET → 자동 SEEK 복구(seek-reset FSM 재사용).
+- **[2026-07-05 신규·HW 불요] modbus-tcp-hardening (M6/M8/M9)** — D6의 잔존 조건 "HMI 착수 시"가 **발화**(PC HMI SP1이 `~/dev/work/gds_us_hmi`에서 구현 완료, Task 8 E2E만 잔여). HMI SP2(FC06 쓰기) 전 처리 권장 + "RS-485 첫 write 간헐 무효" FW 원인 조사 포함. 상세 복원 = 2026-07-02 감사 HANDOFF(git 이력).
+- **[2026-07-05] HMI SP1 Task 8 실보드 E2E** — 벤치 세션 최우선 후보. 진입 = gds_us_hmi 폴더 세션 + 그쪽 HANDOFF.md (이 repo 아님).
 - 진입 절차 = **§3** (brainstorming → spec → writing-plans → subagent-driven → finishing).
 - ⚠ 머지/푸시 정책 변경: 이제 origin(SSH) 사용 — 머지 후 `git push origin main` + 태그 푸시(§6).
 
