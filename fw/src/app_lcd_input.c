@@ -17,7 +17,6 @@
 #include "mon.h"
 #include "cfg_clamp.h"
 #include "app_input.h"     /* app_estop_active — 런 페이지 복귀 가드 */
-#include "app_overload.h"  /* app_overload_active — 런 페이지 복귀 가드 */
 
 /*--------------------------------------------------------------
  * samd20 define.h / main.c constants (file-local — verbatim values)
@@ -89,35 +88,39 @@ uint8_t app_lcd_in_run_page(void)
     return (st->lcd_status == run_page_for_mode(st->sys_mode)) ? 1u : 0u;
 }
 
-/* 런 페이지 복귀 공용 가드 — 활성 안전상태(E-stop/overload)나 잔여 에러가 있으면
- * 경고 페이지 유지. ⚠ state->error_status의 OVLD 비트는 app_lcd_tick의 reg 미러가
- * 매 iter 덮어써 휘발성(app_lcd.c:193-200) — 라이브 접근자가 정본. E-stop에 막혀
- * 경고가 유지될 때는 호출측이 VP 텍스트를 "E-STOP"으로 재기록한다. */
+/* 런 페이지 복귀 공용 가드 — 경고 페이지를 점유하는 조건이 남아 있으면 복귀 금지.
+ * 점유 조건 = E-stop(라이브 접근자) + OVTIME 계열 error_status(reg 미러가 fault
+ * 래치 동안 지속 공급 — app_lcd.c:193-200). OVLD는 아이콘-only(아래)라 비차단.
+ * E-stop에 막혀 경고가 유지될 때는 호출측이 VP 텍스트를 "E-STOP"으로 재기록. */
 static bool lcd_may_restore_run_page(void)
 {
-    return (app_estop_active() == 0u) && (app_overload_active() == 0u) &&
+    return (app_estop_active() == 0u) &&
            (app_lcd_state()->error_status == 0u);
 }
 
 /* 과부하 에러 표시 — app_overload 글루가 assert/deassert 엣지에 호출.
- * ERR_OVLD 비트만 조작(weld OVTIME 보존), ICON_OL + 경고/런 페이지는 RESET-키
- * 클리어 경로(이 파일)와 동일 시퀀스. */
+ * legacy do_control(main.c:4218-4227): OVLD/OUTERR는 VP 텍스트+아이콘만 —
+ * LCD_WARNING 페이지 전환은 OVTIME 전용(4229-4233). 런 화면 유지 + ICON_OL
+ * (2026-07-05 벤치 실장비 거동으로 페이지 전환 편차 발견·정정). deassert 복귀는
+ * 경고 페이지 표시 중일 때만 — 아이콘-only라 setup 등 임의 페이지 납치 금지. */
 void app_lcd_set_overload(bool on)
 {
     lcd_app_state_t *state = app_lcd_state();
 
     if (on) {
         state->error_status |= ERR_OVLD;
+        dgus_write_text(VP_ERROR_MSG, "OVER LOAD");   /* 기록만 — 페이지 무전환 */
         dgus_write_u16(ICON_OL, 1);
-        app_lcd_show_error(state->error_status);   /* VP_ERROR_MSG + LCD_WARNING */
     } else {
         state->error_status &= (uint8_t)~ERR_OVLD;
         dgus_write_u16(ICON_OL, 0);
-        if (lcd_may_restore_run_page()) {
-            state->lcd_status = run_page_for_mode(state->sys_mode);
-            dgus_set_page(state->lcd_status);
-        } else if (app_estop_active() != 0u) {
-            dgus_write_text(VP_ERROR_MSG, "E-STOP");   /* 경고 유지 — 원인 갱신 */
+        if (state->lcd_status == LCD_WARNING) {
+            if (lcd_may_restore_run_page()) {
+                state->lcd_status = run_page_for_mode(state->sys_mode);
+                dgus_set_page(state->lcd_status);
+            } else if (app_estop_active() != 0u) {
+                dgus_write_text(VP_ERROR_MSG, "E-STOP");   /* 경고 유지 — 원인 갱신 */
+            }
         }
     }
 }

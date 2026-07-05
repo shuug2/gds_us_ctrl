@@ -9,17 +9,22 @@
 #include "app_reg.h"     /* app_reg_command, app_reg_measure */
 #include "app_lcd.h"     /* app_lcd_cfg, us_cmd_t, US_*, app_lcd_set_estop */
 #include "app_weld.h"    /* app_weld_abort_now (E-stop 진입 즉시 abort) */
+#include "app_buzzer.h"  /* app_buzzer_beep_ms (E-stop 점멸 부저) */
 #include "sys_tick.h"
 
-#define INPUT_TICK_MS  10u
+#define INPUT_TICK_MS    10u
+#define ESTOP_BEEP_MS   250u   /* 점멸 1회 on 길이 (app_overload와 동일 패턴) */
+#define ESTOP_BLINK_MS  500u   /* 250 on / 250 off 주기 = 재-arm 간격 */
 
 static uint32_t s_prev_ms;
+static uint32_t s_blink_ms;
 static uint8_t  s_estop_active;
 
 void app_input_init(void)
 {
     input_fsm_init();
     s_prev_ms      = sys_tick_get_ms();
+    s_blink_ms     = s_prev_ms;
     s_estop_active = 0u;
 }
 
@@ -51,6 +56,9 @@ void app_input_tick(void)
         io_sol_dn(false);
         app_weld_abort_now();
         app_lcd_set_estop(true);
+        s_blink_ms = now;
+        app_buzzer_beep_ms(ESTOP_BEEP_MS);   /* 점멸 첫 beep (legacy SYS_ESTOP
+                                                buzzer blink, main.c:2125-2136) */
     }
     /* 해제 엣지: 런 페이지 복귀 (legacy 4238-4241 init_lcd_mode 등가; 레벨추종
      * 자동 클리어 — RESET 불필요, 런 재시작 안 함은 기존 그대로). */
@@ -67,6 +75,12 @@ void app_input_tick(void)
         uint8_t src = app_reg_measure()->us_run_status;
         if (src != (uint8_t)US_IDLE) {
             app_reg_command(US_CMD_RUN_RELEASE, src);
+        }
+        /* 부저 점멸: ESTOP_BLINK_MS마다 one-shot beep 재-arm (legacy SYS_ESTOP
+         * mode_blink 등가, app_overload 패턴 재사용). 해제 시 자연 소멸. */
+        if ((uint32_t)(now - s_blink_ms) >= ESTOP_BLINK_MS) {
+            s_blink_ms = now;
+            app_buzzer_beep_ms(ESTOP_BEEP_MS);
         }
         return;
     }
