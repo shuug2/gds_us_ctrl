@@ -48,7 +48,8 @@
 - **B-SEAM OSC 물리 구동** — **대부분 선행 완료 2026-07-05**: RESET/SEEK 라인 실구동 머지(`29803ae`) + "명령 3선 active-LOW 레벨 미러" 가설 **실증**(RESET 592ms→SEEK 591ms 레그 + FREQ_IN 스윕-정착 34115→34508Hz = **스윕 주체=OSC 보드측 확정** — 최대 미지수 해소). 잔여 = 스코프 파형 정밀 관측(안전 극성/폴라리티 sanity), PB12(OSC2) 용도(출력 구동 금지 유지), 진폭 추종.
 - **6b signal calibration** — **범위 축소 2026-07-05**: 주파수 보정 **불필요화**(HSE 전환으로 0.01% 일치, freq_cal_val=0 유지), 전류 1차 캘리브레이션 완료(600mA 앵커, gain 7/5 + cal_val 트림 경로 확립). 잔여 = 전류 정밀/다점 보정, ch0(레귤레이션) 도메인·물리단위, weld energy 누산 절대 E2E + divisor(`REG_ENERGY_DIV=250`), ADC offset, **EMA↔에너지 적분 디커플링**(`3d2f414` 리뷰 MEDIUM — 표시 EMA가 energy-exit 판정에 물림, 적분은 비필터 값으로 분리; 명시 이연 결정).
   - **(하위 항목) #7 출력이상 ERR_OUTERR 포팅** — samd20 출력이상 검출(`curr_amp <= USOUT_TH(25)` ×`USOUT_ERR_CNT_MAX(8)`, multi 모드, main.c:4318-4338)은 **트리거 `re_outerr_issued=1`이 주석처리(4333)=legacy에서 비활성**. 실 `curr_amp`(ADC 측정 진폭)에 의존하므로 **6b 종속** — 6b로 진폭 절대 보정이 서야 검출 임계가 의미를 가짐. 살리려면 ① 트리거 주석 해제 ② 실 curr_amp. fault 표면 인프라(error_status/ICON_OUTERR/`MB_STATUS_OUTERR=0x10`/RESET 복구)는 이미 main에 완비(미공급). 분석 = `docs/superpowers/specs/2026-06-28-ovtime-energy-run-design.md` §1·§8.
-- **overload 보호** — CON_OVLD(PC0) 입력 + 보호 동작. OVLD→RESET→자동 SEEK 복구 = **seek-reset FSM 재사용** 설계됨.
+- ~~**overload 보호**~~ — ✅ **실동작 E2E 사용자 벤치 PASS 2026-07-05 c** (체인 전체 정상, 코드 무변경 — physical-io 이월 3건[EMSW·OSC 구동·overload] 전부 소진). 잔여 LOW: handle_key_multi RESET의 OVLD/OUTERR 비트 휘발성(후속).
+- **[2026-07-05 c 신규 완료 참고]** seek/reset 중 측정값 라이브 표시(`e2003e1`, us_on_status 복원+벤치 4항목 PASS) / 표시 전류 전달함수 재정의(`54e5220`, 재앵커 ch1≈126 + 오프셋 제거: GAIN 59/126·OFFSET 0·DEADBAND 20 — ⚠ **최종 벤치 0.60A 표시 명시 확인 미기록 = 다음 벤치 첫 항목**; 중간 구간 2점 fit은 6b).
 
 **설계상 이연(slice 2)**: DHCP 핫플러그(링크 드롭 후 재획득 — 현재 LINKWAIT→UP 단방향), SERIAL boot-skip.
 
@@ -64,7 +65,7 @@
 | D3 | **H3+H2 = 'fram-i2c-robustness' 슬라이스**(fram_read_* status 전파+실패 필드 팩토리 폴백/경고, I2C1 bus-unstick+err_count 표면 배선) / **H4+IWDG는 별도 슬라이스** — 📐 **spec 완료 2026-07-02**(`docs/superpowers/specs/2026-07-02-fram-i2c-robustness-design.md`; 확정: 경고=mon만·unstick=init 1회·write 무변경·INIT_FLAG 읽기실패=factory-write 금지). ✅ **HW 회귀 PASS + MERGED 2026-07-04**(main `be2fac9` --no-ff, tag `hw-revA_fw-stage-fram-robust`, 브랜치 삭제; HW=부팅 FRAM 저장값 유지 폴백 미발동+LCD 육안 / START→STATUS 1×4→0 ceiling 무회귀 / FC06 write→리셋→리로드; mon `[cfg]` 캡처는 RS-485 DE 미제어로 생략—①③④가 FRAM 로드 입증) | ~~코딩 세션 (HW=검증만)~~ |
 | D4 | ✅ **CODE-COMPLETE 2026-07-04 (slice4 브랜치 첫 커밋 `4541ef4`, 미머지 HW 게이트)** — WELD 모드 래치(CYL1→WELD 전이 시점 단일 스냅샷)+전이 카운터 리셋, host 3테스트 | ~~weld slice4 선결~~ |
 | D5 | 미머지 통합 = **코딩 세션에서 reconcile 선행**(각 브랜치→현 main rebase+`app_reg_tick` 시그니처 semantic 통합+board.c 병합, 빌드+host PASS까지), 순서 **b→d→ch1**(b=독립·최고령, d가 a·c 포함). ✅ **reconcile 완료 2026-07-04 d** — 3브랜치가 main 위 선형 스택(b'=main+4, d'=b'+28, ch1'=d'+5), `reg_run_limits_t` 7필드 통합, ceiling 이중화×ovtime 병합(spec §5.2 — ⚠TOUCH 운영 ceiling 제외 등 의도된 거동 변화 2건), board.c=d판 byte-identical, 단계별 0-warning+host 8/12/12 PASS, d'/ch1' cpp-review 게이트 통과. backup=`backup/pre-d5-*` 3개. spec/plan=`2026-07-04-d5-reconcile-*`. ✅ **HW 검증+전단위 머지 완료 2026-07-04**(패널 rig 세션 — b' `0cc34a8`/d' `46055c9`/ch1' `e973721`/slice4 `b571da0`, 태그 4개; 거동 변화 2건 실증) | ~~완료~~ |
-| D6 | Modbus/ETH 중 **M7만 먼저**(LCD static IP 저장→가동 중 W5500 즉시 반영 경로), M6/M8/M9는 **HMI 착수 시 'modbus-tcp-hardening'** ✅ **M7 HW E2E PASS + MERGED 2026-07-04**(main `6467d67` --no-ff, tag `hw-revA_fw-stage-eth-reapply`, 브랜치 삭제; E2E=mode-only 전환 G4/IP 변경 즉시 반영/STATIC↔DHCP 왕복/ETH↔SERIAL/ceiling 무회귀 전항목). M6/M8/M9만 HMI 트리거로 잔존 | ~~M7=코딩 세션~~ / 나머지=HMI 트리거 |
+| D6 | Modbus/ETH 중 **M7만 먼저**(LCD static IP 저장→가동 중 W5500 즉시 반영 경로), M6/M8/M9는 **HMI 착수 시 'modbus-tcp-hardening'** ✅ **M7 HW E2E PASS + MERGED 2026-07-04**(main `6467d67` --no-ff, tag `hw-revA_fw-stage-eth-reapply`). ✅ **M6/M8/M9 'modbus-tcp-hardening' HW E2E PASS + MERGED 2026-07-06**(main `7c474e1` --no-ff, tag `hw-revA_fw-stage-mbtcp-hardening`; 최종 리뷰 HIGH=coalesced FC06 apply 굶김→FC06-후-워크-종료 fix + 벤치 fix 2건=vendored recv 논블로킹 순서-뒤집힘 우회·W5500 KA 10s[선재 락아웃]; RS-485 첫-write 조사 보고=research/) — **감사 큐 D0~D6 완전 소진** | ~~전부 완료~~ |
 
 부수: stale 주석 정정(`app_reg.h:42` "no-op", `app_modbus.c:105/109`, `fw/test/Makefile:1-3`)은 해당 파일을 건드리는 첫 코드 커밋에 동승.
 
@@ -88,24 +89,27 @@ make -C fw/test test                                # 5 스위트 PASS 기대 (r
 
 ### 2.2 다음 작업 후보
 
-**2026-07-05부로 weld 사이클 E2E 종결** (§1.2 참조 — HW-gated 백로그 대폭 축소). 남은 후보:
+**2026-07-06 현재: 감사 큐 완전 소진 + overload 종결 + mbtcp-hardening 머지** — 활성 후보는 사실상 HMI Task 8 하나, 나머지는 사용자 보류.
 
-- **B-SEAM 잔여** — 스코프 파형 정밀 관측 + PB12 용도 + 진폭 추종 (RESET/SEEK 구동·스윕 주체는 2026-07-05 해소).
-- **6b signal calibration 잔여** — 전류 정밀/다점 보정, ch0 도메인, weld energy 절대 E2E + divisor (주파수는 HSE로 불필요화).
-- **overload 실동작** — PB13 입력 실신호 → 정지/릴레이/부저/RESET→SEEK 복구 체인 E2E (인프라 완비, 실신호 게이트). + 리뷰 노트: handle_key_multi RESET의 OVLD/OUTERR 비트 테스트 휘발성(LOW, 후속).
-- **[HW 불요] modbus-tcp-hardening (M6/M8/M9)** — HMI 트리거 발화 상태 유지 (2026-07-05 세션은 벤치 우선으로 미착수).
-- **HMI SP1 Task 8 실보드 E2E** — gds_us_hmi 폴더 세션 (RS-485 어댑터 연결 필요).
-- **[2026-07-05 신규·HW 불요] modbus-tcp-hardening (M6/M8/M9)** — D6의 잔존 조건 "HMI 착수 시"가 **발화**(PC HMI SP1이 `~/dev/work/gds_us_hmi`에서 구현 완료, Task 8 E2E만 잔여). HMI SP2(FC06 쓰기) 전 처리 권장 + "RS-485 첫 write 간헐 무효" FW 원인 조사 포함. 상세 복원 = 2026-07-02 감사 HANDOFF(git 이력).
-- **[2026-07-05] HMI SP1 Task 8 실보드 E2E** — 벤치 세션 최우선 후보. 진입 = gds_us_hmi 폴더 세션 + 그쪽 HANDOFF.md (이 repo 아님).
+- **[2026-07-06 사용자 신규 등록 3건 — 상세는 작업 시작 시 사용자가 설명 예정]**:
+  1. **부팅 딜레이 시 터치 에러** — 부팅(워밍업 ~4s?) 중 LCD 터치 관련 오류 거동. 상세 대기.
+  2. **원격제어 시 REMOTE icon 점등** — Modbus/원격 제어 중 LCD REMOTE 아이콘 표시. 상세 대기. (참고: samd20 DISP_REMOTE/modbus_status 표시는 Stage C 때 의도적 스킵 — app_lcd_disp.c 주석 "DISP_REMOTE... skipped".)
+  3. **전류 표시 필터 2배 빠르게** — 현 EMA α=1/8 per 50ms(τ≈400ms, `app_reg.c` reg_acquire_step) 확인 후 반응속도 ×2(τ≈200ms 방향, 예: α=1/4). ⚠ EMA↔에너지 적분 커플링(6b 이연 MEDIUM)과 교차 — 같이 볼 것.
+- **HMI SP1 Task 8 실보드 E2E** — 진입 = `~/dev/work/gds_us_hmi` 폴더 세션 + 그쪽 HANDOFF.md (이 repo 아님). RS-485 어댑터 필요. **병행: RS-485 첫-write 재현 절차 실행** — `docs/superpowers/research/2026-07-05-rs485-first-write.md` §6 (전원사이클→첫 FC06 ×10 기록; 최유력=글리치 병합, V-A/V-B 시나리오 분리).
+- **6b signal calibration 잔여** — ⏸ **사용자 보류(2026-07-05 c)**. 전류 다점/2점 fit(낮은 부하 실측점 — 오프셋 제거로 중간 구간 편차 가능), ch0 도메인, weld energy 절대 E2E + divisor, EMA↔에너지 적분 디커플링(리뷰 MEDIUM), OUTERR(하위 항목).
+- **B-SEAM 잔여** — ⏸ **사용자 보류(2026-07-05 c)**. 스코프 파형 정밀 관측 + PB12 용도 + 진폭 추종 (구동·스윕 주체는 해소).
+- **후속 소소(비긴급)**: app_eth STATIC_UP 링크 재폴링 부재(선재 — KA로 완화됨, 근본 수정은 링크 FSM 확장) / KA 무송신-피어 잔여(Modbus 실질 무해) / defer Minor 목록 = `.superpowers/sdd/progress.md`(mbtcp) + 구 ledger들.
 - 진입 절차 = **§3** (brainstorming → spec → writing-plans → subagent-driven → finishing).
-- ⚠ 머지/푸시 정책 변경: 이제 origin(SSH) 사용 — 머지 후 `git push origin main` + 태그 푸시(§6).
+- ⚠ 머지/푸시 정책: origin(SSH) — 머지 후 `git push origin main` + 태그 푸시(§6). **현재 미푸시: main 18±커밋 + tag `hw-revA_fw-stage-mbtcp-hardening`**.
 
-### 2.3-a 보드 현 상태 (2026-07-05 마감 — 최신)
+### 2.3-a 보드 현 상태 (2026-07-06 마감 — 최신)
 
-- **main `3d2f414` 플래시됨** (클럭 HSE 포함). **풀배선 리그**: 양손 SW_START1/2(PC12/PB11)·SENSE_DN/UP(PA11/PA12)·EMSW(PC11)·B_START/B_RESET + 실 혼/실린더 + 전류 sense(PB1, 600mA→~15mV). RS-485 어댑터 미접속(세션 내내 — 관측=LCD 육안+SWD).
-- **테스트 잔재 설정**: TIMEOVER=2s, delay1=76(760ms), delay2=184, delay3=50, trigger2/3=109/90, OUT_POWER=100, f_safty=1, EN_MULTI=0/EN_ENERGY=0, model_type=multi(1), mo 60/90/100/150, cal_val=2, freq_cal_val=0(**HSE라 0 유지가 정답**). 운영 투입 전 복원 필요.
+- **main 최신(`7c474e1` 머지 코드 = `434e007` tip) 플래시됨**. **풀배선 리그** 유지: 양손 SW_START1/2(PC12/PB11)·SENSE_DN/UP(PA11/PA12)·EMSW(PC11)·B_START/B_RESET + 실 혼/실린더 + 전류 sense(PB1) + **이더넷 케이블 연결**(W5500). RS-485 어댑터 미접속.
+- **comm = ETH_STATIC, IP 192.168.1.199** (mbtcp E2E 잔류) — 벤치 기본(SERIAL/addr=1/9600/EVEN) 복원은 LCD.
+- **테스트 잔재 설정**: TIMEOVER=2s, delay1=76(760ms), delay2=184, delay3=50, trigger2/3=109/90, **OUT_POWER=56/ON_TIME=56(2026-07-06 원복됨)**, f_safty=1, EN_MULTI=0/EN_ENERGY=0, model_type=multi(1), mo 60/90/100/150, **cal_val=1(2026-07-05 c SWD 실측 — 구 노트 "2"는 stale)**, freq_cal_val=0(**HSE라 0 유지가 정답**). 운영 투입 전 복원 필요.
+- ⚠ 다음 벤치 첫 항목: **전류 표시 0.60A 재확인**(전달함수 재정의 `54e5220` 후 명시 확인 미기록 — RUN+전류계 0.6A ↔ 표시 0.60A, 유휴 0.00).
 - ⚠ 빌드마다 bss 주소 이동 — SWD read 전 현재 ELF에서 `arm-none-eabi-gdb -batch -ex "p/x &심볼"` 재확보 필수. 비침습 샘플러 = openocd TCL 루프(read_memory, halt 없음, ~1.4ms/샘플).
-- ⚠ push 미실행 (6커밋 + docs) — 사람 터미널에서 `git push origin main`.
+- ⚠ push 미실행 (main 18±커밋 + 태그 1) — 사람 터미널에서 `git push origin main && git push origin hw-revA_fw-stage-mbtcp-hardening`.
 
 ### 2.3 보드 현 상태 (2026-06-20 마감 시점)
 
