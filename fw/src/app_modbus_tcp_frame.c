@@ -45,3 +45,22 @@ bool mb_tcp_build_response(mb_core_t *mb, const uint8_t *req, uint16_t req_len,
     *out_len = (uint16_t)(6u + pdu_len);
     return true;
 }
+
+mb_tcp_fr_t mb_tcp_frame_peek(const uint8_t *buf, uint16_t len,
+                              uint16_t *frame_len)
+{
+    if (len < MB_TCP_MBAP_LEN) {
+        return MB_TCP_FR_NEED_MORE;
+    }
+    uint16_t proto  = (uint16_t)(((uint16_t)buf[2] << 8) | buf[3]);
+    uint16_t length = (uint16_t)(((uint16_t)buf[4] << 8) | buf[5]);
+    if ((proto != 0u) || (length < 2u) || (length > MB_FRAME_MAX)) {
+        return MB_TCP_FR_DESYNC;
+    }
+    uint16_t total = (uint16_t)(MB_TCP_MBAP_LEN + length);
+    if (len < total) {
+        return MB_TCP_FR_NEED_MORE;
+    }
+    *frame_len = total;
+    return MB_TCP_FR_OK;
+}

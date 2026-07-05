@@ -22,3 +22,16 @@
 bool mb_tcp_build_response(mb_core_t *mb, const uint8_t *req, uint16_t req_len,
                            uint8_t out[MB_TCP_RESP_MAX], uint16_t *out_len,
                            uint8_t *fc_out);
+
+/* M6 프레임 워커(spec §2.1): 누적 수신 버퍼 선두에서 완전 MBAP 프레임 1개를
+ * 판정. *frame_len = 6(MBAP) + length필드(unit+PDU) wire 길이. DESYNC(헤더
+ * 불량)면 호출측이 누적 버퍼를 통째로 폐기 — 재동기는 마스터 재시도에 위임.
+ * length 수용 경계는 mb_tcp_build_response(:20)와 동일(MB_FRAME_MAX). */
+typedef enum {
+    MB_TCP_FR_NEED_MORE = 0,   /* 더 수신 필요 (frame_len 미기록) */
+    MB_TCP_FR_OK,              /* *frame_len 바이트의 완전 프레임 */
+    MB_TCP_FR_DESYNC           /* proto!=0 / length<2 / length>MB_FRAME_MAX */
+} mb_tcp_fr_t;
+
+mb_tcp_fr_t mb_tcp_frame_peek(const uint8_t *buf, uint16_t len,
+                              uint16_t *frame_len);
