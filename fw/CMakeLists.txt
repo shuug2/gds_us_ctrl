@@ -30,6 +30,7 @@ add_compile_options(
 add_compile_definitions(
     STM32F410Rx
     USE_HAL_DRIVER
+    HSE_VALUE=16000000U    # 보드 16MHz X-tal (vendor conf 기본 25MHz 오버라이드 — vendor 무편집)
 )
 
 # vendor HAL static library — Phase 1 sources only
