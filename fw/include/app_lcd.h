@@ -172,4 +172,8 @@ void app_lcd_show_error(uint8_t error_code);          /* error_status -> VP_ERRO
  * LCD_WARNING, off=클리어+ICON_OL=0+런 페이지 복귀. RESET-키 클리어와 동일 패턴. */
 void app_lcd_set_overload(bool on);
 
+/* TRIGGER 모드 SENSE_DN 상태 텍스트 "SENSOR ON/OFF" (DISP_STD_DATA1) — weld
+ * 글루가 레벨 변화 엣지에 호출 (samd20 check_remote_input main.c:1230-1265). */
+void app_lcd_weld_sensor_text(bool on);
+
 uint8_t app_lcd_in_run_page(void);   /* 1 = run 페이지 (slice4 weld SETUP 게이트) */

@@ -20,6 +20,7 @@
 static uint32_t s_prev_ms;
 static uint8_t  s_start_pending;   /* one-shot latch (slice4: 트리거 FSM start_pulse가 채움) */
 static uint8_t  s_sol_last;        /* SOL_DN level edge tracking */
+static uint8_t  s_sens_dn_bak;     /* SENSOR ON/OFF 표시용 레벨 bak (legacy re_dn_bak) */
 
 void app_weld_init(void)
 {
@@ -28,6 +29,7 @@ void app_weld_init(void)
     s_prev_ms       = sys_tick_get_ms();
     s_start_pending = 0u;
     s_sol_last      = 0u;
+    s_sens_dn_bak   = io_read_sens_dn();   /* io_init 선행(main.c) — 현재 레벨 기준 */
 }
 
 void app_weld_request_start(void)
@@ -91,6 +93,18 @@ void app_weld_tick(void)
     };
     weld_trig_out_t tout;
     weld_trigger_fsm_step(&tin, &tout);
+
+    /* TRIGGER 모드 SENSOR ON/OFF 표시 미러 — SENSE_DN 레벨 변화 양쪽 엣지, 라이브
+     * run_mode (samd20 check_remote_input main.c:1230-1265; bak 갱신은 모드 무관).
+     * 페이지 진입 초기값은 app_lcd_change_page("SENSOR OFF")가 담당. deviation:
+     * legacy 스캔은 페이지 무관이지만 이 코드는 SETUP 게이트(위) 뒤라 setup 중
+     * 동결 — run 페이지 복귀 시 change_page 초기값이 재기준선. */
+    if (tin.sens_dn != s_sens_dn_bak) {
+        if (cfg->run_mode != 0u) {
+            app_lcd_weld_sensor_text(tin.sens_dn == 0u);   /* active-LOW: 0=감지=ON */
+        }
+        s_sens_dn_bak = tin.sens_dn;
+    }
 
     /* 사이클 진입 게이팅 (spec §4.3, 의도된 deviation): US START가 거부될 상태면
      * 사이클 자체를 시작하지 않음 — SOL만 하강하는 블라인드 사이클 차단. */
