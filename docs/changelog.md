@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### 2026-07-05 c-4 — modbus-tcp-hardening (M6/M8/M9) HW E2E PASS + MERGED
+
+감사 잔존 MEDIUM 3건 종결 (merge `7c474e1` --no-ff, tag `hw-revA_fw-stage-mbtcp-hardening`, 브랜치 삭제). subagent-driven 4-Task(spec `fe8f64b`/plan `3fc4465`), whole-branch cpp-review(opus) + HW E2E(이더넷 벤치 .199) 전항목 PASS.
+
+- **M6**: 수신 누적 버퍼(262B) + 순수 워커 `mb_tcp_frame_peek`(host 10케이스 TDD) — coalesced/파이프라인/경계-partial 프레임 처리, poll당 코얼레스드 단일 send(벤더 논블로킹 send의 SENDOK-대기 SOCK_BUSY 특성 대응). **최종 리뷰 HIGH**: coalesced FC06 2건 중 앞 건 클램프 시 apply 체인(one-change-per-call) 굶김으로 뒤 write 조용히 유실 → **FC06 후 워크 즉시 종료** fix(`2173da1`) = RTU 동일 1-write-per-mirror 불변식 + read-after-write stale + FRAM ×4 스톨 동시 해소.
+- **M8**: `tcp_leave()` — tcp_active 하강 엣지(RTU 점유/eth 불가)에서 소켓+수신상태 정리. HW: SERIAL 저장 순간 피어 RST 관측(구=ESTABLISHED 방치) + ETH 재저장 재리슨.
+- **M9**: `SF_IO_NONBLOCK` + CLOSE_WAIT 500ms 벨트 — blocking disconnect/send 슈퍼루프 스톨(최대 ~1.6s) 제거(레거시 대비 의도적 강화 편차). HW: 케이블 분리 중 LCD 반응성 정상.
+- **벤치 발견 fix 2건**: ① `5bf7559` **vendored socket.c recv() 논블로킹 순서-뒤집힘**(비-IPv6 경로 :687-692 — NONBLOCK이면 데이터 있어도 무조건 SOCK_BUSY, 업스트림과 다름) → recv 구간만 ctlsocket 블로킹 토글 우회(RSR>0 가드로 스톨 불가; 최초 전면 무응답 근본원인) ② `434e007` **W5500 auto keep-alive 10s** — 케이블 분리 후 stale-ESTABLISHED 단일소켓 영구 락아웃(**선재 결함**: app_eth STATIC_UP 링크 재폴링 없음, M7 주석이 경고한 시나리오) 자가치유(~20s). 잔여: KA는 데이터 1회 교환 후 무장(무송신 피어 미커버=Modbus 실질 무해) / app_eth STATIC_UP 링크 재폴링은 무수정(후속 후보).
+- **RS-485 첫-write 조사 보고**(`docs/superpowers/research/2026-07-05-rs485-first-write.md`): 최유력=어댑터 글리치 바이트의 idle-gap 프레이밍 병합→CRC 드롭→무응답(마스터 재시도 회복, FW 결함성 낮음); H1(stale 인덱스)/H2(gap 오판)/H4(apply 누락=간헐성 원인으로는) 기각, 잠재 H5(재오픈 윈도우 ORE) 신규. 벤치 재현 절차 = HMI Task 8 세션 입력.
+- HW E2E 상세: FC03 파이프라인(1세그 2요청→2응답)/coalesced FC06(30→클램프50+100 둘 다 적용)/[FC06][FC03] 지연-정합(read-back=50)/START→STATUS→STOP/M8 왕복/M9 분리-복구. E2E 스크립트 = plan Task 4(파이썬 3종).
+- 게이트: host 전 스위트 + our-code 0-warning FLASH 48.57%/RAM 19.36% + post-merge 재확인. Minor 이월 = 전건 defer(ledger 기재). ⚠ 보드 = ETH_STATIC(.199) 잔류 — 벤치 기본(SERIAL/addr=1) 복원은 LCD.
+
 ### 2026-07-05 c-3 — overload 실동작 E2E 벤치 PASS (코드 무변경)
 
 풀배선 리그에서 overload 체인(PB13 실신호 → 정지/PB3 릴레이/ERR_OVLD 아이콘/부저/복구) 사용자 벤치 시험 완료 — **잘 동작 확인**. slice C(2026-06 인프라)부터 이월돼 온 "overload 실동작" 백로그 종결. 세션 내 결정: 6b 다점 보정·B-SEAM 잔여는 보류 유지.
