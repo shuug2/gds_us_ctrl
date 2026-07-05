@@ -102,12 +102,53 @@ static void test_unit_echo(void)
     CHECK(out[6] == 0x11u);                /* echoes REQUEST unit, not device_addr */
 }
 
+/* M6 프레임 워커: 누적 버퍼 선두의 완전 프레임 판정 (spec §2.1). */
+static void test_frame_peek(void)
+{
+    uint16_t fl = 0u;
+    /* 정상 FC03 요청 12B (기존 test_fc03_read_one과 동일 형태) */
+    uint8_t one[] = { 0x00,0x01, 0x00,0x00, 0x00,0x06,
+                      0x01, 0x03, 0x00,0x06, 0x00,0x01 };
+
+    /* MBAP 헤더(6B) 미만 -> NEED_MORE */
+    CHECK(mb_tcp_frame_peek(one, 5u, &fl) == MB_TCP_FR_NEED_MORE);
+    /* 헤더만(6B, length=6 선언) -> 본문 미도착 NEED_MORE */
+    CHECK(mb_tcp_frame_peek(one, 6u, &fl) == MB_TCP_FR_NEED_MORE);
+    /* 부분(10B) -> NEED_MORE */
+    CHECK(mb_tcp_frame_peek(one, 10u, &fl) == MB_TCP_FR_NEED_MORE);
+    /* 완전 12B -> OK, frame_len=12 */
+    fl = 0u;
+    CHECK(mb_tcp_frame_peek(one, 12u, &fl) == MB_TCP_FR_OK);
+    CHECK(fl == 12u);
+    /* coalesced 2프레임(24B): 선두 판정은 첫 프레임 12만 */
+    uint8_t two[24];
+    memcpy(two, one, 12u); memcpy(&two[12], one, 12u); two[13] = 0x02u; /* txn 차별화 */
+    fl = 0u;
+    CHECK(mb_tcp_frame_peek(two, 24u, &fl) == MB_TCP_FR_OK);
+    CHECK(fl == 12u);
+    /* proto != 0 -> DESYNC */
+    uint8_t bad_proto[12]; memcpy(bad_proto, one, 12u); bad_proto[2] = 0x01u;
+    CHECK(mb_tcp_frame_peek(bad_proto, 12u, &fl) == MB_TCP_FR_DESYNC);
+    /* length < 2 -> DESYNC */
+    uint8_t bad_short[12]; memcpy(bad_short, one, 12u);
+    bad_short[4] = 0x00u; bad_short[5] = 0x01u;
+    CHECK(mb_tcp_frame_peek(bad_short, 12u, &fl) == MB_TCP_FR_DESYNC);
+    /* length > MB_FRAME_MAX(125) -> DESYNC (build_response :20 경계와 동일) */
+    uint8_t bad_big[12]; memcpy(bad_big, one, 12u);
+    bad_big[4] = 0x00u; bad_big[5] = (uint8_t)(MB_FRAME_MAX + 1u);
+    CHECK(mb_tcp_frame_peek(bad_big, 12u, &fl) == MB_TCP_FR_DESYNC);
+    /* length 경계 정확값(125) + 미도착 -> NEED_MORE (DESYNC 아님) */
+    uint8_t max_hdr[6] = { 0x00,0x02, 0x00,0x00, 0x00, (uint8_t)MB_FRAME_MAX };
+    CHECK(mb_tcp_frame_peek(max_hdr, 6u, &fl) == MB_TCP_FR_NEED_MORE);
+}
+
 int main(void)
 {
     test_fc03_read_one();
     test_fc06_write();
     test_rejects();
     test_unit_echo();
+    test_frame_peek();
     if (g_fail == 0) { printf("app_modbus_tcp_frame: all checks PASSED\n"); return 0; }
     printf("app_modbus_tcp_frame: %d FAILED\n", g_fail);
     return 1;

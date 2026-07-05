@@ -425,6 +425,36 @@ print("PIPELINE OK")
 ```
 
      Expected: `PIPELINE OK` (구 펌웨어면 2번째 응답 미수신 timeout). mbpoll 단일 요청 회귀 병행: `mbpoll -m tcp -a 1 -r 7 -c 3 <ip>` 정상.
+
+     **coalesced FC06 회귀(리뷰 HIGH — FC03-only로는 못 잡음)**:
+
+```python
+# scratchpad/mb_pipeline_fc06.py — 한 세그먼트에 FC06 2개(앞 건 클램프 유발) + read-back
+# 기대: 에코 2개(12B×2=24B) 수신, 이후 FC03 read-back = OUT_POWER 50(클램프)·ON_TIME 100.
+import socket, sys, time
+ip = sys.argv[1]
+w1 = bytes([0,1, 0,0, 0,6, 1,6, 0,6, 0,30])    # FC06 addr6 OUT_POWER=30 -> 클램프 50
+w2 = bytes([0,2, 0,0, 0,6, 1,6, 0,7, 0,100])   # FC06 addr7 ON_TIME=100
+s = socket.create_connection((ip, 502), timeout=3)
+s.sendall(w1 + w2)
+buf = b''
+while len(buf) < 24:
+    chunk = s.recv(64)
+    if not chunk:
+        break
+    buf += chunk
+assert len(buf) == 24, f"echo missing: {buf.hex()}"
+time.sleep(0.1)                                  # 이월 poll + mirror 여유
+r1 = bytes([0,3, 0,0, 0,6, 1,3, 0,6, 0,1])     # FC03 OUT_POWER
+r2 = bytes([0,4, 0,0, 0,6, 1,3, 0,7, 0,1])     # FC03 ON_TIME
+s.sendall(r1); a = s.recv(64)
+s.sendall(r2); b = s.recv(64)
+op = int.from_bytes(a[9:11], 'big'); ot = int.from_bytes(b[9:11], 'big')
+print("OUT_POWER", op, "ON_TIME", ot)
+assert op == 50 and ot == 100, "coalesced FC06 write lost"
+print("FC06 COALESCED OK")
+# 뒷정리: OUT_POWER/ON_TIME 원복은 mbpoll 또는 LCD로 수행
+```
   2. **M8**: ESTABLISHED 유지 중 LCD comm_mode→SERIAL 저장 → SWD `Sn_SR(0)` read(`openocd read_memory` — W5500은 SPI 레지스터라 SWD 불가 → 대신 **워크스테이션 소켓이 close/RST 수신**하는지 python 스크립트로 관찰: `recv()`가 b'' 반환) → ETH 재전환 → 재연결+FC03 정상.
   3. **M9**: FC03 1초 폴링 중 이더넷 케이블 분리 → 보드 LCD 터치 반응성 유지(육안) + TCL 샘플러(비침습)로 슈퍼루프 진행 확인(예: sys_tick ms 카운터 연속 증가, >100ms 공백 없음) → 케이블 복귀 → 재연결 정상.
   4. **회귀**: mbpoll -m tcp FC03 미러/FC06 클램프+에코(120→100), 직접-초음파 START→ceiling STATUS `1×n→0`, comm_mode 왕복(ETH↔SERIAL) 무크래시.

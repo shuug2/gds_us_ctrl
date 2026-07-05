@@ -60,13 +60,19 @@ mb_tcp_fr_t mb_tcp_frame_peek(const uint8_t *buf, uint16_t len, uint16_t *frame_
   루프.
 - **워커 루프**: poll당 최대 `MB_TCP_FRAMES_PER_POLL=4` 프레임 —
   `mb_tcp_frame_peek` OK → `mb_tcp_build_response`(슬라이스) → 응답을 TX 누적
-  버퍼에 append → FC06이면 `app_modbus_apply_writes()`(프레임별 순차, 기존
-  respond-then-apply 계약 유지) → 오프셋 전진. 루프 종료 후 **단일 send** —
-  벤더 논블로킹 send는 직전 send의 SENDOK(피어 ACK) 미도래 시 SOCK_BUSY를
-  반환하므로(socket.c:531-550 확인) 프레임별 연속 send는 2번째부터 드롭됨;
-  MBAP 응답 스트림은 자체 구분되므로 코얼레스드 1-send가 정확+안전.
-  NEED_MORE → 잔여 `memmove` 선두 이동. DESYNC → `s_acc_len=0` (폐기, 이미
-  빌드된 응답은 send). 상한 도달 시 잔여는 다음 poll로 자연 이월.
+  버퍼에 append → FC06이면 `app_modbus_apply_writes()` 후 **그 프레임에서 워크
+  즉시 종료**(2026-07-05 whole-branch review HIGH 반영: `apply_writes`는
+  one-change-per-call else-if 체인이고 클램프 잔여(`holding`=raw vs cfg=클램프)
+  재동기가 poll 뒤 `mirror_live()`뿐이라, 같은 poll에서 두 번째 FC06을 apply
+  하면 잔여 재발견으로 굶겨 write가 에코만 나가고 조용히 유실됨. FC06-후-종료
+  = RTU와 동일한 1-write-per-mirror 사이클 + read-after-write stale 차단 +
+  FRAM save poll당 1회 상한). 잔여 프레임은 누적 버퍼로 다음 poll 이월.
+  루프 종료 후 **단일 send** — 벤더 논블로킹 send는 직전 send의 SENDOK(피어
+  ACK) 미도래 시 SOCK_BUSY를 반환하므로(socket.c:531-550 확인) 프레임별 연속
+  send는 2번째부터 드롭됨; MBAP 응답 스트림은 자체 구분되므로 코얼레스드
+  1-send가 정확+안전. NEED_MORE → 잔여 `memmove` 선두 이동. DESYNC →
+  `s_acc_len=0` (폐기, 이미 빌드된 응답은 send). 상한 도달 시 잔여는 다음
+  poll로 자연 이월.
 - **논블로킹 전환**: `socket(..., SF_IO_NONBLOCK)`. `send()` 반환 관측 — 전송
   바이트 != out_len(SOCK_BUSY 포함) → **응답 드롭** + mon 로그 1줄(마스터
   재시도가 Modbus 표준 회복 경로; 재전송 큐 없음 = KISS).
@@ -126,6 +132,14 @@ mb_tcp_fr_t mb_tcp_frame_peek(const uint8_t *buf, uint16_t len, uint16_t *frame_
 
 1. **M6**: 파이프라인 스크립트(python, 한 TCP 세그먼트에 FC03 요청 2개 연속
    write) → 응답 2개 수신. mbpoll 단일 요청 회귀 병행.
+   **+ coalesced FC06 케이스(리뷰 HIGH 회귀)**: 한 세그먼트에
+   [FC06 OUT_POWER=30(클램프 대상)][FC06 ON_TIME=100] → 응답 2개(에코) 수신
+   후 FC03 read-back으로 **OUT_POWER=50(클램프)·ON_TIME=100 둘 다 적용** 확인
+   — 워크-종료 이월(두 번째 write는 다음 poll에서 apply)이 유실 없이 동작함을
+   입증. ⚠ FC03-only 파이프라인은 이 결함을 못 잡음(리뷰 지적).
+   **+ [FC06][FC03 같은 세그먼트]**: FC06 클램프 write + 같은 reg FC03을 한
+   세그먼트로 → FC03 응답이 다음 poll(mirror 후)로 지연돼 **클램프된 값**을
+   반환하는지 확인 (재리뷰 이월 노트 — stale 미러 스냅샷 아님을 입증).
 2. **M8**: ETH 연결(ESTABLISHED, SWD `Sn_SR` read=0x17) → LCD comm_mode→SERIAL
    저장 → `Sn_SR`=CLOSED(0x00) 확인 + 피어 소켓 종료 관측 → ETH 재전환 →
    재연결 정상.
