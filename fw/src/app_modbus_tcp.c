@@ -27,6 +27,14 @@
 #define MB_TCP_FRAMES_PER_POLL   4u
 #define MB_TCP_TXACC_LEN         (MB_TCP_FRAMES_PER_POLL * MB_TCP_RESP_MAX)
 #define MB_TCP_CLOSEWAIT_MAX_MS  500u   /* graceful DISCON 벨트 (spec §3) */
+/* W5500 auto keep-alive 주기 (5s 단위 → 2=10s). 케이블 분리/피어 소멸로
+ * ESTABLISHED가 고착되면 단일-소켓 서버가 새 SYN에 RST(영구 락아웃) —
+ * app_eth는 STATIC_UP에서 링크 재폴링을 안 하므로(선재 설계) 칩 KA가 유일한
+ * 자가-치유: 유휴 10s 후 프로브 → 무응답 → Sn_IR TIMEOUT → SOCK_CLOSED →
+ * FSM 재리슨 (HW E2E M9 케이블-복귀 락아웃으로 발견, 2026-07-05).
+ * ⚠ W5500 KA는 데이터 1회 이상 교환 후부터 동작 — 연결만 하고 무송신인
+ * 피어는 미커버(Modbus 마스터는 즉시 요청하므로 실질 무해). */
+#define MB_TCP_KEEPALIVE_5S      2u
 
 static uint8_t  s_acc[MB_TCP_ACC_LEN];      /* 수신 누적 (partial 이월) */
 static uint16_t s_acc_len;
@@ -76,7 +84,10 @@ static void control_tcp(void)
             break;
         case SOCK_CLOSED:
             s_cw_active = 0u;
-            (void)socket(MB_TCP_SOCK, Sn_MR_TCP, MB_TCP_PORT, SF_IO_NONBLOCK);
+            if (socket(MB_TCP_SOCK, Sn_MR_TCP, MB_TCP_PORT, SF_IO_NONBLOCK)
+                == (int8_t)MB_TCP_SOCK) {
+                setSn_KPALVTR(MB_TCP_SOCK, MB_TCP_KEEPALIVE_5S);
+            }
             break;
         default:
             break;
