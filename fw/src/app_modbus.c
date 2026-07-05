@@ -303,6 +303,18 @@ void app_modbus_init(void)
     apply_config();
 }
 
+/* M8: TCP 서버를 떠나는 전이(RTU 점유 or ETH 불가)에서 sock0 + 수신 상태
+ * 정리 — ESTABLISHED 방치 차단(감사 M8). 전이에서만 호출해 매-tick 중복
+ * close(무해하나 SPI 낭비) 회피. g_tcp_active=1은 app_eth_available() 참
+ * 경로에서만 세워지므로 칩-부재 시 도달 불가(vendor close 스핀 안전). */
+static void tcp_leave(void)
+{
+    if (g_tcp_active != 0u) {
+        app_modbus_tcp_reset();
+        g_tcp_active = 0u;
+    }
+}
+
 void app_modbus_tick(void)
 {
     apply_config();
@@ -311,7 +323,7 @@ void app_modbus_tick(void)
     if (g_applied.owned != 0u) {
         /* RTU owns USART6 (comm_mode==SERIAL && addr!=0). Behavior-identical
          * to the hardware-verified slice-1 path. */
-        g_tcp_active = 0u;
+        tcp_leave();
         uint8_t frame[MB_FRAME_MAX];
         uint8_t len = usart6_mb_rx_frame(frame, sizeof frame);
         if (len != 0u) {
@@ -343,6 +355,6 @@ void app_modbus_tick(void)
         app_modbus_tcp_poll();   /* decode(MB_MODE_TCP) + apply on FC06 + respond */
         mirror_live();           /* keep holding[] fresh for reads (closes the gap) */
     } else {
-        g_tcp_active = 0u;
+        tcp_leave();
     }
 }
