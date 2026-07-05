@@ -99,7 +99,19 @@ void app_modbus_tcp_poll(void)
         if (avail > space) {
             avail = space;
         }
+        /* ⚠ recv만 블로킹 모드로 일시 토글: 이 vendored socket.c의 비-IPv6
+         * recv 경로(:687-692)는 논블로킹 체크가 recvsize 체크보다 앞이라
+         * NONBLOCK이면 데이터가 있어도 무조건 SOCK_BUSY 반환(업스트림과
+         * 순서 뒤집힘 — HW E2E 전면 무응답으로 발견, 2026-07-05). RSR>0
+         * 가드 후 호출이라 블로킹 recv도 즉시 반환(RSR은 RECV 커맨드 전엔
+         * 감소 불가; 피어 RST/close 시 벤더가 에러 반환 → 스톨 불가).
+         * vendor read-only → ctlsocket 공개 API 우회. send/disconnect는
+         * NONBLOCK 유지 (M9). */
+        uint8_t iomode = SOCK_IO_BLOCK;
+        (void)ctlsocket(MB_TCP_SOCK, CS_SET_IOMODE, &iomode);
         int32_t got = recv(MB_TCP_SOCK, &s_acc[s_acc_len], avail);
+        iomode = SOCK_IO_NONBLOCK;
+        (void)ctlsocket(MB_TCP_SOCK, CS_SET_IOMODE, &iomode);
         if (got > 0) {
             s_acc_len = (uint16_t)(s_acc_len + (uint16_t)got);
         }
