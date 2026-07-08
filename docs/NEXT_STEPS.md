@@ -2,7 +2,8 @@
 
 > CLAUDE.md 에 명시된 first-load 문서. 새 세션 시작 시 본 파일을 가장 먼저 읽고 진행 상황 + 다음 작업을 확인.
 >
-> **본 문서 최신화: 2026-07-05** — weld 사이클 E2E 전항목 PASS(풀배선 벤치) + 벤치 수정 6커밋(§1.1 표 하단): 클럭 **HSI→HSE**(주파수/타이밍 편차 원천 제거), 전류 표시 실동작(rig-fit), RESET/SEEK 물리 구동(**스윕 주체=보드측 실증** — B-SEAM 최대 미지수 해소), E-stop LCD/부저, SENSOR ON/OFF, overload 아이콘-only. HW-gated 백로그 대폭 축소(§1.2/§2.2). 보드 상태=§2.3-a. ⚠ push 미실행.
+> **본 문서 최신화: 2026-07-08** — 사용자 신규 3건 전부 코드-완료(§2.2 상단): 부팅 터치 유령 런 fix(`e26e15b`, data=0 물리 토글) + REMOTE icon(`60792da`, samd20 case 9) + 전류 EMA τ≈100ms(`78a1e43`). 보드 미플래시 — 벤치 체크리스트 = 루트 `HANDOFF.md` §Resume. push 미실행(main + 이월 태그).
+> (직전 최신화 2026-07-05 — weld 사이클 E2E 전항목 PASS(풀배선 벤치) + 벤치 수정 6커밋(§1.1 표 하단): 클럭 **HSI→HSE**(주파수/타이밍 편차 원천 제거), 전류 표시 실동작(rig-fit), RESET/SEEK 물리 구동(**스윕 주체=보드측 실증** — B-SEAM 최대 미지수 해소), E-stop LCD/부저, SENSOR ON/OFF, overload 아이콘-only. HW-gated 백로그 대폭 축소(§1.2/§2.2). 보드 상태=§2.3-a.)
 > (직전 최신화 2026-07-02 — 전면 감사 반영: §1.1 표에 i2c-pot/ovtime 추가, §1.3 적용 결정 7건(D0~D6) 신설. 발견 상세 = git 이력의 HANDOFF 2026-07-02판.)
 > (직전 최신화 2026-06-20 — weld 슬라이스3 + SEEK/RESET HW 검증·머지·푸시 완료.) 변경 이력 = `docs/changelog.md`(최신 위), 세션별 상태 로그 = `docs/superpowers/RESUME.md`(SessionStart 자동 로드).
 >
@@ -89,12 +90,9 @@ make -C fw/test test                                # 5 스위트 PASS 기대 (r
 
 ### 2.2 다음 작업 후보
 
-**2026-07-06 현재: 감사 큐 완전 소진 + overload 종결 + mbtcp-hardening 머지** — 활성 후보는 사실상 HMI Task 8 하나, 나머지는 사용자 보류.
+**2026-07-08 현재: 사용자 신규 3건 전부 코드-완료(HW 벤치 게이트)** — 활성 = FW 벤치 검증 세션 + HMI Task 8, 나머지는 사용자 보류.
 
-- **[2026-07-06 사용자 신규 등록 3건 — 상세는 작업 시작 시 사용자가 설명 예정]**:
-  1. **부팅 딜레이 시 터치 에러** — 부팅(워밍업 ~4s?) 중 LCD 터치 관련 오류 거동. 상세 대기.
-  2. **원격제어 시 REMOTE icon 점등** — Modbus/원격 제어 중 LCD REMOTE 아이콘 표시. 상세 대기. (참고: samd20 DISP_REMOTE/modbus_status 표시는 Stage C 때 의도적 스킵 — app_lcd_disp.c 주석 "DISP_REMOTE... skipped".)
-  3. **전류 표시 필터 2배 빠르게** — 현 EMA α=1/8 per 50ms(τ≈400ms, `app_reg.c` reg_acquire_step) 확인 후 반응속도 ×2(τ≈200ms 방향, 예: α=1/4). ⚠ EMA↔에너지 적분 커플링(6b 이연 MEDIUM)과 교차 — 같이 볼 것.
+- ~~**[2026-07-06 사용자 신규 등록 3건]**~~ — ✅ **전부 코드-완료 2026-07-08**(`e26e15b`/`60792da`/`78a1e43`, 전건 cpp-review 0 Crit/High, main 직접 커밋): ① 부팅 터치 유령 런 = data=0 물리 토글 fix ② REMOTE icon = samd20 case 9 포팅(1s hold) ③ 전류 EMA α 1/8→1/2(τ≈100ms). **벤치 검증 미실시**(보드 미플래시) — 체크리스트 = 루트 `HANDOFF.md` §Resume (유령 런 소멸/REMOTE 에셋 렌더/반응 체감+energy 타이밍[리뷰 MEDIUM]).
 - **HMI SP1 Task 8 실보드 E2E** — 진입 = `~/dev/work/gds_us_hmi` 폴더 세션 + 그쪽 HANDOFF.md (이 repo 아님). RS-485 어댑터 필요. **병행: RS-485 첫-write 재현 절차 실행** — `docs/superpowers/research/2026-07-05-rs485-first-write.md` §6 (전원사이클→첫 FC06 ×10 기록; 최유력=글리치 병합, V-A/V-B 시나리오 분리).
 - **6b signal calibration 잔여** — ⏸ **사용자 보류(2026-07-05 c)**. 전류 다점/2점 fit(낮은 부하 실측점 — 오프셋 제거로 중간 구간 편차 가능), ch0 도메인, weld energy 절대 E2E + divisor, EMA↔에너지 적분 디커플링(리뷰 MEDIUM), OUTERR(하위 항목).
 - **B-SEAM 잔여** — ⏸ **사용자 보류(2026-07-05 c)**. 스코프 파형 정밀 관측 + PB12 용도 + 진폭 추종 (구동·스윕 주체는 해소).
@@ -102,9 +100,10 @@ make -C fw/test test                                # 5 스위트 PASS 기대 (r
 - 진입 절차 = **§3** (brainstorming → spec → writing-plans → subagent-driven → finishing).
 - ⚠ 머지/푸시 정책: origin(SSH) — 머지 후 `git push origin main` + 태그 푸시(§6). **현재 미푸시: main 18±커밋 + tag `hw-revA_fw-stage-mbtcp-hardening`**.
 
-### 2.3-a 보드 현 상태 (2026-07-06 마감 — 최신)
+### 2.3-a 보드 현 상태 (2026-07-08 마감 — 최신)
 
-- **main 최신(`7c474e1` 머지 코드 = `434e007` tip) 플래시됨**. **풀배선 리그** 유지: 양손 SW_START1/2(PC12/PB11)·SENSE_DN/UP(PA11/PA12)·EMSW(PC11)·B_START/B_RESET + 실 혼/실린더 + 전류 sense(PB1) + **이더넷 케이블 연결**(W5500). RS-485 어댑터 미접속.
+- ⚠ **2026-07-08 신규 3커밋(`e26e15b`/`60792da`/`78a1e43`) 미플래시** — 보드는 아래 2026-07-06 상태 그대로. 다음 벤치 첫 단계 = 재빌드+재플래시(플래시↔ELF 대조), 이후 체크리스트 = 루트 `HANDOFF.md` §Resume (전류 0.60A[이월]→유령 런 소멸→REMOTE icon→EMA 반응→energy 타이밍).
+- **`7c474e1` 머지 코드(= `434e007` tip) 플래시됨**. **풀배선 리그** 유지: 양손 SW_START1/2(PC12/PB11)·SENSE_DN/UP(PA11/PA12)·EMSW(PC11)·B_START/B_RESET + 실 혼/실린더 + 전류 sense(PB1) + **이더넷 케이블 연결**(W5500). RS-485 어댑터 미접속.
 - **comm = ETH_STATIC, IP 192.168.1.199** (mbtcp E2E 잔류) — 벤치 기본(SERIAL/addr=1/9600/EVEN) 복원은 LCD.
 - **테스트 잔재 설정**: TIMEOVER=2s, delay1=76(760ms), delay2=184, delay3=50, trigger2/3=109/90, **OUT_POWER=56/ON_TIME=56(2026-07-06 원복됨)**, f_safty=1, EN_MULTI=0/EN_ENERGY=0, model_type=multi(1), mo 60/90/100/150, **cal_val=1(2026-07-05 c SWD 실측 — 구 노트 "2"는 stale)**, freq_cal_val=0(**HSE라 0 유지가 정답**). 운영 투입 전 복원 필요.
 - ⚠ 다음 벤치 첫 항목: **전류 표시 0.60A 재확인**(전달함수 재정의 `54e5220` 후 명시 확인 미기록 — RUN+전류계 0.6A ↔ 표시 0.60A, 유휴 0.00).

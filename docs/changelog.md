@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### 2026-07-08 — 사용자 신규 3건 코드-완료 (부팅 터치 유령 런 / REMOTE icon / 전류 EMA 100ms) — HW 벤치 게이트
+
+2026-07-06 등록 사용자 3건 전부 구현·리뷰 통과·main 직접 커밋(벤치-수정 관례). 보드 미사용 세션 — **보드 미플래시**, 벤치 검증은 다음 보드 세션(체크리스트=루트 HANDOFF §Resume).
+
+- **`e26e15b` fix(lcd) 부팅 딜레이 터치 유령 런**: 근본원인 = V30 RUN data=0 양엣지 quirk의 런-상태 매핑이 app_reg silent-reject(워밍업 ~4s/seek-reset 체인/E-stop·overload·fault/동일-드레인)마다 페어링 반전 → release가 START로 재매핑되어 쥐지 않은 런(30s 캡) + 탭마다 정지→재시작(="터치 무시+계속 출력+전원사이클"). 수정 = 입력 레이어 물리 토글 `s_run_key_down` + SYS_PIC_NOW 재앵커, app_reg 무수정. **1차 설계(reg arm-swallow-on-reject) 폐기** — force-stop 경로에서 release를 press로 오인해 재반전(reg에서 구분 불가). cpp APPROVE-W-C(0C/0H).
+- **`60792da` feat(lcd) REMOTE icon**: samd20 DISP_REMOTE(case 9) 포팅 — 유효 Modbus 요청 디코드(RTU/TCP) 동안 VP 0x120e ON, 마지막 요청 후 1s OFF(legacy 100카운트 등가). `app_modbus_note_remote/remote_active` + ICON_RUN 동형 엣지-쓰기. cpp APPROVE(0C/0H). ⚠ V30 에셋 0x120e 렌더는 벤치 첫 확인.
+- **`78a1e43` feat(reg) ch1 표시 EMA α 1/8→1/2**: τ≈400→≈100ms(50ms 커밋 유지), "업데이트 주기 100mS" 요청. 과하면 `d/4` 폴백. cpp APPROVE-W-C(0C/0H, MEDIUM=적분 커플링 실거동 → energy-exit/OVTIME 타이밍 벤치 재확인 이월).
+- 게이트: our-code 0-warning FLASH 48.58%/RAM 19.36% + host 13스위트 PASS. ⚠ push 미실행(main + 태그 `hw-revA_fw-stage-mbtcp-hardening` 이월분).
+
 ### 2026-07-05 c-4 — modbus-tcp-hardening (M6/M8/M9) HW E2E PASS + MERGED
 
 감사 잔존 MEDIUM 3건 종결 (merge `7c474e1` --no-ff, tag `hw-revA_fw-stage-mbtcp-hardening`, 브랜치 삭제). subagent-driven 4-Task(spec `fe8f64b`/plan `3fc4465`), whole-branch cpp-review(opus) + HW E2E(이더넷 벤치 .199) 전항목 PASS.
