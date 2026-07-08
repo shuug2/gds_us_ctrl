@@ -257,11 +257,14 @@ static void reg_acquire_step(void)
     g_reg.ch1_acc += s1;
     if (++g_reg.ch1_cnt >= CH1_SAMPLES) {
         uint32_t avg = (g_reg.ch1_acc * 6u) / CH1_SAMPLES;
-        /* 표시 안정화 EMA (사용자 요청 2026-07-05): α=1/8 per 50ms 커밋 →
-         * τ≈400ms — 전류가 천천히 추종 + 노이즈 스파이크의 피크 래칫 완화.
-         * ×16 고정소수(잔여분 보존), 유휴↔런 전이 손실 없음(연속 필터). */
+        /* 표시 안정화 EMA: α=1/2 per 50ms 커밋 → τ≈100ms (사용자 요청
+         * 2026-07-08 "업데이트 주기 100ms" — 2026-07-05의 α=1/8·τ≈400ms가
+         * 너무 느림). 스파이크 억제는 그만큼 약해짐(50샘플 평균이 1차 방어).
+         * ×16 고정소수(잔여분 보존), 유휴↔런 전이 손실 없음(연속 필터).
+         * ⚠ 에너지 적분은 이 필터 통과 후 curr_power를 누산(6b 디커플링
+         * 이연) — α 증가는 적분 지연도 같이 줄임(legacy 무필터에 근접). */
         int32_t d = (int32_t)(avg << 4) - (int32_t)s_ch1_filt_x16;
-        s_ch1_filt_x16 = (uint32_t)((int32_t)s_ch1_filt_x16 + d / 8);
+        s_ch1_filt_x16 = (uint32_t)((int32_t)s_ch1_filt_x16 + d / 2);
         g_reg.ch1_avg = (uint16_t)(s_ch1_filt_x16 >> 4);
         g_reg.ch1_acc = 0u;
         g_reg.ch1_cnt = 0u;
