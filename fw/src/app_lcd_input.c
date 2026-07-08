@@ -154,8 +154,15 @@ static uint8_t setup1_page_for_mode(uint8_t sys_mode)
     return LCD_SETUP_STD1;                              /* 10 (SYS_STD) */
 }
 
+/* Physical RUN-key state reconstructed from the V30 data=0 edge stream (one
+ * event per physical edge, alternating press/release — HW-traced 2026-06-08).
+ * Zero-init assumes the key is up at boot (same assumption as the SETUP_MODEL
+ * long-press pairing below). Reset on SYS_PIC_NOW re-init: a panel reset
+ * means the release edge will never arrive (§4.4). */
+static uint8_t s_run_key_down;
+
 /* KEY_MULTI (0x1080): 1=RESET / 2=SEEK / 3=RUN(press) / 4=RUN(release); the V30
- * DGUS asset additionally returns 0=RUN on both edges (mapped by run state — §4.4).
+ * DGUS asset additionally returns 0=RUN on both edges (toggle-mapped — §4.4).
  * Raise the ultrasonic command hook only (Stage D owns the us/sig/energy FSM).
  * RUN press also writes the DAC. RESET in an OVLD/OUTERR error clears those bits,
  * blanks the icons, and restores the run page (samd20 main.c:3633-3706). */
@@ -193,15 +200,22 @@ static void handle_key_multi(uint16_t data16)
     } else if (data16 == 0) {                           /* RUN (V30 panel: key value 0 on both edges) */
         /* The V30 DGUS asset returns KEY_MULTI=0 on BOTH press and release for the
          * RUN button (RESET=1/SEEK=2 are correct; data=0 is unique to RUN, HW-traced
-         * 2026-06-08). Map to START vs RUN_RELEASE by the live run state so the
-         * down/up data=0 pair reconstructs hold-to-run; self-syncing (a dropped edge
-         * is corrected by the next press). The legacy data=3/4 branches above stay
-         * for forward-compat if the asset is later fixed to send them. See spec §4.4.
-         * Note: us_run_status is published by app_reg_tick, so back-to-back data=0
-         * frames drained in the same loop iteration both read the stale (pre-tick)
-         * status; app_reg_command's US_IDLE guard rejects the double-START and the
-         * release becomes a dropped edge (self-syncing per spec §4.4). */
-        if (app_lcd_measure()->us_run_status == US_IDLE) {
+         * 2026-06-08). Each data=0 event IS one physical edge, so the s_run_key_down
+         * toggle reconstructs the press/release pairing exactly. Mapping by the live
+         * run state instead (pre-2026-07-08) inverted the pairing whenever app_reg
+         * silently rejected the mapped START (boot warm-up ~4 s, seek/reset chain,
+         * E-stop/overload/fault, back-to-back frames in one drain): the physical
+         * release then re-mapped to START and began an un-held run that nothing
+         * released (30 s safety cap only), and every further tap stop-then-
+         * restarted it — RUN looked dead until power cycle. With the toggle a
+         * rejected press simply pairs with a no-op RELEASE-while-IDLE (which also
+         * clears any armed swallow_start). Only a lost or duplicated edge frame
+         * can drift the toggle (the HW trace saw neither: one event per edge, no
+         * auto-repeat); SYS_PIC_NOW re-init (panel reset) re-anchors it. The legacy
+         * data=3/4 branches above stay for forward-compat if the asset is later
+         * fixed to send them. See spec §4.4. */
+        s_run_key_down ^= 1u;
+        if (s_run_key_down != 0u) {
             app_lcd_hook_us_command(US_CMD_START);
             app_lcd_hook_set_pot(cfg->output_power);    /* DAC on run start (stub, F2) */
         } else {
@@ -968,6 +982,7 @@ void app_lcd_input_dispatch(const dgus_frame_t *f)
              * makes the next disp_step see a real edge after init_mode clears
              * the icon (spec §4.3). Harmless when already idle. */
             app_lcd_hook_us_command(US_CMD_RUN_RELEASE);
+            s_run_key_down = 0u;   /* panel reset: the release edge never arrives */
             app_lcd_var_init();
             app_lcd_send_model_str(cfg->model_freq, cfg->model_type);
             app_lcd_init_mode(cfg);
