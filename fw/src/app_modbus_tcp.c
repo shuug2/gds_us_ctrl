@@ -163,6 +163,7 @@ void app_modbus_tcp_poll(void)
         bool     wrote = false;
         if (mb_tcp_build_response(app_modbus_core(), &s_acc[off], frame_len,
                                   &s_txacc[tx_len], &out_len, &fc)) {
+            app_modbus_note_remote();   /* REMOTE icon (samd20 modbus_status) */
             tx_len = (uint16_t)(tx_len + out_len);
             if (fc == 0x06u) {
                 app_modbus_apply_writes();

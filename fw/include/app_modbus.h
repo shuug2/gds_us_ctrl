@@ -30,3 +30,11 @@ mb_core_t *app_modbus_core(void);
  * transport processed an FC06 (RTU inline; TCP via this accessor). Operates
  * on the shared core from app_modbus_core(). */
 void app_modbus_apply_writes(void);
+
+/* REMOTE-icon activity (samd20 modbus_status/modbus_comm_cnt, main.c:5187-
+ * 5199): note_remote() is stamped by whichever transport decodes a valid
+ * request (RTU/TCP); remote_active() then holds true for 1 s after the last
+ * request (legacy timeout = 100 case-9 wraps ~= 1 s) and falls back to false.
+ * Consumed by app_lcd_disp_step to drive DISP_REMOTE. */
+void app_modbus_note_remote(void);
+bool app_modbus_remote_active(void);

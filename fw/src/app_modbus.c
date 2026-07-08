@@ -20,6 +20,7 @@
 #include "app_input.h"      /* app_estop_active (STATUS ESTOP 비트) */
 #include "app_config.h"
 #include "dgus_lcd.h"     /* DISP_*_EN echo (samd20 send_lcd_data_var) */
+#include "sys_tick.h"     /* REMOTE icon 1 s hold timestamp */
 #include "mon.h"
 
 #define MB_COMM_MODE_SERIAL  0u   /* cfg->comm_mode: 0=SERIAL 1=ETH_STATIC 2=ETH_DHCP */
@@ -34,6 +35,24 @@ static struct {
     uint8_t addr;
 } g_applied;
 static uint8_t g_tcp_active;   /* rising-edge baseline guard for ETH mode */
+
+#define MB_REMOTE_HOLD_MS  1000u  /* samd20 modbus_comm_cnt>100 @ case-9 ~10ms */
+static uint32_t s_remote_ms;    /* last decoded request (REMOTE icon hold base) */
+static uint8_t  s_remote_seen;  /* 0 until the first request — boot/wrap guard */
+
+/* samd20 modbus_status 등가: 유효 요청 디코드 시각 스탬프 (RTU/TCP 공용). */
+void app_modbus_note_remote(void)
+{
+    s_remote_ms   = sys_tick_get_ms();
+    s_remote_seen = 1u;
+}
+
+/* REMOTE icon 게이트: 마지막 요청 후 1 s 유지 (samd20 main.c:5189-5192). */
+bool app_modbus_remote_active(void)
+{
+    return (s_remote_seen != 0u) &&
+           ((uint32_t)(sys_tick_get_ms() - s_remote_ms) < MB_REMOTE_HOLD_MS);
+}
 
 bool app_modbus_owns_usart6(void)
 {
@@ -331,6 +350,7 @@ void app_modbus_tick(void)
             uint8_t fc = 0u;
             uint8_t n  = mb_core_decode(&g_mb, frame, len, MB_MODE_RTU, resp, &fc);
             if (n != 0u) {
+                app_modbus_note_remote();   /* REMOTE icon (samd20 modbus_status) */
                 usart6_mb_send(resp, n);
             }
             if (fc == 0x06u) {

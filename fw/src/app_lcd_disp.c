@@ -28,6 +28,7 @@
 #include <stdbool.h>
 #include "app_lcd.h"
 #include "app_config.h"
+#include "app_modbus.h"   /* app_modbus_remote_active — DISP_REMOTE icon */
 #include "dgus_lcd.h"
 
 /* US-on gate. The display picks curr/max while the ultrasonic output is on, else
@@ -183,7 +184,7 @@ static void disp_send_val(const lcd_measure_t *m)
  * samd20 gates the time bar on sig_run_status (curr us_on_time_200m vs last_time);
  * lcd_measure_t carries no last_time, so we feed us_on_time_200m on both paths (per
  * the task spec; stub → 0 → empty bar). DISP_REMOTE/modbus_status (samd20 case 9)
- * is skipped — Stage C.
+ * is supplied since 2026-07-08 via app_modbus_remote_active() (edge-driven below).
  *--------------------------------------------------------------*/
 void app_lcd_disp_step(void)
 {
@@ -201,6 +202,16 @@ void app_lcd_disp_step(void)
     if (run_on != prev_run_on) {
         dgus_write_u16(ICON_RUN, run_on ? 1u : 0u);
         prev_run_on = run_on;
+    }
+
+    /* DISP_REMOTE (samd20 case 9, main.c:5187-5199): Modbus 요청이 흐르는 동안
+     * REMOTE icon ON, 마지막 요청 후 1 s에 OFF. Stage C에서 이연했던 공급을
+     * 채움 (2026-07-08). ICON_RUN과 같은 write-on-change 패턴. */
+    static bool prev_remote_on = false;
+    bool remote_on = app_modbus_remote_active();
+    if (remote_on != prev_remote_on) {
+        dgus_write_u16(DISP_REMOTE, remote_on ? 1u : 0u);
+        prev_remote_on = remote_on;
     }
 
     switch (s) {
