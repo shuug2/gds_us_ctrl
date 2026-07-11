@@ -2,7 +2,8 @@
 
 > CLAUDE.md 에 명시된 first-load 문서. 새 세션 시작 시 본 파일을 가장 먼저 읽고 진행 상황 + 다음 작업을 확인.
 >
-> **본 문서 최신화: 2026-07-08** — 사용자 신규 3건 전부 코드-완료(§2.2 상단): 부팅 터치 유령 런 fix(`e26e15b`, data=0 물리 토글) + REMOTE icon(`60792da`, samd20 case 9) + 전류 EMA τ≈100ms(`78a1e43`). 보드 미플래시 — 벤치 체크리스트 = 루트 `HANDOFF.md` §Resume. push 미실행(main + 이월 태그).
+> **본 문서 최신화: 2026-07-11** — FW 벤치: 신규 3건 중 **#1 유령 런·#2 REMOTE icon(V30 0x120e 첫 입증)·energy/OVTIME 타이밍 HW PASS**, #3 EMA 체감·전류 0.60A=전류계 이월(2회째). 벤치 중 발견 **OVTIME 경고화면 복귀 버그 fix 2커밋**(`83498e7` fault_cleared 엣지 복귀 + `88faf08` show_error lcd_status 스탬프 누락=근본원인, HW 재검증 PASS — 상세=루트 `HANDOFF.md`). 보드=`88faf08` 플래시됨. **★ 다음=HMI Task 8**(gds_us_hmi). push=main `88faf08`까지 완료, 남은 것=마감 docs 커밋+이월 태그.
+> (직전 최신화 2026-07-08 — 사용자 신규 3건 전부 코드-완료: 부팅 터치 유령 런 fix(`e26e15b`) + REMOTE icon(`60792da`) + 전류 EMA τ≈100ms(`78a1e43`).)
 > (직전 최신화 2026-07-05 — weld 사이클 E2E 전항목 PASS(풀배선 벤치) + 벤치 수정 6커밋(§1.1 표 하단): 클럭 **HSI→HSE**(주파수/타이밍 편차 원천 제거), 전류 표시 실동작(rig-fit), RESET/SEEK 물리 구동(**스윕 주체=보드측 실증** — B-SEAM 최대 미지수 해소), E-stop LCD/부저, SENSOR ON/OFF, overload 아이콘-only. HW-gated 백로그 대폭 축소(§1.2/§2.2). 보드 상태=§2.3-a.)
 > (직전 최신화 2026-07-02 — 전면 감사 반영: §1.1 표에 i2c-pot/ovtime 추가, §1.3 적용 결정 7건(D0~D6) 신설. 발견 상세 = git 이력의 HANDOFF 2026-07-02판.)
 > (직전 최신화 2026-06-20 — weld 슬라이스3 + SEEK/RESET HW 검증·머지·푸시 완료.) 변경 이력 = `docs/changelog.md`(최신 위), 세션별 상태 로그 = `docs/superpowers/RESUME.md`(SessionStart 자동 로드).
@@ -98,17 +99,19 @@ make -C fw/test test                                # 5 스위트 PASS 기대 (r
 - **B-SEAM 잔여** — ⏸ **사용자 보류(2026-07-05 c)**. 스코프 파형 정밀 관측 + PB12 용도 + 진폭 추종 (구동·스윕 주체는 해소).
 - **후속 소소(비긴급)**: app_eth STATIC_UP 링크 재폴링 부재(선재 — KA로 완화됨, 근본 수정은 링크 FSM 확장) / KA 무송신-피어 잔여(Modbus 실질 무해) / defer Minor 목록 = `.superpowers/sdd/progress.md`(mbtcp) + 구 ledger들.
 - 진입 절차 = **§3** (brainstorming → spec → writing-plans → subagent-driven → finishing).
-- ⚠ 머지/푸시 정책: origin(SSH) — 머지 후 `git push origin main` + 태그 푸시(§6). **현재 미푸시: main 18±커밋 + tag `hw-revA_fw-stage-mbtcp-hardening`**.
+- ⚠ 머지/푸시 정책: origin(SSH) — 머지 후 `git push origin main` + 태그 푸시(§6). **현재 미푸시: 마감 docs 커밋 + tag `hw-revA_fw-stage-mbtcp-hardening`**(main `88faf08`까지는 push 완료 — 2026-07-11 확인).
 
-### 2.3-a 보드 현 상태 (2026-07-08 마감 — 최신)
+### 2.3-a 보드 현 상태 (2026-07-11 마감 — 최신)
 
-- ⚠ **2026-07-08 신규 3커밋(`e26e15b`/`60792da`/`78a1e43`) 미플래시** — 보드는 아래 2026-07-06 상태 그대로. 다음 벤치 첫 단계 = 재빌드+재플래시(플래시↔ELF 대조), 이후 체크리스트 = 루트 `HANDOFF.md` §Resume (전류 0.60A[이월]→유령 런 소멸→REMOTE icon→EMA 반응→energy 타이밍).
-- **`7c474e1` 머지 코드(= `434e007` tip) 플래시됨**. **풀배선 리그** 유지: 양손 SW_START1/2(PC12/PB11)·SENSE_DN/UP(PA11/PA12)·EMSW(PC11)·B_START/B_RESET + 실 혼/실린더 + 전류 sense(PB1) + **이더넷 케이블 연결**(W5500). RS-485 어댑터 미접속.
-- **comm = ETH_STATIC, IP 192.168.1.199** (mbtcp E2E 잔류) — 벤치 기본(SERIAL/addr=1/9600/EVEN) 복원은 LCD.
-- **테스트 잔재 설정**: TIMEOVER=2s, delay1=76(760ms), delay2=184, delay3=50, trigger2/3=109/90, **OUT_POWER=56/ON_TIME=56(2026-07-06 원복됨)**, f_safty=1, EN_MULTI=0/EN_ENERGY=0, model_type=multi(1), mo 60/90/100/150, **cal_val=1(2026-07-05 c SWD 실측 — 구 노트 "2"는 stale)**, freq_cal_val=0(**HSE라 0 유지가 정답**). 운영 투입 전 복원 필요.
-- ⚠ 다음 벤치 첫 항목: **전류 표시 0.60A 재확인**(전달함수 재정의 `54e5220` 후 명시 확인 미기록 — RUN+전류계 0.6A ↔ 표시 0.60A, 유휴 0.00).
+- **main `88faf08` 플래시·검증됨** (2026-07-11: 신규 3건 코드 + OVTIME 경고화면 복귀 fix 2건 포함). 벤치 PASS = #1 유령 런 소멸·#2 REMOTE icon(V30 0x120e 첫 입증)·energy/OVTIME 타이밍(t≈1.0–1.09s ×3)·경고화면 복귀(Modbus/터치 양경로).
+- **풀배선 리그** 유지: 양손 SW_START1/2(PC12/PB11)·SENSE_DN/UP(PA11/PA12)·EMSW(PC11)·B_START/B_RESET + 실 혼/실린더 + 전류 sense(PB1) + **이더넷 케이블 연결**(W5500). RS-485 어댑터 미접속.
+- **comm = ETH_STATIC, IP 192.168.1.199** — **HMI Task 8 진입 시 LCD에서 SERIAL/addr=1/9600/EVEN 복원 필요**.
+- **테스트 잔재 설정**: TIMEOVER=8, delay1=76(760ms), delay2=184, delay3=50, trigger2/3=109/90, OUT_POWER=56/ON_TIME=56, f_safty=1, EN_MULTI=0/EN_ENERGY=0(2026-07-11 OVTIME 벤치 후 원복 확인), **model_type=multi(1)**, mo 60/90/100/150, cal_val=1, freq_cal_val=0(**HSE라 0 유지가 정답**). 운영 투입 전 복원 필요.
+- ⚠ **model_type=multi(1) 함정**: Modbus 직접런 운영 ceiling 미적용(slice-D 설계=HAND 전용, 30s 안전 캡만) — 테스트 후 반드시 STOP(-r 29). ceiling 회귀 시험은 model_type=hand 전제(전환 시 EMSW E-stop 유발 주의, rig 노트 R1).
+- ⚠ 이월(2회째, 전류계 세션): **전류 표시 0.60A**(RUN+전류계 0.6A↔표시 0.60A, 유휴 0.00) + **#3 EMA 반응 체감**(과하면 `d/2`→`d/4` 폴백) + **energy-exit 실전류**.
 - ⚠ 빌드마다 bss 주소 이동 — SWD read 전 현재 ELF에서 `arm-none-eabi-gdb -batch -ex "p/x &심볼"` 재확보 필수. 비침습 샘플러 = openocd TCL 루프(read_memory, halt 없음, ~1.4ms/샘플).
-- ⚠ push 미실행 (main 18±커밋 + 태그 1) — 사람 터미널에서 `git push origin main && git push origin hw-revA_fw-stage-mbtcp-hardening`.
+- ⚠ mbpoll: 쓰기 값은 **IP 뒤**(`mbpoll ... .199 1`) / 부팅 직후·연속 TCP 트랜잭션 간헐 실패 → 재시도(0.4s ×3) 필수.
+- ⚠ push: main `88faf08`까지 완료(2026-07-11 확인) — 남은 것=마감 docs 커밋+태그 1, 사람 터미널에서 `git push origin main && git push origin hw-revA_fw-stage-mbtcp-hardening`.
 
 ### 2.3 보드 현 상태 (2026-06-20 마감 시점)
 

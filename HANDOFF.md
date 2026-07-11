@@ -1,54 +1,54 @@
-# Handoff: 2026-07-08 세션 — 사용자 신규 3건 전부 코드-완료 (부팅 터치 유령 런 fix + REMOTE icon + 전류 EMA 100ms), HW 벤치 게이트
+# Handoff: 2026-07-11 FW 벤치 세션 — 신규 3건 중 2건 HW PASS + OVTIME 경고화면 복귀 버그 발견·수정·검증, 다음 = HMI
 
-**Generated**: 2026-07-08 (세션 마감, 보드 미사용 코딩 세션)
-**Branch**: `main` tip `78a1e43`(+이 docs 커밋) — **⚠ push 미실행** (사람 터미널: `git push origin main && git push origin hw-revA_fw-stage-mbtcp-hardening` — 태그는 이전 세션분이 아직 origin에 없음, main 커밋은 세션 시작 시점까지는 동기였음)
-**Status**: 코드 3건 완료·리뷰 통과·커밋됨. **보드에 미플래시** — 다음 보드 세션에서 재플래시 + 벤치 체크리스트(§Resume) 실행.
+**Generated**: 2026-07-11 (세션 마감, 풀배선 벤치 + ETH .199 인터랙티브)
+**Branch**: `main` tip `88faf08`(+이 docs 커밋) — **main `88faf08`까지 push 완료**(세션 중 확인) — 남은 push = 이 docs 커밋 + **태그 `hw-revA_fw-stage-mbtcp-hardening`**(사람 터미널: `git push origin main && git push origin hw-revA_fw-stage-mbtcp-hardening`)
+**Status**: FW 벤치 사실상 종결(전류계 항목만 이월). **★ 다음 세션 = HMI Task 8** (`~/dev/work/gds_us_hmi`, 별도 repo).
 
-> **요약**: 2026-07-06 등록된 사용자 신규 3건을 모두 코드-완료. ⑴ **부팅 딜레이 터치 유령 런**(`e26e15b`) — 근본원인 = V30 RUN 버튼 data=0 양엣지 quirk의 런-상태 매핑이 "조용히 거부되는 START"(부팅 워밍업 ~4s·seek/reset 체인·E-stop/overload/fault)마다 press/release 페어링을 반전시킴 → 물리 release가 START로 재매핑되어 쥐지 않은 런 시작 + 이후 탭마다 정지→재시작(사용자 관측 "터치 무시 + 계속 출력 + 전원사이클 필요"와 정확 일치). 수정 = **입력 레이어 물리 토글**(`s_run_key_down`) + SYS_PIC_NOW 재앵커, app_reg 무수정. ⑵ **REMOTE icon**(`60792da`) — samd20 DISP_REMOTE(case 9) 충실 포팅: 유효 Modbus 요청 흐르는 동안 ON, 마지막 요청 후 1s에 OFF. ⑶ **전류 표시 EMA**(`78a1e43`) — α 1/8→1/2(50ms 커밋 유지), τ≈400ms→≈100ms. 전건 cpp-review 통과(0 Crit/High).
+> **요약**: 2026-07-08 코드-완료분 3건을 재플래시 후 벤치 검증 — **#1 유령 런 소멸 PASS**(워밍업 중 press→release 무출력 + hold-to-run + RESET 체인 케이스), **#2 REMOTE icon PASS**(TCP 폴링 중 ON/중단 ~1s 후 OFF, **V30 에셋 0x120e 렌더 첫 입증**), **energy/OVTIME 타이밍 PASS**(TIMEOVER=1s → t≈1.0–1.09s ×3 재현 = 리뷰 MEDIUM 해소). #3 EMA 반응 체감·전류 0.60A는 전류계 미준비로 이월. 벤치 중 **사용자가 신규 버그 발견**: OVTIME 경고화면이 RESET 후에도 복귀 안 됨 → 근본원인 2중(원격 클리어 시 페이지 복귀 부재 + `show_error()`의 `lcd_status` 스탬프 누락) → **fix 2커밋(`83498e7`+`88faf08`) + HW 재검증 PASS**(Modbus RESET 자동복귀 / 터치 RESET 즉시복귀).
 
 ## Goal
 
-2026-07-06 세션 마감 시 등록된 사용자 신규 3건 처리:
-1. 부팅 딜레이 시 터치 에러 (증상 상세: 초음파 계속 출력·터치 무시·전원사이클 필요)
-2. 원격제어 진행 중 REMOTE icon 점등
-3. 전류 표시 업데이트 반응 100ms
+① 2026-07-08 신규 3건 HW 벤치 검증(체크리스트=직전 HANDOFF §Resume) ② 벤치 중 발견된 OVTIME 경고화면 복귀 버그 수정·재검증.
 
 ## Completed
 
-- [x] **#1 `e26e15b` fix(lcd)**: data=0 매핑을 런-상태 기반 → 물리 토글로 교체. systematic-debugging으로 근본원인 코드-레벨 확정(아래 Code Context). cpp-review APPROVE-WITH-COMMENTS(0C/0H, LOW 주석 2건 반영).
-- [x] **#2 `60792da` feat(lcd)**: REMOTE icon. `app_modbus_note_remote()`/`app_modbus_remote_active()`(1s hold, 랩-세이프) + RTU/TCP 디코드 성공 지점 스탬프 + LCD disp 엣지-쓰기(ICON_RUN 패턴). cpp-review APPROVE(0C/0H).
-- [x] **#3 `78a1e43` feat(reg)**: ch1 표시 EMA α 1/8→1/2 (τ≈100ms; "업데이트 주기 100ms"를 응답시간으로 해석 — 사용자 통지됨). cpp-review APPROVE-WITH-COMMENTS(0C/0H, MEDIUM=에너지 커플링 벤치 재확인 이월).
-- [x] 게이트: our-code 0-warning 빌드(FLASH 48.58%/RAM 19.36%) + host 13스위트 PASS (3건 공통).
+- [x] **재플래시**: `78a1e43` 코드 → (fix 후) 최종 **`88faf08` 코드가 보드에 플래시됨** (Verified OK ×3회).
+- [x] **#1 유령 런 소멸 PASS**: 전원 인가 → 4s 내 RUN press 유지 → 워밍업 후 release → 무출력 확인 + 정상 hold-to-run + RESET 체인(1.2s) 중 press 케이스 무해.
+- [x] **#2 REMOTE icon PASS**: mbpoll TCP 500ms 연속 폴링 중 ON → 중단 ~1s 후 OFF. V30 에셋의 VP 0x120e 실렌더 첫 확인(Stage C 스킵분 해소).
+- [x] **energy/OVTIME 타이밍 PASS**(EMA 리뷰 MEDIUM): EN_ENERGY=1+TIMEOVER=1s+START → STATUS=8이 t≈1.04/1.08/1.09s 발화(3회 일관, 종전과 동일) + RESET 복구(bit3→0). energy 모드의 560ms ceiling 대체 동작 정상.
+- [x] **`83498e7` fix(lcd)**: 원격(Modbus)/물리 RESET fault 클리어 시 경고 페이지 미복귀 — `app_lcd_fault_cleared()` 신설(app_lcd_tick 미러의 error_status nonzero→0 엣지 호출, LCD_WARNING일 때만+E-stop 보류). cpp APPROVE-W-C(0C/0H, MEDIUM/LOW 반영).
+- [x] **`88faf08` fix(lcd)**: `show_error()`에 `state->lcd_status=LCD_WARNING` 스탬프 누락 보완(legacy main.c:4232 쌍 상실) — **진짜 근본원인**. 부수 교정: `app_lcd_in_run_page()` weld SETUP-freeze 게이트가 OVTIME 경고 중 오탐하던 것 해소. cpp 재검증 APPROVE.
+- [x] **fix HW 재검증 PASS**: 테스트 A(OVTIME→Modbus RESET→**화면 자동 복귀**) + 테스트 B(OVTIME→**터치 RESET 즉시 복귀**+STATUS 클리어).
+- [x] 게이트: our-code 0-warning + host 13스위트 PASS(양 커밋) + 테스트 잔재 원복(EN_ENERGY=0, TIMEOVER=8).
+- [x] 메모리 갱신: [[project-ovtime-energy-run]](버그 2건+교훈) / [[project-bench-test-env]](model_type ceiling 함정).
 
 ## Not Yet Done
 
-- [ ] **HW 벤치 검증 3건 전부** (§Resume 체크리스트) — 이 세션은 보드 미사용, **보드는 이전(mbtcp-hardening `434e007` tip) 코드 그대로**.
-- [ ] (이월) **전류 표시 0.60A 재확인** — `54e5220` 전달함수 재정의 후 명시 벤치 확인 미기록. EMA가 빨라져 이제 정착 관측이 쉬움.
-- [ ] (리뷰 MEDIUM) **energy 모드 energy-exit/OVTIME 타이밍 재확인** — EMA α 변경이 적분 입력의 스파이크 추종을 높임(구조 무변경, 실거동 확인 필요).
-- [ ] HMI SP1 Task 8 실보드 E2E (gds_us_hmi 폴더, RS-485) + RS-485 첫-write 재현 병행.
-- [ ] 6b 잔여 / B-SEAM 잔여 — ⏸ 사용자 보류 유지.
+- [ ] **★ HMI SP1 Task 8 실보드 E2E** — `~/dev/work/gds_us_hmi` 폴더 세션 + **그쪽 HANDOFF.md**로 진입. RS-485 어댑터 연결 필요(현재 미접속, 보드는 ETH_STATIC이라 LCD에서 SERIAL/addr=1 복원 필요). 이 repo `docs/superpowers/research/2026-07-05-rs485-first-write.md` §6(첫-write 재현 절차) 지참.
+- [ ] (이월 2회째) **전류 표시 0.60A 실측** + **#3 EMA 반응 체감**(과하면 `app_reg.c` `d/2`→`d/4` τ≈200ms 폴백) + **energy-exit 실전류**(에너지-도달 정상정지) — 전류계 준비된 FW 벤치 세션.
+- [ ] push (사람 터미널) — **main은 `88faf08`까지 push 완료 확인** — 남은 것 = 이 docs 커밋 + **태그** `git push origin main && git push origin hw-revA_fw-stage-mbtcp-hardening`.
+- [ ] 6b 잔여 / B-SEAM — ⏸ 사용자 보류 유지.
 - [ ] 후속 소소(변경 없음): app_eth STATIC_UP 링크 재폴링 / KA 무송신-피어 / defer Minor(ledger) / handle_key_multi RESET OVLD 비트 휘발성(LOW).
 
 ## Failed Approaches (Don't Repeat These)
 
-- **#1의 1차 설계 = reg 레이어 "거부 시 swallow 무장"(arm-on-reject)** — `app_reg_command`에서 TOUCH START가 거부될 때마다 `swallow_start=1`을 무장해 다음 mapped-START(실은 release)를 소비시키는 안. **결함**: overload/E-stop **force-stop 경로**(`app_overload.c:69/85`, `app_input.c:77`)에서는 버튼을 쥔 채 런이 강제 정지되고, 이때 도착하는 "거부되는 START"는 press가 아니라 **물리 release** — 이걸 press로 오인해 무장하면 페어링이 다시 반전됨(overload 해제 후 첫 press가 먹히고 그 release가 유령 런 시작). **reg 레이어에서는 거부된 START가 press인지 release인지 원리적으로 구분 불가.** → 입력 레이어 물리 토글로 전환(정보가 존재하는 곳에서 해결).
-- (참고) 구 코드 주석의 "self-syncing (a dropped edge is corrected by the next press)" 주장은 **거부-press 케이스에 성립하지 않았음** — pre-D5엔 TOUCH ceiling+swallow가 우연히 재동기해 줬는데 D5의 "TOUCH 운영 ceiling 제외" 결정으로 그 우연한 복구 경로가 사라져 있었다.
+- **OVTIME 화면 fix 1차 = `83498e7` 단독** — HW에서 실패. `app_lcd_fault_cleared()`의 `lcd_status != LCD_WARNING` 게이트가 항상 조기 리턴: **`app_lcd_show_error()`가 물리 페이지만 전환(dgus_set_page)하고 `state->lcd_status`를 스탬프하지 않아**(legacy main.c:4232-4233은 쌍) state는 런 페이지로 남아 있었음. cpp-reviewer도 이 전제를 오독(스탬프가 있다고 단정)한 채 APPROVE — **HW 벤치가 유일하게 잡음**. 교훈: **`dgus_set_page()` 호출은 반드시 `state->lcd_status` 스탬프와 쌍** (다른 모든 호출부는 쌍인데 show_error만 outlier였음).
+- **mbpoll 쓰기 값 위치**: 값은 **IP 뒤** (`mbpoll ... 192.168.1.199 1`). 테스트 스크립트 helper가 값을 IP 앞에 넣어 mbpoll이 host="1"로 접속 시도 → "START write FAILED" 오진으로 사이클 낭비. 또 **부팅 직후 첫 TCP 트랜잭션들은 조용히 실패 가능**(link-up 직후) + W5500 단일 소켓에 연속 접속 시 간헐 거부 → 스크립트는 재시도(0.4s 간격 ×3) 필수.
 
 ## Key Decisions
 
 | Decision | Rationale |
 |----------|-----------|
-| #1 물리 토글(입력 레이어) > 런-상태 매핑/reg 레이어 패치 | data=0은 물리 엣지당 정확히 1회(2026-06-08 HW 트레이스) → 토글이 물리 진실을 그대로 재구성, 모든 silent-reject 창구(워밍업/체인/E-stop/overload/fault/동일-드레인)에 불변. 유일한 드리프트 = 유실/중복 프레임(트레이스상 무발생) + SYS_PIC_NOW 재앵커로 봉쇄 |
-| #1 swallow 메커니즘 존치(app_reg 무수정) | 토글 하에서 ceiling-stop 잔여 swallow는 기존 RELEASE-while-IDLE 재동기 분기(`app_reg.c:201-206`)가 자동 정리 — 제거는 범위 밖 |
-| #2 REMOTE = 활동 기반 1s hold (모드/명령 기반 아님) | legacy samd20 충실(modbus_comm_cnt>100 ≈ 1s). "원격제어 진행중" = 마스터가 실제 폴링 중 |
-| #3 "업데이트 주기 100ms" = 응답 τ≈100ms 해석(α=1/2) | 커밋 주기(50ms)를 100ms로 늘리면 오히려 느려짐 — 등록 당시 의도("반응 ×2")와 결합해 응답시간으로 해석. 벤치에서 과하게 튀면 α=1/4(τ≈200ms) 한 줄 폴백 |
-| 3건 모두 main 직접 커밋(브랜치 없음) | 소규모 벤치-수정 관례(D0/D1·2026-07-05 벤치 6커밋 선례) — 커밋 전 cpp-review + HW 확인은 다음 보드 세션 동승 |
+| 복귀 로직 = 미러 nonzero→0 엣지 단일 지점 (`app_lcd_fault_cleared`) | legacy는 Modbus/물리 RESET 핸들러 각각이 페이지 복귀(main.c:4356-4370/4605-4617) — 포팅 레이어링상 LCD가 페이지 소유이므로 클리어 소스 전부(REMOTE/물리/터치)를 fault 표면 한 곳에서 커버. 터치 경로는 이미 복귀해 자연 no-op |
+| `show_error`에 스탬프 추가(내부 상태 정합) > 게이트 완화 | 스탬프가 samd20-충실 + `app_lcd_in_run_page()`(weld SETUP-freeze)·`set_overload(false)` 분기 등 lcd_status 소비자 전반의 정합을 함께 회복 |
+| Modbus 직접런 무정지 = 무수정 (회귀 아님) | 운영 ceiling은 slice-D 설계상 **HAND 모드의 COMM/REMOTE 전용** — 보드 잔재 model_type=multi(1)에서는 30s 안전 캡만 정상. NEXT_STEPS §2.3-a 잔재 목록과 일치, 메모리 기록 |
+| fix 2건 main 직접 커밋 | 벤치-수정 관례(2026-07-05 6커밋 선례) — 커밋 전 cpp-review + 당일 HW 재검증 동승 |
 
 ## Current State
 
-**Working**: main `78a1e43` — 빌드 0-warning, host 13스위트 PASS, 리뷰 3건 통과. working tree clean(이 docs 커밋 제외).
+**Working**: main `88faf08` — 보드에 플래시됨·검증됨. 빌드 0-warning, host 13스위트 PASS, working tree clean(이 docs 커밋 제외).
 
-**보드**: **이번 코드 미플래시**. 이전 상태 그대로 = mbtcp-hardening 머지 코드(`434e007` tip 동일), 풀배선 리그 + 이더넷(ETH_STATIC 192.168.1.199), OUT_POWER=56/ON_TIME=56, cal_val=1, 테스트 잔재 설정은 NEXT_STEPS §2.3-a.
+**보드**: `88faf08` 코드, **풀배선 리그 + 이더넷(ETH_STATIC 192.168.1.199)**, RS-485 어댑터 미접속. 테스트 잔재 설정 유지(§2.3-a: model_type=multi(1), TIMEOVER=8, EN_ENERGY=0, OUT_POWER=56/ON_TIME=56, cal_val=1, freq_cal_val=0).
 
 **Uncommitted Changes**: 없음(docs 커밋 후).
 
@@ -56,51 +56,45 @@
 
 | File | Why It Matters |
 |------|----------------|
-| `fw/src/app_lcd_input.c` | #1 본체: `s_run_key_down` 토글(157행 부근 static + data=0 분기) + SYS_PIC_NOW 재앵커 |
-| `fw/src/app_reg.c` | 워밍업 게이트(`:159`)·guard(`app_reg_start_allowed`)·swallow(`:99-109,161-169,201-206`) — #1이 의존하는 무수정 반경 / #3 EMA(`reg_acquire_step` ch1 분기 `d / 2`) |
-| `fw/src/app_modbus.c` | #2 활동 상태 + `note_remote`/`remote_active` + RTU 스탬프(`mb_core_decode` 성공 시) |
-| `fw/src/app_modbus_tcp.c` | #2 TCP 스탬프(`mb_tcp_build_response` 성공 시 — poll당 최대 4회, 무해) |
-| `fw/src/app_lcd_disp.c` | #2 소비자: `DISP_REMOTE`(0x120e) 엣지-쓰기(ICON_RUN 패턴 바로 아래) |
-| `ref/samd20/main.c:5187-5199` | #2 legacy 원본(case 9) — 포팅 충실도 대조용 |
+| `fw/src/app_lcd_input.c` | `app_lcd_fault_cleared()` 신설(경고→런 페이지 복귀, E-stop 보류+텍스트 재기록) + 복귀 가드 패밀리(`lcd_may_restore_run_page`/`run_page_for_mode`) |
+| `fw/src/app_lcd.c` | `app_lcd_tick` fault 미러 — 0→nonzero=show_error / **nonzero→0=fault_cleared**(신규 엣지) |
+| `fw/src/app_lcd_disp.c` | `app_lcd_show_error()` — **`lcd_status=LCD_WARNING` 스탬프**(신규; dgus_set_page와 쌍 규칙 주석) |
+| `ref/samd20/main.c:4356-4370, 4605-4617, 4232-4233` | legacy 대조 지점(RESET 핸들러 페이지 복귀 / lcd_status 스탬프 쌍) |
+| `docs/superpowers/research/2026-07-05-rs485-first-write.md` | HMI Task 8 세션 지참물(§6 재현 절차) |
 
 ## Code Context
 
-**#1 토글 매핑** (`app_lcd_input.c`, data=0 분기):
+**신규 복귀 함수** (`fw/src/app_lcd_input.c`):
 ```c
-static uint8_t s_run_key_down;          /* 물리 RUN 키 상태; SYS_PIC_NOW에서 0 리셋 */
-...
-} else if (data16 == 0) {               /* V30: press/release 모두 data=0 */
-    s_run_key_down ^= 1u;
-    if (s_run_key_down != 0u) { US_CMD_START + set_pot } else { US_CMD_RUN_RELEASE }
+void app_lcd_fault_cleared(void)   /* app_lcd_tick 미러가 error_status nonzero→0 엣지에 호출 */
+{
+    lcd_app_state_t *state = app_lcd_state();
+    if (state->lcd_status != LCD_WARNING) return;          /* 임의 페이지 납치 금지 */
+    if (lcd_may_restore_run_page()) {                      /* estop==0 && error_status==0 */
+        state->lcd_status = run_page_for_mode(state->sys_mode);
+        dgus_set_page(state->lcd_status);
+    } else if (app_estop_active() != 0u) {
+        dgus_write_text(VP_ERROR_MSG, "E-STOP");           /* 경고 유지 — 원인 갱신 */
+    }
 }
 ```
-거부된 press → 그 release는 RELEASE-while-IDLE no-op(+swallow 정리). 워밍업 중 press-in/release-out도 유령 런 없음 — 대신 "워밍업 중 시작한 hold는 워밍업 후에도 시작 안 됨"(다시 누르면 정상; M16 레벨-추종과의 의도적 편차, 안전 방향).
 
-**#2 활동 접근자** (`app_modbus.h`):
-```c
-void app_modbus_note_remote(void);      /* 유효 요청 디코드 시 스탬프 (RTU/TCP) */
-bool app_modbus_remote_active(void);    /* 마지막 요청 후 1s 유지 */
-```
-
-**#3 EMA** (`app_reg.c` reg_acquire_step): `s_ch1_filt_x16 += d / 2` (구 `d / 8`), 50ms 커밋 — 스텝 75%@100ms/97%@250ms.
+**OVTIME 벤치 재현** (mbpoll 1-based, TCP .199): EN_ENERGY `-r 21`=1, TIMEOVER `-r 10`=1 → START `-r 28` 값 1 → ~1.0s 후 STATUS `-r 30`=8 → RESET `-r 26` 값 1 → STATUS=0+**화면 자동 복귀**. 원복: `-r 21`=0, `-r 10`=8.
 
 ## Resume Instructions
 
-**FW 벤치 세션 (최우선)** — 플래시 후 순서대로:
+**HMI 세션 (최우선)**:
+1. `cd ~/dev/work/gds_us_hmi` 로 **새 세션** → 그쪽 `HANDOFF.md` 읽기 (SP1 Task 8 = 실보드 E2E 5항목, tip `c196c73` 미머지).
+2. 준비물: RS-485 어댑터 연결 + 보드를 LCD에서 **SERIAL/addr=1/9600/EVEN** 복원(현재 ETH_STATIC) + 이 repo research doc §6.
+3. Task 8 PASS 시 머지 = SP1 종료. 첫-write 간헐 무효 재현 절차 병행.
 
-1. `env -u STM32_TOOLCHAIN cmake --build fw/build` → `openocd -f fw/openocd/stm32f410.cfg -c "program fw/build/gds_us_ctrl.elf verify reset exit"` (⚠ 플래시↔ELF 대조 습관 유지)
-2. **(이월) 전류 0.60A**: RUN 정착 + 전류계 0.6A ↔ 표시 0.60A, 유휴 0.00. EMA 빨라졌으므로 ~0.3s 내 정착 기대.
-3. **#1 유령 런 소멸**: 전원 인가 → **4초 내** RUN 터치해 누른 채 → 워밍업 끝난 뒤 손 뗌 → **초음파 출력 없어야 함**(구 펌웨어는 여기서 유령 런). 이어서 정상 hold-to-run(누르면 켜지고 떼면 꺼짐) 확인. 추가: RESET 체인(1.2s) 중 press→체인 후 release도 무해 확인.
-4. **#2 REMOTE icon**: mbpoll FC03 반복 폴링(RTU 또는 TCP) 중 icon ON → 폴링 중단 ~1s 후 OFF. ⚠ V30 에셋이 VP 0x120e를 실제 렌더하는지 이번이 첫 확인(Stage C 때 스킵) — 안 뜨면 FW가 아니라 에셋 매핑 의심(SWD로 dgus 전송 확인 가능).
-5. **#3 반응 체감**: 부하 변화 시 표시가 ~0.1-0.3s 내 추종 + 노이즈 튐 허용 수준인지. 과하면 `app_reg.c` `d / 2`→`d / 4`(τ≈200ms) 폴백.
-6. **(리뷰 MEDIUM) energy 타이밍**: EN_ENERGY=ON 직접런 energy-exit/OVTIME 발화 타이밍이 종전과 유의미하게 다르지 않은지.
-7. 통과 시 태그 없음(스테이지 아님) — push만: `git push origin main && git push origin hw-revA_fw-stage-mbtcp-hardening` (사람 터미널).
-
-**HMI 세션** → `~/dev/work/gds_us_hmi` + 그쪽 HANDOFF.md (RS-485; 이 repo `docs/superpowers/research/2026-07-05-rs485-first-write.md` §6 지참).
+**FW 전류 벤치 세션 (전류계 준비되면)**:
+1. 플래시 불필요(보드=main 최신). 유휴 표시 0.00 확인 → RUN 유지 → 전류계 0.6A ↔ 표시 0.60A(~0.3s 정착).
+2. 부하 변화 추종 체감(#3) — 노이즈 과하면 `app_reg.c` `d/2`→`d/4` 한 줄 폴백.
+3. EN_ENERGY=ON 실전류 energy-exit(에너지-도달 정상정지) 확인.
 
 ## Warnings
 
-1. **빌드 시 vendor 헤더 경고 3건**(wiznet `socket.h` declared-static-never-defined)은 vendor-도메인 pre-existing — our-code 0-warning 게이트와 무관.
-2. **mbpoll 주소 1-based**(-r N = wire N-1) 관행 유지. STATUS=reg 30, START=28, STOP=29.
-3. 기존 승계: SWD halt 금지(비침습 샘플러) / bss 주소 빌드마다 이동 / LCD 터치+B_START 웨지→전원사이클 / stty 잔재.
-4. `#1` 관련: 토글은 **중복 data=0 프레임**에도 드리프트(리뷰 LOW — HW 트레이스상 무발생) — 만약 벤치에서 "한 번 눌렀는데 START+RELEASE 연발" 관측되면 중복 프레임 의심.
+1. **Modbus 직접런은 이 보드 설정(model_type=multi)에서 자동정지 없음** — 30s 안전 캡뿐. 테스트 후 반드시 STOP(`-r 29` 값 1). ceiling 회귀 테스트는 model_type=hand(0) 전제(LCD SETUP에서 변경 — 단 EMSW 배선 상태에서 model 전환 시 E-stop 유발 주의, rig 노트 R1).
+2. **mbpoll**: 쓰기 값은 IP 뒤 / 부팅 직후·연속 트랜잭션 간헐 실패 → 재시도 / 주소 1-based(-r N = wire N-1), STATUS=30/START=28/STOP=29/RESET=26.
+3. 빌드 시 vendor 헤더 경고 3건(wiznet socket.h)은 pre-existing — our-code 0-warning 게이트와 무관.

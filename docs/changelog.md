@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### 2026-07-11 — FW 벤치: 신규 3건 중 2건 HW PASS + OVTIME 경고화면 복귀 버그 발견·수정·검증
+
+풀배선 벤치(ETH .199)에서 2026-07-08 코드-완료분 재플래시 후 검증 + 벤치 중 사용자 발견 버그 수정. 보드 = `88faf08` 플래시·검증됨.
+
+- **벤치 PASS 3항목**: ① **#1 유령 런 소멸**(워밍업 중 press→release 무출력 + hold-to-run + RESET 체인 중 press 무해) ② **#2 REMOTE icon**(TCP 폴링 중 ON→중단 ~1s 후 OFF; **V30 에셋 0x120e 렌더 첫 입증**) ③ **energy/OVTIME 타이밍**(EMA 리뷰 MEDIUM 해소 — TIMEOVER=1s→t≈1.0–1.09s ×3 일관 + RESET 복구). #3 EMA 체감·전류 0.60A = 전류계 미준비 이월(2회째).
+- **`83498e7` fix(lcd) 경고 페이지 고착 ①**: 원격(Modbus)/물리 RESET이 fault를 클리어해도 페이지 복귀 부재(legacy는 각 RESET 핸들러가 직접 복귀, samd20 main.c:4356-4370/4605-4617 — 포팅 누락) + 이후 터치 RESET은 `ERR_OVTIME` 게이트(이미 0)에 막혀 no-op → `app_lcd_fault_cleared()` 신설: app_lcd_tick 미러의 error_status **nonzero→0 엣지**에서 LCD_WARNING일 때만 런 페이지 복귀(E-stop 활성 시 보류+"E-STOP" 텍스트 재기록). 모든 클리어 소스(REMOTE/물리/터치) 단일 지점 커버. cpp APPROVE-W-C(0C/0H).
+- **`88faf08` fix(lcd) 경고 페이지 고착 ② = 진짜 근본원인**: `app_lcd_show_error()`가 물리 페이지만 전환하고 `state->lcd_status=LCD_WARNING` 스탬프 누락(legacy main.c:4232-4233 쌍 상실) → ①의 게이트 포함 기존 복귀 경로 전부 무력화. 스탬프 보완 + `app_lcd_in_run_page()`(weld SETUP-freeze 게이트)가 OVTIME 경고 중 1을 반환하던 오탐 부수 교정. ⚠ **1차 fix 단독은 HW 실패, cpp-reviewer도 스탬프 존재를 오독한 채 APPROVE — HW 벤치가 유일한 검출 게이트였음**. 교훈: `dgus_set_page()`는 반드시 `state->lcd_status` 스탬프와 쌍. cpp 재검증 APPROVE.
+- **fix HW 재검증 PASS**: 테스트 A(OVTIME→Modbus RESET→화면 자동 복귀) + 테스트 B(OVTIME→터치 RESET 즉시 복귀+STATUS 클리어).
+- **부수 발견(회귀 아님)**: 잔재 model_type=multi(1)에서 Modbus 직접런 운영 ceiling 미적용 — slice-D 설계상 HAND 모드 COMM/REMOTE 전용(30s 안전 캡만 동작). 벤치 함정으로 메모리 기록.
+- 게이트: our-code 0-warning + host 13스위트 PASS(양 커밋) + 테스트 잔재 원복(EN_ENERGY=0, TIMEOVER=8). ⚠ push 미실행(main + 태그 이월).
+
 ### 2026-07-08 — 사용자 신규 3건 코드-완료 (부팅 터치 유령 런 / REMOTE icon / 전류 EMA 100ms) — HW 벤치 게이트
 
 2026-07-06 등록 사용자 3건 전부 구현·리뷰 통과·main 직접 커밋(벤치-수정 관례). 보드 미사용 세션 — **보드 미플래시**, 벤치 검증은 다음 보드 세션(체크리스트=루트 HANDOFF §Resume).
