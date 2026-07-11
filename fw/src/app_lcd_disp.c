@@ -305,5 +305,10 @@ void app_lcd_show_error(uint8_t error_code)
     }
 
     dgus_write_text(VP_ERROR_MSG, msg);
+    /* state 스탬프 필수 (samd20 main.c:4232) — 복귀 경로들(app_lcd_fault_cleared/
+     * set_overload off/KEY_ERROR_RESET)이 lcd_status==LCD_WARNING을 게이트로 읽고,
+     * app_lcd_in_run_page()(weld SETUP 게이트)도 이 값 기반. 누락 시 경고 페이지가
+     * 표시 중인데 state는 런 페이지로 남아 복귀가 전부 no-op (2026-07-11 벤치). */
+    app_lcd_state()->lcd_status = LCD_WARNING;
     dgus_set_page(LCD_WARNING);
 }
