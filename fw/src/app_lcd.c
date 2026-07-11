@@ -186,15 +186,20 @@ bool app_lcd_ensure_run_page(const app_config_t *cfg)
 void app_lcd_tick(void)
 {
     /* fault 표면: app_reg가 publish한 measure.error_status의 0→nonzero 엣지에
-     * 경고 페이지 1회 진입(app_lcd_show_error→LCD_WARNING). state.error_status는
-     * 입력 레이어(KEY_ERROR_RESET)가 읽으므로 매 호출 미러. 복구 = RESET 키 →
-     * app_lcd_hook_us_command(US_CMD_RESET) → app_reg가 source 클리어 → 다음
-     * publish에서 0 (app_reg.c). 매 iter 호출(4ms 게이트는 disp_step 한정). */
+     * 경고 페이지 1회 진입(app_lcd_show_error→LCD_WARNING), nonzero→0 엣지에
+     * 런 페이지 복귀(app_lcd_fault_cleared — REMOTE/물리 RESET 클리어 커버;
+     * legacy는 각 RESET 핸들러가 직접 복귀, samd20 main.c:4356-4370/4605-4617).
+     * state.error_status는 입력 레이어(KEY_ERROR_RESET)가 읽으므로 매 호출 미러.
+     * 매 iter 호출(4ms 게이트는 disp_step 한정). */
     static uint8_t prev_err = 0u;
     uint8_t err = app_lcd_measure()->error_status;
+    /* 터치 RESET 직후 ~1 iter 동안 stale publish가 state를 재기록할 수 있음 —
+     * 모든 복귀 경로가 lcd_status==LCD_WARNING을 먼저 게이트하므로 무해. */
     app_lcd_state()->error_status = err;
     if ((err != 0u) && (prev_err == 0u)) {
         app_lcd_show_error(err);
+    } else if ((err == 0u) && (prev_err != 0u)) {
+        app_lcd_fault_cleared();
     }
     prev_err = err;
 

@@ -146,6 +146,28 @@ void app_lcd_set_estop(bool on)
     }
 }
 
+/* fault 클리어 표면 — app_lcd_tick 미러가 measure.error_status nonzero→0
+ * 엣지에 호출. legacy는 Modbus/물리 RESET 핸들러가 직접 런 페이지를 복귀
+ * (samd20 main.c:4356-4370 / 4605-4617 set_lcd_page) — 이 포트에서는 클리어
+ * 소스와 무관하게 이 한 지점이 커버한다(REMOTE/물리 B_RESET; KEY_ERROR_RESET
+ * 터치 경로는 이미 복귀해 lcd_status != LCD_WARNING → no-op). 경고 페이지일
+ * 때만 복귀(임의 페이지 납치 금지, overload off 경로와 동일 가드), E-stop
+ * 활성이면 보류(레벨 해제 시 app_lcd_set_estop(false)가 복귀). */
+void app_lcd_fault_cleared(void)
+{
+    lcd_app_state_t *state = app_lcd_state();
+
+    if (state->lcd_status != LCD_WARNING) {
+        return;
+    }
+    if (lcd_may_restore_run_page()) {
+        state->lcd_status = run_page_for_mode(state->sys_mode);
+        dgus_set_page(state->lcd_status);
+    } else if (app_estop_active() != 0u) {
+        dgus_write_text(VP_ERROR_MSG, "E-STOP");   /* 경고 유지 — 원인 갱신 */
+    }
+}
+
 /* Resolve the setup-page-1 id for the active sys_mode (SETUP_PARAM / _MOOHAN). */
 static uint8_t setup1_page_for_mode(uint8_t sys_mode)
 {

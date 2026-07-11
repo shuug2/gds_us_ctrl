@@ -185,4 +185,9 @@ void app_lcd_weld_sensor_text(bool on);
  * legacy do_control SYS_ESTOP 전이 (samd20 main.c:4209-4215, 4238-4241). */
 void app_lcd_set_estop(bool on);
 
+/* fault 클리어 복귀 — app_lcd_tick 미러가 error_status nonzero→0 엣지에 호출.
+ * 경고 페이지일 때만 런 페이지 복귀 (REMOTE/물리 RESET 클리어 커버;
+ * legacy samd20 main.c:4356-4370/4605-4617 등가). */
+void app_lcd_fault_cleared(void);
+
 uint8_t app_lcd_in_run_page(void);   /* 1 = run 페이지 (slice4 weld SETUP 게이트) */
