@@ -214,7 +214,8 @@ void weld_fsm_step(const weld_in_t *in, weld_out_t *out)
                 s_temp_time      = hold_time(in);
             } else if (s_temp_time == 0u) {
                 out->weld_stop   = 1u;   /* abort도 US 정지 */
-                out->weld_fault  = 1u;   /* glue: fault hook (mon; 후속 SYS_ERROR) */
+                out->weld_fault  = 1u;   /* glue: fault hook → app_reg_raise_ovtime
+                                          * (ERR_OVTIME=legacy SYS_ERROR, 2026-07-18) */
                 s_sol_dn         = 0u;   /* 실린더 즉시 상승 */
                 s_f_status_start = 0u;
                 s_run_status     = WELD_READY;   /* CYL2 미경유, work_cnt++ 없음 */

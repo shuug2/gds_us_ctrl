@@ -79,7 +79,12 @@ void app_weld_hook_set_amp(uint8_t dac)
 
 void app_weld_hook_fault(void)
 {
-    mon_printf("[weld] fault: energy timeout (backstop abort)\r\n");
+    /* 에너지 backstop 초과(에너지 미달+시간 만료) = legacy RUN_WELD OVTIME
+     * (main.c:5288-5293). 직접런과 같은 ERR_OVTIME으로 상승 → 부저 알람+경고
+     * 화면+Modbus STATUS (app_weld_fsm.c:217 "후속 SYS_ERROR" 이연분 완성).
+     * 재시작 차단은 error_status로 abort 합성(app_weld.c)+start guard 자동. */
+    app_reg_raise_ovtime();
+    mon_printf("[weld] fault: energy timeout (backstop abort) -> ERR_OVTIME\r\n");
 }
 
 void app_weld_tick(void)

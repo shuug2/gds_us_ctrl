@@ -55,6 +55,11 @@ void app_reg_command(us_cmd_t cmd, uint8_t src);
  * swallow_start는 TOUCH 전용 소비라 조건에서 제외 (US_CYCLE에 무관). */
 bool app_reg_start_allowed(void);
 
+/* OVTIME fault 상승 — weld(US_CYCLE) 에너지 backstop abort가 호출 (직접런
+ * OVTIME과 같은 error_status|=ERR_OVTIME으로 통합; legacy RUN_WELD OVTIME
+ * main.c:5292). publish/RESET 클리어는 기존 인프라가 커버. */
+void app_reg_raise_ovtime(void);
+
 /* run-output(USOUT) 전이 hook: us_run_status idle↔active 변화 시 호출.
  * 기본 구현이 io_usout 구동 (app_reg.c). */
 void app_reg_hook_us_output(bool on);

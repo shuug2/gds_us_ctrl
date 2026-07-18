@@ -150,6 +150,15 @@ bool app_reg_start_allowed(void)
            (app_horn_mode_active() == 0u);
 }
 
+void app_reg_raise_ovtime(void)
+{
+    /* weld(US_CYCLE) 에너지 backstop abort용 fault 세터 — 직접런 OVTIME과 같은
+     * 비트. 다음 publish(reg_publish_measure)가 measure.error_status로 노출 →
+     * app_fault_alarm(부저)/app_lcd_show_error(경고화면)/Modbus STATUS. RESET
+     * (US_CMD_RESET)이 클리어. legacy RUN_WELD OVTIME main.c:5292. */
+    g_reg.error_status |= ERR_OVTIME;
+}
+
 void app_reg_command(us_cmd_t cmd, uint8_t src)
 {
     switch (cmd) {
