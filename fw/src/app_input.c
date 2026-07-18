@@ -86,7 +86,10 @@ void app_input_tick(void)
     }
 
     /* 명령 버튼 (US_REMOTE 통일 strict). START 가드(==US_IDLE + estop/overload/
-     * seek_reset break)는 app_reg_command 내부. */
+     * seek_reset break)는 app_reg_command 내부.
+     * ⚠ 불변식: 부팅 첫 tick은 bak zero-init 재동기로 start_release가 1회
+     * 올 수 있음(input_fsm_init 주석) — RUN_RELEASE-while-IDLE(REMOTE)는
+     * no-op이어야 함(app_reg source-matched + swallow=touch-only 전제). */
     if (ev.start_press != 0u)   { app_reg_command(US_CMD_START,       (uint8_t)US_REMOTE); }
     if (ev.start_release != 0u) { app_reg_command(US_CMD_RUN_RELEASE, (uint8_t)US_REMOTE); }
     if (ev.reset_press != 0u)   { app_reg_command(US_CMD_RESET,       (uint8_t)US_REMOTE); }

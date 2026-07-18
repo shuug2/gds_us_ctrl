@@ -5,17 +5,21 @@
  * stale 엣지 회피. */
 #include "app_input_fsm.h"
 
-static uint8_t s_start_bak;   /* active-LOW idle = 1 */
-static uint8_t s_reset_bak;   /* active-LOW idle = 1 */
-static uint8_t s_seek_bak;    /* active-LOW idle = 1 */
+static uint8_t s_start_bak;   /* active-LOW idle = 1 (init은 의도적 0 — init 주석) */
+static uint8_t s_reset_bak;   /* active-LOW idle = 1 (init은 의도적 0) */
+static uint8_t s_seek_bak;    /* active-LOW idle = 1 (init은 의도적 0) */
 static uint8_t s_emsw_bak;    /* active-HIGH idle = 0 */
 static uint8_t s_estop_active;
 
 void input_fsm_init(void)
 {
-    s_start_bak    = 1u;
-    s_reset_bak    = 1u;
-    s_seek_bak     = 1u;
+    /* bak = 0("눌림 가정") — legacy re_*_bak 전역 zero-init 충실(main.c:490).
+     * 부팅 시 이미 활성(LOW)인 입력은 엣지가 안 생겨 유령 press 금지(예:
+     * multi 모드 PC11=EMSW NC 배선 평시 LOW → 유령 SEEK, 2026-07-18 벤치).
+     * 유휴(HIGH) 입력은 첫 step에 release측 재동기 엣지만(무해 no-op). */
+    s_start_bak    = 0u;
+    s_reset_bak    = 0u;
+    s_seek_bak     = 0u;
     s_emsw_bak     = 0u;
     s_estop_active = 0u;
 }

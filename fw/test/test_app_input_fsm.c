@@ -16,16 +16,45 @@ static int failures = 0;
     }                                                                       \
 } while (0)
 
-/* idle 입력(active-LOW 1, EMSW 0) — 부팅 무이벤트 */
+/* idle 입력(active-LOW 1, EMSW 0) — 부팅 press 이벤트 없음.
+ * bak zero-init(legacy 충실)이라 첫 step은 release측 재동기 엣지만
+ * (start_release 1회, RUN_RELEASE-while-IDLE no-op), 2번째 step부터 전무. */
 static void test_idle_no_event(void)
 {
     input_fsm_init();
     input_in_t in = { .start = 1u, .reset = 1u, .estop_seek = 1u, .model_type = 0u };
     input_out_t o = input_fsm_step(&in);
     CHECK_EQ(o.start_press, 0u);
+    CHECK_EQ(o.start_release, 1u);             /* 부팅 재동기 엣지 (무해 no-op) */
     CHECK_EQ(o.reset_press, 0u);
     CHECK_EQ(o.seek_press, 0u);
     CHECK_EQ(o.estop_active, 0u);
+    o = input_fsm_step(&in);                   /* 재동기 후 완전 무이벤트 */
+    CHECK_EQ(o.start_press, 0u);
+    CHECK_EQ(o.start_release, 0u);
+    CHECK_EQ(o.reset_press, 0u);
+    CHECK_EQ(o.seek_press, 0u);
+}
+
+/* 부팅 시 이미 눌림(active-LOW 0)인 입력은 유령 press 금지 — legacy
+ * re_*_bak zero-init 충실 (평시-LOW 배선의 부팅 유령 SEEK 버그 2026-07-18:
+ * multi 모드 PC11=EMSW NC 배선 평시 LOW → 부팅 seek_press 1회 오발). */
+static void test_boot_active_inputs_no_ghost(void)
+{
+    input_fsm_init();
+    input_in_t in = { .start = 0u, .reset = 0u, .estop_seek = 0u, .model_type = 1u };
+    input_out_t o = input_fsm_step(&in);       /* 부팅 첫 step: 전부 눌린 상태 */
+    CHECK_EQ(o.start_press, 0u);               /* 유령 press 없음 */
+    CHECK_EQ(o.reset_press, 0u);
+    CHECK_EQ(o.seek_press, 0u);
+    in.start = 1u; in.reset = 1u; in.estop_seek = 1u;
+    o = input_fsm_step(&in);                   /* 실제 뗌 */
+    CHECK_EQ(o.start_release, 1u);             /* start만 release 이벤트 보유 */
+    CHECK_EQ(o.reset_press, 0u);
+    CHECK_EQ(o.seek_press, 0u);
+    in.estop_seek = 0u;
+    o = input_fsm_step(&in);                   /* 이후 실제 눌림은 정상 발화 */
+    CHECK_EQ(o.seek_press, 1u);
 }
 
 /* B_START 모멘터리: 눌림→press, 유지→무이벤트, 뗌→release */
@@ -173,6 +202,7 @@ static void test_model_switch_no_stale_edge(void)
 int main(void)
 {
     test_idle_no_event();
+    test_boot_active_inputs_no_ghost();
     test_start_momentary();
     test_reset_press_edge();
     test_seek_in_hand_multi();
