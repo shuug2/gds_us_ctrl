@@ -160,23 +160,25 @@ static void test_energy_limit_zero_no_instant_stop(void)
  * 데드밴드/단조성/언더플로 가드/×2.2 비율 등 구조만 검증.
  * 상수: GAIN 59/126 + OFFSET 0 (2026-07-05 c 사용자 결정: legacy −37 오프셋
  * 제거 = 순수 비례; RUN 실측 600mA↔ch1≈126 앵커, 구 7/5·−37은 EMA 미정착
- * 오측 앵커), DEADBAND 20 (유휴 v≈14 + 마진), POWER 22/10. */
+ * 오측 앵커), DEADBAND 14 (legacy 51−37 실효 게이트 = 최소 표시 0.15A,
+ * 2026-07-18 사용자 결정 — 구 20은 0.21A 플로어), POWER 22/10. */
 static void test_reg_current_from_adc(void) {
     /* idle / 데드밴드 이하 -> 0 (v = ch1*59/126 + cal) */
     CHECK_EQ(reg_current_from_adc(0,  0), 0);     /* v=0           */
-    CHECK_EQ(reg_current_from_adc(29, 0), 0);     /* v=13 <=20 (실측 유휴) */
-    CHECK_EQ(reg_current_from_adc(43, 0), 0);     /* v=20  경계 ->0 */
-    CHECK_EQ(reg_current_from_adc(44, 0), 0);     /* v=20  경계 ->0 */
+    CHECK_EQ(reg_current_from_adc(29, 0), 0);     /* v=13 <=14 (실측 유휴) */
+    CHECK_EQ(reg_current_from_adc(32, 0), 0);     /* v=14  경계 ->0 */
     /* 데드밴드 직상 -> v 그대로 (오프셋 0) */
+    CHECK_EQ(reg_current_from_adc(33, 0), 15);    /* v=15  -> 최소 표시 0.15A */
+    CHECK_EQ(reg_current_from_adc(43, 0), 20);    /* v=20 (구 DEADBAND 20에선 0이던 대역) */
     CHECK_EQ(reg_current_from_adc(45, 0), 21);    /* v=21  -> 21   */
     CHECK_EQ(reg_current_from_adc(126, 0), 59);   /* v=59 (600mA 앵커; 126*59/126 정확) */
     CHECK_EQ(reg_current_from_adc(126, 1), 60);   /* 앵커 직접 벡터: 보드 실측 cal=1 -> 0.60A */
     CHECK_EQ(reg_current_from_adc(150, 0), 70);   /* v=70          */
-    /* 단조 증가: 21 < 59 < 70 (위 벡터로 확인됨) */
+    /* 단조 증가: 15 < 20 < 21 < 59 < 70 (위 벡터로 확인됨) */
     /* cal_val 양수: 데드밴드 입력을 활성대역으로 끌어올림 */
     CHECK_EQ(reg_current_from_adc(29, 10), 23);   /* v=13+10=23 -> 23 */
     /* cal_val 음수: 활성 입력을 데드밴드 아래로 */
-    CHECK_EQ(reg_current_from_adc(45, -5), 0);    /* v=21-5=16 <=20   */
+    CHECK_EQ(reg_current_from_adc(45, -7), 0);    /* v=21-7=14 <=14   */
     /* 음수 cal 언더플로 가드: uint wrap 없이 0 */
     CHECK_EQ(reg_current_from_adc(0, -100), 0);   /* v=-100 -> 0      */
 }

@@ -85,11 +85,14 @@ reg_energy_outcome_t reg_energy_termination(uint8_t energy_ctrl, uint32_t curr_e
  * ch1(legacy 도메인) ≈126 → 표시 59+cal(보드 1)=60 = 0.60A(10mA 단위) 앵커.
  * (같은 날 초기 fit 7/5·−37의 ch1≈65 앵커는 EMA τ400ms 미정착 오측 —
  * RUN 정착 실측 표시 1.4A/실제 0.6A로 판명, 유휴 ch1=29는 양일 동일.)
- * DEADBAND 20 = 유휴 잔류(v=13) + 마진; 표시 플로어 ≈0.21A, 그 이하는 0.
+ * DEADBAND 14 = legacy 실효 게이트(51−37 도메인); 표시 플로어 0.15A, 그
+ * 이하는 0 (2026-07-18 사용자 결정 — 구 20은 유휴 v=13+마진 기준 0.21A).
  * 미세 트림 = cal_val(LCD CAL 필드). */
 #define REG_CURR_GAIN_NUM   59u   /* rig-fit ×0.468 (samd20 원본 4/10) */
 #define REG_CURR_GAIN_DEN   126u
-#define REG_CURR_DEADBAND   20    /* 유휴 노이즈 플로어 (구 samd20 51은 −37 도메인) */
+#define REG_CURR_DEADBAND   14    /* legacy 실효 게이트(main.c:420 51−37 도메인) —
+                                   * 최소 표시 0.15A (2026-07-18; 구 20=0.21A 플로어).
+                                   * ⚠ cal_val≈0 운용 시 유휴 v≈13-14가 경계에 걸림 */
 #define REG_CURR_OFFSET     0     /* legacy 'temp_val − 37' 제거 (사용자 결정) */
 #define REG_POWER_NUM       22u   /* samd20 ×2.2 */
 #define REG_POWER_DEN       10u
