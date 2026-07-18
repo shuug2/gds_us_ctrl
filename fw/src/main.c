@@ -8,6 +8,7 @@
 #include "app_modbus.h"
 #include "app_eth.h"
 #include "app_buzzer.h"
+#include "app_fault_alarm.h"
 #include "app_overload.h"
 #include "app_input.h"
 #include "app_osc_init.h"
@@ -54,6 +55,7 @@ int main(void) {
     app_seek_reset_init();  /* Stage SEEK/RESET: FSM reset (needs sys_tick up) */
     app_buzzer_init();      /* 부저 글루 (needs sys_tick up) — 부팅 beep은 위
                              * sys_tick_init 직후 블로킹 구동으로 이동(2026-07-18) */
+    app_fault_alarm_init(); /* 일반 fault(OVTIME 등) 부저 점멸 (needs sys_tick up) */
     app_overload_init();    /* 과부하 글루 (needs io_init + sys_tick up) */
     app_input_init();       /* 물리 명령 입력 + E-stop 글루 (needs io_init + sys_tick up) */
     app_modbus_init(); /* Stage C: USART6 occupancy decision (needs cfg loaded by app_init) */
