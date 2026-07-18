@@ -17,6 +17,7 @@
 #include "mon.h"
 #include "cfg_clamp.h"
 #include "app_input.h"     /* app_estop_active — 런 페이지 복귀 가드 */
+#include "app_horn.h"      /* app_horn_mode_active — SETUP horn 체크박스 미러 */
 
 /*--------------------------------------------------------------
  * samd20 define.h / main.c constants (file-local — verbatim values)
@@ -941,11 +942,18 @@ void app_lcd_input_dispatch(const dgus_frame_t *f)
     case SETUP_PARAM:
         state->lcd_status = setup1_page_for_mode(state->sys_mode);
         app_lcd_change_page(state->lcd_status);
+        /* horn-down 체크박스 = 현재 SYS_HORN 모드 미러 + shadow 리셋 (legacy
+         * main.c:3617-3622 verbatim — 저장 시 체크 안 건드리면 temp==0이라
+         * 모드 이탈되는 legacy 거동 포함). */
+        dgus_write_u16(DISP_HORNDOWN, (uint16_t)app_horn_mode_active());
+        state->temp_horndown = 0u;
         break;
     case SETUP_PARAM_MOOHAN:                             /* long-press variant of SETUP_PARAM */
         if (long_press_released(vp, data16)) {
             state->lcd_status = setup1_page_for_mode(state->sys_mode);
             app_lcd_change_page(state->lcd_status);
+            dgus_write_u16(DISP_HORNDOWN, (uint16_t)app_horn_mode_active());
+            state->temp_horndown = 0u;                   /* legacy 3617-3622 미러 */
         }
         break;
     case SETUP_MODEL:                                    /* long-press → model setup */

@@ -10,6 +10,7 @@
 #include "app_config.h"   /* app_config_t, app_config_save_all */
 #include "app_input.h"    /* app_estop_active (slice4 abort 합성) */
 #include "app_overload.h" /* app_overload_active (slice4 abort 합성) */
+#include "app_horn.h"     /* app_horn_mode_active (SYS_HORN 동결 게이트) */
 #include "i2c_pot.h"      /* i2c_pot_set_dac (U4 진폭, raw DAC) */
 #include "sys_tick.h"
 #include "mon.h"
@@ -101,6 +102,15 @@ void app_weld_tick(void)
      * 정지(app_overload는 SOL 미해제) → mid-cycle SOL은 run 페이지 복귀 시
      * 레벨-기반 abort가 해제 (리뷰 반영, 결정=plan 순서 유지+문서화). */
     if (app_lcd_in_run_page() == 0u) {
+        return;
+    }
+    /* SYS_HORN(horn-down) 동결 — legacy는 sys_status==SYS_HORN이면 do_action
+     * SYS_RUN 분기(사이클/초음파) 자체를 안 탐(main.c:1634). 양손 키는
+     * app_horn이 솔 토글로 소비. SETUP 게이트와 동일한 스킵 방식(sens_dn
+     * 미러도 함께 동결). ⚠추적: horn 이탈로 동결 해제된 mid-cycle은 이
+     * 글루의 s_sol_last가 horn의 SOL 조작을 모른 채 재개(legacy도 SYS_HORN
+     * 왕복 후 run_status 그대로 재개 — 동급 리스크, 리뷰 HIGH 트래킹). */
+    if (app_horn_mode_active() != 0u) {
         return;
     }
 

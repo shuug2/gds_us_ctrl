@@ -11,6 +11,7 @@
 #include "app_fault_alarm.h"
 #include "app_overload.h"
 #include "app_input.h"
+#include "app_horn.h"
 #include "app_osc_init.h"
 #include "sys_tick.h"
 #include "usart1.h"
@@ -58,6 +59,7 @@ int main(void) {
     app_fault_alarm_init(); /* 일반 fault(OVTIME 등) 부저 점멸 (needs sys_tick up) */
     app_overload_init();    /* 과부하 글루 (needs io_init + sys_tick up) */
     app_input_init();       /* 물리 명령 입력 + E-stop 글루 (needs io_init + sys_tick up) */
+    app_horn_init();        /* SYS_HORN horn-down 글루 (needs io_init + sys_tick up) */
     app_modbus_init(); /* Stage C: USART6 occupancy decision (needs cfg loaded by app_init) */
     app_eth_init();    /* Stage C slice 2a/2b: W5500 bring-up (non-fatal). TCP
                         * server runs from app_modbus_tick() when comm_mode is

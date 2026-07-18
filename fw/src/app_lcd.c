@@ -4,6 +4,7 @@
 #include "sys_tick.h"
 #include "mon.h"
 #include "app_reg.h"
+#include "app_horn.h"
 #include "i2c_pot.h"   /* pot_dac_from_power + i2c_pot_set_dac (U4 진폭) */
 
 /*--- Stage LCD subsystem state owner + control/HW stub hooks ---
@@ -77,6 +78,7 @@ void app_lcd_hook_ether_apply(uint8_t mode, const uint8_t ip[4], const uint8_t n
 void app_lcd_hook_horn(bool down)
 {
     mon_printf("[lcd-hook] horn down=%u\r\n", (unsigned)down);
+    app_horn_set_mode(down);   /* SYS_HORN 모드 진입/이탈 (구 스텁 → 실배선 2026-07-18) */
 }
 
 uint8_t app_lcd_run_page(const app_config_t *cfg)

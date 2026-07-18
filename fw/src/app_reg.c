@@ -11,6 +11,7 @@
 #include "app_seek_reset.h"   /* app_seek_reset_request, app_seek_reset_active */
 #include "app_overload.h"   /* app_overload_active (START 차단) */
 #include "app_input.h"      /* app_estop_active (START 차단, E-stop) */
+#include "app_horn.h"       /* app_horn_mode_active (START 차단, SYS_HORN) */
 #include "adc1.h"
 #include "io.h"
 #include "board.h"          /* board_osc4 (PB14 OSC4 발진 게이트) */
@@ -143,7 +144,10 @@ bool app_reg_start_allowed(void)
            (app_overload_active() == 0u) &&
            /* E-stop 활성 중 START 차단 (SAMD20 SYS_ESTOP). 레벨 기반
             * (E-stop 떼면 자동 해제). */
-           (app_estop_active() == 0u);
+           (app_estop_active() == 0u) &&
+           /* SYS_HORN(horn-down) 중 모든 소스 START 차단 — legacy는
+            * sys_status!=SYS_RUN이라 런 머시너리 자체가 배제 (main.c:1427). */
+           (app_horn_mode_active() == 0u);
 }
 
 void app_reg_command(us_cmd_t cmd, uint8_t src)

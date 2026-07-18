@@ -12,6 +12,7 @@
 #include "app_seek_reset.h"
 #include "app_overload.h"
 #include "app_input.h"
+#include "app_horn.h"
 #include "app_modbus.h"
 #include "app_eth.h"
 #include "i2c1.h"    /* i2c1_err_count / i2c1_unstick_events — 부팅·1s 관측 로그 */
@@ -107,6 +108,12 @@ void app_loop_iter(void)
      * seek_reset_tick이 같은 iter 소비; B_START/force-stop은 app_reg_tick에 반영
      * (app_seek_reset_tick·app_reg_tick 앞 배치). */
     app_input_tick();
+
+    /* 2.58 SYS_HORN horn-down — 10 ms. STD SETUP이 모드 소유(LCD dispatch가
+     * set_mode), 양손 키 press 엣지 = 솔 토글. 초음파/weld 배제는 게이트
+     * (app_reg_start_allowed / app_weld_tick)가 담당. app_input_tick 뒤 =
+     * estop 신선. */
+    app_horn_tick();
 
     /* 2.6 SEEK/RESET FSM — 10 ms cadence. run_active(us_run_status)를 읽어 RUN
      * 직교; ICON/hook만 emit (app_reg에 명령 안 보냄)이라 reg_tick 앞/뒤 무관 —
