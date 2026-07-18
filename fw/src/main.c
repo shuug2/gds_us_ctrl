@@ -23,6 +23,8 @@ extern void usart6_init(void);   /* drivers/usart.c */
 extern void tim11_init(void);    /* drivers/tim.c */
 extern void board_init(void);    /* src/board.c */
 
+#define BOOT_BEEP_MS  100u   /* 부팅 완료 1회 beep 길이 (점멸계 250ms와 구분) */
+
 int main(void) {
     HAL_Init();
     clock_init();      /* 96 MHz */
@@ -45,6 +47,9 @@ int main(void) {
     app_weld_init();   /* Stage Weld-Cycle: FSM reset (needs sys_tick up) */
     app_seek_reset_init();  /* Stage SEEK/RESET: FSM reset (needs sys_tick up) */
     app_buzzer_init();      /* 부저 글루 (needs sys_tick up) */
+    app_buzzer_beep_ms(BOOT_BEEP_MS);  /* 부팅 완료 1회 beep — 슈퍼루프 첫 tick부터
+                                        * 발음. legacy 부재(부저 호출부 전수: boot는
+                                        * buzzer_off뿐), 사용자 신규 요청 2026-07-18 */
     app_overload_init();    /* 과부하 글루 (needs io_init + sys_tick up) */
     app_input_init();       /* 물리 명령 입력 + E-stop 글루 (needs io_init + sys_tick up) */
     app_modbus_init(); /* Stage C: USART6 occupancy decision (needs cfg loaded by app_init) */
