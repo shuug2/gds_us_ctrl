@@ -190,4 +190,9 @@ void app_lcd_set_estop(bool on);
  * legacy samd20 main.c:4356-4370/4605-4617 등가). */
 void app_lcd_fault_cleared(void);
 
+/* 런 페이지 이탈(경고 전환) 시 터치 RUN-키 토글 재앵커 — show_error/E-stop이
+ * 호출. 눌린 채 페이지 전환되면 release data=0이 영영 안 와 토글 반전(떼면
+ * START). RUN_RELEASE 발행(+swallow 정리) 후 토글=0. */
+void app_lcd_input_run_key_reanchor(void);
+
 uint8_t app_lcd_in_run_page(void);   /* 1 = run 페이지 (slice4 weld SETUP 게이트) */

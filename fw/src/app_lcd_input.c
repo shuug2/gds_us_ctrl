@@ -140,6 +140,7 @@ void app_lcd_set_estop(bool on)
         dgus_write_text(VP_ERROR_MSG, "E-STOP");
         state->lcd_status = LCD_WARNING;
         dgus_set_page(state->lcd_status);
+        app_lcd_input_run_key_reanchor();   /* 홀드 중 페이지 이탈 → 토글 반전 방지 */
     } else if (lcd_may_restore_run_page()) {
         state->lcd_status = run_page_for_mode(state->sys_mode);
         dgus_set_page(state->lcd_status);
@@ -182,6 +183,18 @@ static uint8_t setup1_page_for_mode(uint8_t sys_mode)
  * long-press pairing below). Reset on SYS_PIC_NOW re-init: a panel reset
  * means the release edge will never arrive (§4.4). */
 static uint8_t s_run_key_down;
+
+/* 런 페이지를 떠나는 페이지 전환(경고: show_error/E-stop)에서 호출 — 눌린 채
+ * 페이지가 바뀌면 V30 런-키 컨트롤이 사라져 release data=0 이벤트가 영영 안
+ * 오고, 토글이 "눌림"에 고착돼 press↔release가 반전됨(2026-07-18 에너지 모드
+ * OVTIME 중 홀드 벤치 증상: 떼면 START). SYS_PIC_NOW 패널-리셋 처리와 동일
+ * 패턴: RUN_RELEASE(IDLE이면 no-op + 자동정지가 무장한 swallow_start 정리 —
+ * 안 하면 fault 후 첫 탭 1회 무시) + 토글 재앵커. */
+void app_lcd_input_run_key_reanchor(void)
+{
+    app_lcd_hook_us_command(US_CMD_RUN_RELEASE);
+    s_run_key_down = 0u;
+}
 
 /* KEY_MULTI (0x1080): 1=RESET / 2=SEEK / 3=RUN(press) / 4=RUN(release); the V30
  * DGUS asset additionally returns 0=RUN on both edges (toggle-mapped — §4.4).

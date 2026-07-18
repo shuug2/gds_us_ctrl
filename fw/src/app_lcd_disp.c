@@ -311,4 +311,7 @@ void app_lcd_show_error(uint8_t error_code)
      * 표시 중인데 state는 런 페이지로 남아 복귀가 전부 no-op (2026-07-11 벤치). */
     app_lcd_state()->lcd_status = LCD_WARNING;
     dgus_set_page(LCD_WARNING);
+    /* 런-키 홀드 중 페이지 이탈 → release data=0 소실 → 토글 반전 방지
+     * (2026-07-18 에너지 OVTIME 홀드 벤치). IDLE이면 no-op. */
+    app_lcd_input_run_key_reanchor();
 }
