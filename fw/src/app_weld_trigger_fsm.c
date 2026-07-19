@@ -7,6 +7,7 @@ static uint8_t s_in_cycle;   /* main.c:1472 set / 1219 clear */
 static uint8_t s_dn_bak;     /* 엣지 검출용 이전 레벨 (main.c re_dn_bak) */
 static uint8_t s_up_bak;
 
+/* 트리거 FSM 초기화 */
 void weld_trigger_fsm_init(void)
 {
     s_in_cycle = 0u;
@@ -14,6 +15,7 @@ void weld_trigger_fsm_init(void)
     s_up_bak   = 1u;
 }
 
+/* in_cycle 무장 */
 void weld_trigger_fsm_cycle_started(void)
 {
     /* 게이팅 통과·사이클 실시작 시에만 in_cycle 무장 — 게이팅에 막힌 트리거가
@@ -21,6 +23,7 @@ void weld_trigger_fsm_cycle_started(void)
     s_in_cycle = 1u;
 }
 
+/* 트리거/센서 1스텝 */
 void weld_trigger_fsm_step(const weld_trig_in_t *in, weld_trig_out_t *out)
 {
     /* 양손 시작 (main.c:1404): 둘 다 press(0) && !in_cycle. 레벨 파생 —

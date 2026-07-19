@@ -3,6 +3,7 @@
 #include "fram.h"
 #include "cfg_clamp.h"
 
+/* 공장 기본값 적용 */
 void app_config_factory_defaults(app_config_t *cfg)
 {
     /* defaults — samd20 factory_init (ref/samd20/main.c:753-828) */
@@ -37,6 +38,7 @@ void app_config_factory_defaults(app_config_t *cfg)
     }
 }
 
+/* 기본값 적용+FRAM 저장 */
 void app_config_factory_write(app_config_t *cfg)
 {
     app_config_factory_defaults(cfg);
@@ -44,6 +46,7 @@ void app_config_factory_write(app_config_t *cfg)
     app_config_save_all(cfg);
 }
 
+/* FRAM 설정 일괄 저장 */
 void app_config_save_all(const app_config_t *cfg)
 {
     /* full samd20 map (decision beta). FRAM = no write-cycle cost → write all. */
@@ -81,6 +84,7 @@ void app_config_save_all(const app_config_t *cfg)
     }
 }
 
+/* FRAM 설정 일괄 로드 */
 uint8_t app_config_load(app_config_t *cfg)
 {
     uint8_t fail = 0u;

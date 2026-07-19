@@ -42,17 +42,21 @@ static bool        s_available = false;
 /* _Alignas: ioLibrary casts this to (RIP_MSG*) which has uint32_t fields. */
 static _Alignas(uint32_t) uint8_t s_dhcp_buf[1024];  /* DHCP RX buffer (min 548) */
 
+/* eth 가용 여부 반환 */
 bool app_eth_available(void) { return s_available; }
 
 /* ioLibrary CS callbacks (it wants void(*)(void)). */
+/* CS 선택 콜백 */
 static void cs_sel(void)   { spi1_cs_low();  }
+/* CS 해제 콜백 */
 static void cs_desel(void) { spi1_cs_high(); }
 
-/* DHCP IP-assign + IP-update callback (same handler for both). Pull the leased
- * address from the client, apply it to the W5500, mirror it into the live cfg
- * for LCD display (RAM only — never committed to FRAM), and mark available. */
+/* DHCP 리스 반영 */
 static void dhcp_ip_assign(void)
 {
+    /* DHCP IP-assign + IP-update callback (same handler for both). Pull the leased
+     * address from the client, apply it to the W5500, mirror it into the live cfg
+     * for LCD display (RAM only — never committed to FRAM), and mark available. */
     wiz_NetInfo ni = {0};
     for (int i = 0; i < 6; i++) { ni.mac[i] = kEthMac[i]; }
     getIPfromDHCP(ni.ip);
@@ -76,23 +80,25 @@ static void dhcp_ip_assign(void)
                (unsigned)ni.ip[2], (unsigned)ni.ip[3]);
 }
 
-/* DHCP IP-conflict callback. NON-FATAL (samd20's while(1) halt is dropped):
- * drop availability and let the library DECLINE + re-request. */
+/* DHCP 충돌 처리 */
 static void dhcp_ip_conflict(void)
 {
+    /* DHCP IP-conflict callback. NON-FATAL (samd20's while(1) halt is dropped):
+     * drop availability and let the library DECLINE + re-request. */
     s_available = false;
     mon_printf("[eth] dhcp ip conflict — re-requesting\r\n");
 }
 
-/* Apply the net config on the PHY link-up transition (from app_eth_tick).
- * DHCP mode starts the client (stays unavailable until the lease arrives); any
- * other mode applies the static netinfo from cfg and becomes available.
- * Intentionally unconditional w.r.t. comm_mode (SERIAL included): in SERIAL the
- * TCP gate (comm_mode!=SERIAL) keeps the server closed, but a later runtime
- * switch to ETH_STATIC then serves without a reboot — preserving slice-2a
- * behavior. */
+/* link-up net 적용 */
 static void eth_apply_on_link(void)
 {
+    /* Apply the net config on the PHY link-up transition (from app_eth_tick).
+     * DHCP mode starts the client (stays unavailable until the lease arrives); any
+     * other mode applies the static netinfo from cfg and becomes available.
+     * Intentionally unconditional w.r.t. comm_mode (SERIAL included): in SERIAL the
+     * TCP gate (comm_mode!=SERIAL) keeps the server closed, but a later runtime
+     * switch to ETH_STATIC then serves without a reboot — preserving slice-2a
+     * behavior. */
     const app_config_t *cfg = app_lcd_cfg();
 
     if (cfg->comm_mode == COMM_ETH_DHCP) {
@@ -135,17 +141,18 @@ static void eth_apply_on_link(void)
                (unsigned)ni.ip[2], (unsigned)ni.ip[3]);
 }
 
-/* M7: LCD DATA_SAVE committed new comm_mode/ether fields (dirty flag from
- * app_lcd) — re-apply the net lifecycle against the live cfg without a reboot.
- * samd20 re-ran close_tcps+network_init on save (main.c:3327-3403); this
- * restores that liveness. Phase transitions (spec §3.3):
- *   DOWN      no-op (chip absent — boot policy, no retry)
- *   LINKWAIT  no-op (link-up path reads the live cfg anyway)
- *   STATIC_UP drop sock0 + re-apply (static re-netinfo, or DHCP start)
- *   DHCP_RUN  still DHCP -> keep the lease; else stop DHCP + drop sock0 +
- *             re-apply static */
+/* eth 설정 재적용 */
 static void eth_reapply(void)
 {
+    /* M7: LCD DATA_SAVE committed new comm_mode/ether fields (dirty flag from
+     * app_lcd) — re-apply the net lifecycle against the live cfg without a reboot.
+     * samd20 re-ran close_tcps+network_init on save (main.c:3327-3403); this
+     * restores that liveness. Phase transitions (spec §3.3):
+     *   DOWN      no-op (chip absent — boot policy, no retry)
+     *   LINKWAIT  no-op (link-up path reads the live cfg anyway)
+     *   STATIC_UP drop sock0 + re-apply (static re-netinfo, or DHCP start)
+     *   DHCP_RUN  still DHCP -> keep the lease; else stop DHCP + drop sock0 +
+     *             re-apply static */
     const app_config_t *cfg = app_lcd_cfg();
 
     mon_printf("[eth] reapply mode=%u phase=%u\r\n",
@@ -171,6 +178,7 @@ static void eth_reapply(void)
     }
 }
 
+/* eth 칩 부트 초기화 */
 bool app_eth_init(void)
 {
     s_available = false;
@@ -202,12 +210,13 @@ bool app_eth_init(void)
     return true;
 }
 
-/* Superloop driver. While LINKWAIT, polls the PHY link every LINK_POLL_MS and
- * applies the net config on link-up. While DHCP_RUN, drives the DHCP client
- * (1 s DHCP_time_handler + DHCP_run; DHCP_FAILED -> re-init, keep retrying, no
- * static fallback — spec §3.3). No-op once STATIC_UP or DOWN. */
+/* eth 슈퍼루프 tick */
 void app_eth_tick(void)
 {
+    /* Superloop driver. While LINKWAIT, polls the PHY link every LINK_POLL_MS and
+     * applies the net config on link-up. While DHCP_RUN, drives the DHCP client
+     * (1 s DHCP_time_handler + DHCP_run; DHCP_FAILED -> re-init, keep retrying, no
+     * static fallback — spec §3.3). No-op once STATIC_UP or DOWN. */
     /* M7: consume the LCD commit flag in every phase (DOWN/LINKWAIT re-apply
      * is a no-op — those phases read the live cfg on their own path). */
     if (app_lcd_ether_dirty_take()) {

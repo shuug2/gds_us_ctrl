@@ -1,6 +1,7 @@
 /* fw/src/app_modbus_tcp_frame.c — see app_modbus_tcp_frame.h. */
 #include "app_modbus_tcp_frame.h"
 
+/* MBAP 응답 조립 */
 bool mb_tcp_build_response(mb_core_t *mb, const uint8_t *req, uint16_t req_len,
                            uint8_t out[MB_TCP_RESP_MAX], uint16_t *out_len,
                            uint8_t *fc_out)
@@ -46,6 +47,7 @@ bool mb_tcp_build_response(mb_core_t *mb, const uint8_t *req, uint16_t req_len,
     return true;
 }
 
+/* 프레임 경계 판정 */
 mb_tcp_fr_t mb_tcp_frame_peek(const uint8_t *buf, uint16_t len,
                               uint16_t *frame_len)
 {

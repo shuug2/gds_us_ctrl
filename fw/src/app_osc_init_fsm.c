@@ -6,6 +6,7 @@ static uint8_t  s_state;
 static uint16_t s_elapsed;     /* 상태 진입 후 경과 (10ms/tick) */
 static uint8_t  s_h_debounce;  /* WAIT_H: 연속 H 샘플 카운트 */
 
+/* OSC init FSM 초기화 */
 void osc_init_fsm_init(void)
 {
     s_state      = OSC_WAIT_H;
@@ -13,11 +14,13 @@ void osc_init_fsm_init(void)
     s_h_debounce = 0u;
 }
 
+/* FSM 상태 조회 */
 uint8_t osc_init_fsm_state(void)
 {
     return s_state;
 }
 
+/* OSC init FSM 1틱 진행 */
 void osc_init_fsm_step(const osc_init_in_t *in, osc_init_out_t *out)
 {
     memset(out, 0, sizeof(*out));

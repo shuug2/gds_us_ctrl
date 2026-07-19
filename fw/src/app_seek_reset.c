@@ -16,6 +16,7 @@
 static uint32_t s_prev_ms;
 static uint8_t  s_pending_cmd;   /* SR_CMD_* one-shot 래치 (다음 tick 소비) */
 
+/* SEEK/RESET 글루 초기화 */
 void app_seek_reset_init(void)
 {
     seek_reset_fsm_init();
@@ -23,6 +24,7 @@ void app_seek_reset_init(void)
     s_pending_cmd = SR_CMD_NONE;
 }
 
+/* SEEK/RESET 명령 래치 */
 void app_seek_reset_request(us_cmd_t cmd, uint8_t src)
 {
     /* src는 추적용 — 본 스테이지 미사용 (samd20 comm RESET이 src=US_TOUCH로
@@ -35,11 +37,13 @@ void app_seek_reset_request(us_cmd_t cmd, uint8_t src)
     }
 }
 
+/* 체인 진행중 여부 */
 uint8_t app_seek_reset_active(void)
 {
     return (uint8_t)(seek_reset_fsm_state() != SR_IDLE);
 }
 
+/* OSC 라인 레벨 구동 */
 void app_seek_reset_hook_signal(uint8_t which, bool on)
 {
     /* 실 OSC 라인 구동 (2026-07-05 벤치, stub 해제) — legacy do_control이
@@ -56,6 +60,7 @@ void app_seek_reset_hook_signal(uint8_t which, bool on)
                (which == SR_CMD_RESET) ? "RESET" : "SEEK", on ? "ON" : "OFF");
 }
 
+/* SEEK/RESET 10ms tick */
 void app_seek_reset_tick(void)
 {
     uint32_t now = sys_tick_get_ms();

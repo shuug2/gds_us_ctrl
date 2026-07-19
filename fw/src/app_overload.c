@@ -20,6 +20,7 @@ static uint32_t s_prev_ms;
 static uint32_t s_blink_ms;
 static uint8_t  s_active;
 
+/* 과부하 글루 초기화 */
 void app_overload_init(void)
 {
     overload_fsm_init();
@@ -29,8 +30,10 @@ void app_overload_init(void)
     io_ovld_relay(false);
 }
 
+/* 과부하 활성 여부 */
 uint8_t app_overload_active(void) { return s_active; }
 
+/* 과부하 10ms tick 처리 */
 void app_overload_tick(void)
 {
     uint32_t now = sys_tick_get_ms();

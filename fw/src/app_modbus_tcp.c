@@ -42,23 +42,25 @@ static uint8_t  s_txacc[MB_TCP_TXACC_LEN];  /* poll당 응답 코얼레스 (스�
 static uint32_t s_cw_since_ms;              /* CLOSE_WAIT 진입 스탬프 */
 static uint8_t  s_cw_active;
 
-/* M7 (eth re-apply) + M8 (comm_mode 이탈): sock0 강제 close + 수신/종료
- * 상태 리셋. close()는 CLOSED 소켓에 무해. 호출측 계약: W5500이 살아있던
- * 경로에서만 호출됨(app_eth_available 게이트) — 칩 부재 시 vendor close()의
- * 레지스터 폴링 스핀 위험은 도달 불가. */
+/* sock0 강제 close */
 void app_modbus_tcp_reset(void)
 {
+    /* M7 (eth re-apply) + M8 (comm_mode 이탈): sock0 강제 close + 수신/종료
+     * 상태 리셋. close()는 CLOSED 소켓에 무해. 호출측 계약: W5500이 살아있던
+     * 경로에서만 호출됨(app_eth_available 게이트) — 칩 부재 시 vendor close()의
+     * 레지스터 폴링 스핀 위험은 도달 불가. */
     (void)close(MB_TCP_SOCK);
     s_acc_len   = 0u;
     s_cw_active = 0u;
 }
 
-/* Port of samd20 process_tcp.c control_tcps: walk the socket FSM one step.
- * M9: 소켓을 SF_IO_NONBLOCK으로 열어 disconnect()가 DISCON 발행 후 즉시
- * SOCK_BUSY 반환(socket.c:491-513) — CLOSE_WAIT에서 슈퍼루프 무정지. DISCON
- * 후 LAST_ACK로 이탈하므로 재발행 없음; 500ms 내 미완료면 close() 벨트. */
+/* 소켓 FSM 1스텝 */
 static void control_tcp(void)
 {
+    /* Port of samd20 process_tcp.c control_tcps: walk the socket FSM one step.
+     * M9: 소켓을 SF_IO_NONBLOCK으로 열어 disconnect()가 DISCON 발행 후 즉시
+     * SOCK_BUSY 반환(socket.c:491-513) — CLOSE_WAIT에서 슈퍼루프 무정지. DISCON
+     * 후 LAST_ACK로 이탈하므로 재발행 없음; 500ms 내 미완료면 close() 벨트. */
     switch (getSn_SR(MB_TCP_SOCK)) {
         case SOCK_ESTABLISHED:
             s_cw_active = 0u;
@@ -94,6 +96,7 @@ static void control_tcp(void)
     }
 }
 
+/* TCP 서버 poll */
 void app_modbus_tcp_poll(void)
 {
     control_tcp();

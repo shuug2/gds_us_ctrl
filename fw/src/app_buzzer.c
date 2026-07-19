@@ -9,6 +9,7 @@
 static uint32_t s_prev_ms;
 static uint8_t  s_last;
 
+/* 부저 글루 초기화 */
 void app_buzzer_init(void)
 {
     buzzer_fsm_init();
@@ -17,6 +18,7 @@ void app_buzzer_init(void)
     io_buzzer(false);
 }
 
+/* ms 단위 beep 요청 */
 void app_buzzer_beep_ms(uint16_t ms)
 {
     /* ms=0 → no-op; 0<ms<10 은 최소 1 tick으로 클램프 (10ms 미만 묵음 방지, 리뷰 M-2). */
@@ -27,6 +29,7 @@ void app_buzzer_beep_ms(uint16_t ms)
     buzzer_fsm_beep(ticks);
 }
 
+/* 부저 10ms tick 처리 */
 void app_buzzer_tick(void)
 {
     uint32_t now = sys_tick_get_ms();

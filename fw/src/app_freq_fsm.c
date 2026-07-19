@@ -14,6 +14,7 @@ static volatile uint32_t s_batch_seq;    /* 완성 batch마다 ++ */
 /* main이 쓰는 상태 (단일 소비자) */
 static uint32_t s_last_seen_seq;
 
+/* FREQ FSM 초기화 */
 void freq_fsm_init(void)
 {
     s_prev_cap     = 0u;
@@ -25,6 +26,7 @@ void freq_fsm_init(void)
     s_last_seen_seq = 0u;
 }
 
+/* 캡처 Δ 누산·batch 래치 */
 void freq_fsm_on_capture(uint32_t capture)
 {
     if (!s_have_prev) {              /* 첫 캡처는 기준점만 (Δ 없음) */
@@ -44,6 +46,7 @@ void freq_fsm_on_capture(uint32_t capture)
     }
 }
 
+/* batch 평균 주파수 계산 */
 uint16_t freq_fsm_compute(int16_t cal_val)
 {
     if (s_batch_seq == s_last_seen_seq) {

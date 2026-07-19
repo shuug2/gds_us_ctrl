@@ -11,6 +11,7 @@ const uint16_t reg_lookup_table[24] = {
     0x00CF, 0x009C, 0x0069, 0x0036, 0x000F, 0x0004, 0x0004, 0x0054
 };
 
+/* ADC 입력 ×6 스케일 */
 uint16_t reg_scale(uint16_t in)
 {
     if (in >= 1000u) return 1000u;       /* SCALE-04: input ceiling (cpi 0x03E8) */
@@ -18,6 +19,7 @@ uint16_t reg_scale(uint16_t in)
     return (uint16_t)(in * 6u);           /* SCALE-06: ×6 (not >>6), range [18,5994] */
 }
 
+/* 스케일값→출력 레벨 */
 uint8_t reg_output_level(uint16_t scaled)
 {
     for (uint8_t i = 0u; i < 21u; i++) {
@@ -28,6 +30,7 @@ uint8_t reg_output_level(uint16_t scaled)
     return 21u;                                /* no match -> output off (@0x15B2) */
 }
 
+/* 램프 카운터→레벨 */
 uint16_t reg_ramp_level(uint16_t counter)
 {
     /* M16 app_0x1226 rung thresholds (recon :249-258); per-rung level =
@@ -46,6 +49,7 @@ uint16_t reg_ramp_level(uint16_t counter)
     return 1024u;   /* counter >= 401: full; caller transitions state to 0 */
 }
 
+/* 경과ms→200ms 단위 */
 uint8_t reg_on_time_200m(uint32_t run_elapsed_ms)
 {
     uint32_t units = run_elapsed_ms / 200u;
@@ -55,11 +59,13 @@ uint8_t reg_on_time_200m(uint32_t run_elapsed_ms)
 /* spec §4.2: 500ms 에너지-단위 윈도우 / REG_TICK_MS(2ms) = 250 샘플. */
 #define REG_ENERGY_DIV  250u
 
+/* 누산→에너지 환산 */
 uint32_t reg_energy_from_acc(uint32_t acc_energy)
 {
     return acc_energy / REG_ENERGY_DIV;
 }
 
+/* energy 런 종료 판정 */
 reg_energy_outcome_t reg_energy_termination(uint8_t energy_ctrl, uint32_t curr_energy,
                                             uint32_t limit_energy, uint32_t elapsed_ms,
                                             uint16_t limit_out_time)
@@ -97,6 +103,7 @@ reg_energy_outcome_t reg_energy_termination(uint8_t energy_ctrl, uint32_t curr_e
 #define REG_POWER_NUM       22u   /* samd20 ×2.2 */
 #define REG_POWER_DEN       10u
 
+/* ch1 ADC→표시 전류 */
 uint16_t reg_current_from_adc(uint16_t ch1_avg, int16_t cal_val)
 {
     int32_t v = (int32_t)ch1_avg * (int32_t)REG_CURR_GAIN_NUM
@@ -107,6 +114,7 @@ uint16_t reg_current_from_adc(uint16_t ch1_avg, int16_t cal_val)
     return (uint16_t)(v - (int32_t)REG_CURR_OFFSET);
 }
 
+/* 전류→표시 전력 환산 */
 uint16_t reg_power_from_amp(uint16_t curr_amp)
 {
     return (uint16_t)(((uint32_t)curr_amp * REG_POWER_NUM) / REG_POWER_DEN);

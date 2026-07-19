@@ -20,6 +20,7 @@ static uint32_t s_prev_ms;
 static uint32_t s_blink_ms;
 static uint8_t  s_estop_active;
 
+/* 입력 글루 초기화 */
 void app_input_init(void)
 {
     input_fsm_init();
@@ -28,8 +29,10 @@ void app_input_init(void)
     s_estop_active = 0u;
 }
 
+/* E-stop 활성 여부 */
 uint8_t app_estop_active(void) { return s_estop_active; }
 
+/* 입력 10ms tick 처리 */
 void app_input_tick(void)
 {
     uint32_t now = sys_tick_get_ms();

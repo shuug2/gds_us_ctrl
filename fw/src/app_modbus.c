@@ -40,30 +40,34 @@ static uint8_t g_tcp_active;   /* rising-edge baseline guard for ETH mode */
 static uint32_t s_remote_ms;    /* last decoded request (REMOTE icon hold base) */
 static uint8_t  s_remote_seen;  /* 0 until the first request — boot/wrap guard */
 
-/* samd20 modbus_status 등가: 유효 요청 디코드 시각 스탬프 (RTU/TCP 공용). */
+/* REMOTE 시각 스탬프 */
 void app_modbus_note_remote(void)
 {
+    /* samd20 modbus_status 등가: 유효 요청 디코드 시각 스탬프 (RTU/TCP 공용). */
     s_remote_ms   = sys_tick_get_ms();
     s_remote_seen = 1u;
 }
 
-/* REMOTE icon 게이트: 마지막 요청 후 1 s 유지 (samd20 main.c:5189-5192). */
+/* REMOTE icon 게이트 */
 bool app_modbus_remote_active(void)
 {
+    /* REMOTE icon 게이트: 마지막 요청 후 1 s 유지 (samd20 main.c:5189-5192). */
     return (s_remote_seen != 0u) &&
            ((uint32_t)(sys_tick_get_ms() - s_remote_ms) < MB_REMOTE_HOLD_MS);
 }
 
+/* mb 코어 ctx 반환 */
 mb_core_t *app_modbus_core(void)
 {
     return &g_mb;
 }
 
-/* samd20 update_holding_reg(0): live values -> holding mirror. Runs every
- * owned tick (plan Deviations 6: fresher reads than samd20's post-message
- * refresh + immediately normalizes clamped writes). */
+/* live 값 mirror */
 static void mirror_live(void)
 {
+    /* samd20 update_holding_reg(0): live values -> holding mirror. Runs every
+     * owned tick (plan Deviations 6: fresher reads than samd20's post-message
+     * refresh + immediately normalizes clamped writes). */
     const app_config_t  *cfg = app_lcd_cfg();
     const lcd_measure_t *m   = app_lcd_measure();
     uint8_t running = (m->us_run_status != (uint8_t)US_IDLE) ? 1u : 0u;
@@ -116,11 +120,12 @@ static void mirror_live(void)
     g_mb.holding[MB_REG_STATUS]      = status;
 }
 
-/* samd20 update_holding_reg(1): one else-if chain per message — commands
- * first (consume-and-clear), then the single config field that differs
- * (clamped, persisted). Chain order preserved verbatim. */
+/* FC06 write 적용 */
 void app_modbus_apply_writes(void)
 {
+    /* samd20 update_holding_reg(1): one else-if chain per message — commands
+     * first (consume-and-clear), then the single config field that differs
+     * (clamped, persisted). Chain order preserved verbatim. */
     app_config_t *cfg = app_lcd_cfg();
     uint16_t v;
     bool save = false;
@@ -259,10 +264,11 @@ void app_modbus_apply_writes(void)
      * this chain on the next message. */
 }
 
-/* Occupancy + line-config edge detector. Cheap compares every tick;
- * transitions (close/open, mon gate) only on change. */
+/* 점유/라인설정 전이 */
 static void apply_config(void)
 {
+    /* Occupancy + line-config edge detector. Cheap compares every tick;
+     * transitions (close/open, mon gate) only on change. */
     const app_config_t *cfg = app_lcd_cfg();
     uint8_t want = ((cfg->comm_mode == MB_COMM_MODE_SERIAL) &&
                     (cfg->comm_address != 0u)) ? 1u : 0u;
@@ -310,6 +316,7 @@ static void apply_config(void)
     }
 }
 
+/* modbus 글루 초기화 */
 void app_modbus_init(void)
 {
     memset(&g_applied, 0, sizeof(g_applied));
@@ -317,18 +324,20 @@ void app_modbus_init(void)
     apply_config();
 }
 
-/* M8: TCP 서버를 떠나는 전이(RTU 점유 or ETH 불가)에서 sock0 + 수신 상태
- * 정리 — ESTABLISHED 방치 차단(감사 M8). 전이에서만 호출해 매-tick 중복
- * close(무해하나 SPI 낭비) 회피. g_tcp_active=1은 app_eth_available() 참
- * 경로에서만 세워지므로 칩-부재 시 도달 불가(vendor close 스핀 안전). */
+/* TCP 이탈 정리 */
 static void tcp_leave(void)
 {
+    /* M8: TCP 서버를 떠나는 전이(RTU 점유 or ETH 불가)에서 sock0 + 수신 상태
+     * 정리 — ESTABLISHED 방치 차단(감사 M8). 전이에서만 호출해 매-tick 중복
+     * close(무해하나 SPI 낭비) 회피. g_tcp_active=1은 app_eth_available() 참
+     * 경로에서만 세워지므로 칩-부재 시 도달 불가(vendor close 스핀 안전). */
     if (g_tcp_active != 0u) {
         app_modbus_tcp_reset();
         g_tcp_active = 0u;
     }
 }
 
+/* modbus 매 tick 처리 */
 void app_modbus_tick(void)
 {
     apply_config();
