@@ -17,9 +17,6 @@ void app_modbus_init(void);
  * run the write-apply pass on FC06, refresh the live register mirror. */
 void app_modbus_tick(void);
 
-/* True while Modbus owns USART6 (mon output suppressed). */
-bool app_modbus_owns_usart6(void);
-
 /* Shared Modbus core instance (register tables). RTU (this file) and TCP
  * (app_modbus_tcp.c) decode into the SAME core so register semantics are
  * single-sourced. */

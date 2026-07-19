@@ -24,7 +24,7 @@
  */
 static uint8_t s_tx_buf[32];                            /* 헤더(6) + payload max(23) + α */
 
-/* TX 카운터 */
+/* TX 카운터 (SWD 정적 read 진단용) */
 static uint16_t s_dgus_tx_timeout_count;
 
 /* RX 파서 상태머신 */
@@ -40,7 +40,7 @@ static uint8_t       s_frame_buf[32];                   /* LEN_max + 약간 여�
 static uint8_t       s_frame_idx;
 static uint8_t       s_bytes_remaining;
 static uint32_t      s_frame_start_ms;                  /* 벽시계 timeout (samd20 결함 #2 회피) */
-static uint16_t      s_dgus_rx_drop_count;
+static uint16_t      s_dgus_rx_drop_count;             /* SWD 정적 read 진단용 */
 
 /*--------------------------------------------------------------
  * 공개 — init / accessor
@@ -55,16 +55,6 @@ void dgus_init(void)
     s_dgus_rx_drop_count    = 0;
     s_dgus_tx_timeout_count = 0;
     /* USART1 / RX ring 책임은 usart1_init. 여기선 dgus 레이어 상태만 */
-}
-
-uint16_t dgus_rx_drop_count(void)
-{
-    return s_dgus_rx_drop_count;
-}
-
-uint16_t dgus_tx_timeout_count(void)
-{
-    return s_dgus_tx_timeout_count;
 }
 
 bool dgus_is_echo(const dgus_frame_t *f)

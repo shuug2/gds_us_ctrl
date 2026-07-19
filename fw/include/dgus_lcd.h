@@ -174,16 +174,10 @@ bool dgus_is_echo(const dgus_frame_t *f);             /* cmd == 0x82 */
 bool dgus_read_word(uint16_t addr, uint16_t *out_val, uint32_t timeout_ms);
 bool dgus_wait_ready(uint32_t timeout_ms);            /* poll SYS_PIC_NOW until panel UART answers */
 
-/* 관측성 (chunk 6f GDB read 용) */
-uint16_t dgus_rx_drop_count(void);
-uint16_t dgus_tx_timeout_count(void);
-
 /*--------------------------------------------------------------
  * Stage A 데모 설정 (사용자가 보드에 맞춰 수정 가능)
  *--------------------------------------------------------------*/
 
-#define DGUS_DEMO_BOOT_PAGE      LCD_RUN_STD    /* 9 — VAR_POWER 시각화되는 페이지 */
-#define DGUS_DEMO_UPTIME_VP      VAR_POWER      /* 0x1110 — U16 (wrap @ 65535초) */
 #define DGUS_DEMO_RESET_ON_BOOT  0              /* 0=skip / 1=부팅 시 LCD 풀-재시작 */
 
 /*--------------------------------------------------------------

@@ -54,11 +54,6 @@ bool app_modbus_remote_active(void)
            ((uint32_t)(sys_tick_get_ms() - s_remote_ms) < MB_REMOTE_HOLD_MS);
 }
 
-bool app_modbus_owns_usart6(void)
-{
-    return g_applied.owned != 0u;
-}
-
 mb_core_t *app_modbus_core(void)
 {
     return &g_mb;
