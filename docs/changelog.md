@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+### 2026-07-18~19 — 사용자 벤치 신규 8건(fix/기능) 전건 HW PASS + USOUT=PCB 확정
+
+풀배선 벤치 인터랙티브 세션. 사용자가 발견한 표시/부팅/알람/모드 이슈를 벤치-수정 관례(main 직접 커밋 + cpp-review + 당일 HW 재검증)로 처리. 보드 = `61524c1` 플래시·검증됨. **무변경 결정**: EMA α=1/2 유지·숫자 피크홀드·cal_val=16.
+
+- **`6af9882` feat(reg) 표시 데드밴드 20→14**: 최소 표시 0.15A = legacy 실효 게이트(main.c:420 `>51 −37` 도메인) 복원. 구 20은 0.21A 플로어였음. 바 게이트(>10) 무변경 — 데드밴드가 상류 지배로 숫자·바 모두 0.15A부터. host 벡터 갱신. HW PASS.
+- **`a46eaf3` fix(input) 부팅 유령 SEEK**: `input_fsm_init` bak 1→0(legacy BSS zero-init 충실). 벤치 리그 EMSW NC 배선(평시 LOW) PC11이 model_type=multi에서 SEEK 역할이라 부팅 첫 tick에 유령 seek_press → 앱 SEEK 체인. host `test_boot_active_inputs_no_ghost` 신설. HW PASS.
+- **`2ea5c2d`+`2cee1cc` feat(buzzer) 부팅 beep 100ms**: legacy 부재 = 신규 기능(부저 호출부 전수 확인). `sys_tick_init` 직후 블로킹 직접 구동(전원 직후 발음, OSC PB12 윈도 전 종료). HW PASS.
+- **`6e30499` feat(alarm) fault 부저 알람**: `app_fault_alarm` 글루 신설 — `measure.error_status`(OVTIME 등) 활성 중 250ms/500ms 점멸(legacy led_update SYS_ERROR 복원). 포팅은 E-stop/과부하 개별 점멸만 있어 일반 fault가 무음이었음. 과부하/E-stop과 disjoint(중복 없음). HW PASS.
+- **`789f347` fix(lcd) 터치 토글 반전**: 홀드 중 OVTIME→경고 페이지 전환이 V30 RUN 컨트롤을 지워 release data=0 소실→`s_run_key_down` '눌림' 고착→press↔release 반전("떼면 START"+재시작마다 run_start_ms 리셋으로 제한시간 누적 불능; 외부 GPIO 신호는 무관). `app_lcd_input_run_key_reanchor()`(RUN_RELEASE+토글0+swallow 정리)를 show_error 끝+set_estop(true)에서 호출. HW PASS.
+- **`519d908` feat(horn) SYS_HORN 포팅**: STD 모드 horn-down 중 양손 스타트가 일반 weld 사이클(초음파 출력)로 진입하던 것 — legacy는 SYS_HORN 별도 상태로 양손 키=솔 토글, 초음파/weld 완전 배제(main.c:1433-1440/1634-1644). 순수 `app_horn_fsm`(host 8테스트)+글루+게이트 2곳(`app_reg_start_allowed`+`app_weld_tick` 동결)+SETUP 체크박스 미러. cpp 1차 **BLOCK**(weld/horn 각자 write-on-change 캐시로 horn 진입이 weld 잔류 SOL 못 끔=CRITICAL)→모드 전이 시 캐시 우회 무조건 OFF→APPROVE. HW PASS.
+- **`61524c1` fix(weld) STD weld OVTIME 알람**: STD 양손 트리거는 weld cycle(US_CYCLE)로 도는데 app_reg 에너지 OVTIME 분기(TOUCH/COMM/REMOTE)에서 구조적 제외 → weld backstop abort가 weld_fault만 내고 error_status 미세팅(app_weld_fsm.c:217 "후속 SYS_ERROR" 이연분). `app_reg_raise_ovtime()` 신설→`app_weld_hook_fault()`가 호출→직접런 OVTIME과 통합(부저+경고+STATUS+RESET 복구). legacy RUN_WELD OVTIME(main.c:5288-5293) 충실. HW PASS.
+- **USOUT(PB4) 미출력 = 코드 정상, PCB 원인**(무수정): 구동 조건(active 전이→io_usout)·극성(active-HIGH=legacy CTRL_ON=1)·핀 충돌 없음(SPI1=PA4/PC4/PC5, OSC=PB2/PB10/PB14)·핀 설정 전부 정상 확인 → 사용자 PCB 확정.
+- 게이트: 전건 cpp APPROVE + our-code 0-warning + host **14스위트** PASS(신규 horn_fsm 8케이스). **설계 불변식 3종**: dgus_set_page↔lcd_status 스탬프 쌍 / 런 페이지 이탈 시 run_key_reanchor / 공유 액추에이터 소유권 전이 시 캐시 우회 강제 write. ⚠ push 미실행(코드 8 + docs + 태그 이월). ⚠ 세션 말미 보드 전원 OFF·잔재 설정 불확정(재개 시 실측).
+
 ### 2026-07-11 — FW 벤치: 신규 3건 중 2건 HW PASS + OVTIME 경고화면 복귀 버그 발견·수정·검증
 
 풀배선 벤치(ETH .199)에서 2026-07-08 코드-완료분 재플래시 후 검증 + 벤치 중 사용자 발견 버그 수정. 보드 = `88faf08` 플래시·검증됨.
