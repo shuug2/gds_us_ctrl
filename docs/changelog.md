@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### 2026-07-19 — fw 전체 리팩토링 (브랜치 refactor/ponytail-cleanup, HW 재검증 게이트)
+
+- **`b02f5b1` 죽은 코드 삭제**: 미호출 게터 3(app_modbus_owns_usart6, dgus rx/tx 카운터 게터 — 백킹 static은 SWD 진단용 보존) + 데모 매크로 2. reg_ramp_level은 in-code keep 명시로 보존. 바이너리 동일.
+- **`e195564` app_lcd_input.c 분할**: comm/ether/DATA_SAVE → 신규 `app_lcd_comm.c`(1038→622+415), 심=`app_lcd_input_priv.h`. 순수 이동(cpp-review 바이트 단위 검증 APPROVE).
+- **`30d001c` app_reg_tick 추출**: `reg_check_safety_ceiling`/`reg_check_auto_terminate` static 헬퍼(118→57라인). 순수 이동, 30s ceiling 주석 verbatim.
+- **`65ceded`~`ac41cd6` 주석 통일**: 전 함수(269) 한국어 ≤20자 헤더 주석, 장문 헤더의 load-bearing 정보(legacy/spec/V30/W5500/안전 근거)는 본문 verbatim 이동 — 지표 무손실(samd20 255·main.c: 112·§ 79). **바이너리 동일 입증**.
+- 게이트: our-code 0-warning + host 14스위트 PASS 전 스테이지. **HW 재검증 필요(머지 전)**: ① LCD SETUP comm/ether 편집+DATA_SAVE 저장/복귀 ② 직접런 560ms ceiling+OVTIME 무회귀 ③ Modbus FC03/06 스모크.
+
 ### 2026-07-18~19 — 사용자 벤치 신규 8건(fix/기능) 전건 HW PASS + USOUT=PCB 확정
 
 풀배선 벤치 인터랙티브 세션. 사용자가 발견한 표시/부팅/알람/모드 이슈를 벤치-수정 관례(main 직접 커밋 + cpp-review + 당일 HW 재검증)로 처리. 보드 = `61524c1` 플래시·검증됨. **무변경 결정**: EMA α=1/2 유지·숫자 피크홀드·cal_val=16.
