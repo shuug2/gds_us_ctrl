@@ -41,7 +41,7 @@
  * Shadow-only: write temp_* + echo the fixed-width text field.
  *--------------------------------------------------------------*/
 
-/* COMM_ADDR (0x1071): temp_address shadow + " NNN"/"NONE" echo. */
+/* COMM_ADDR 편집 에코 */
 void handle_comm_addr(uint16_t data16)
 {
     lcd_app_state_t *state = app_lcd_state();
@@ -52,7 +52,7 @@ void handle_comm_addr(uint16_t data16)
     dgus_write_bytes(COMM_ADDR_TXT, addr_buf, COMM_ADDR_TXT_LEN);
 }
 
-/* COMM_SPEED (0x1072): temp_speed_idx shadow + table-text echo (bounds-guarded). */
+/* COMM_SPEED 편집 에코 */
 void handle_comm_speed(uint16_t data16)
 {
     lcd_app_state_t *state = app_lcd_state();
@@ -65,7 +65,7 @@ void handle_comm_speed(uint16_t data16)
     dgus_write_bytes(COMM_SPEED_TXT, comm_speed_txt[idx], COMM_SPEED_TXT_LEN);
 }
 
-/* COMM_PARITY (0x1073): temp_parity_idx shadow + table-text echo (bounds-guarded). */
+/* COMM_PARITY 편집 에코 */
 void handle_comm_parity(uint16_t data16)
 {
     lcd_app_state_t *state = app_lcd_state();
@@ -78,12 +78,13 @@ void handle_comm_parity(uint16_t data16)
     dgus_write_bytes(COMM_PARITY_TXT, comm_parity_txt[idx], COMM_PARITY_TXT_LEN);
 }
 
-/* LV_COMM_MODE (0x140b): serial / ethernet-static / toggle-DHCP↔static
- * (samd20 main.c:4039-4079). Updates temp_comm_mode shadow + DISP_COMM_MODE /
- * DISP_EN_DHCP echoes + swaps between serial (_MHC/_STDC) and ethernet
- * (_MHE/_STDE) pages. */
+/* comm 모드 선택 처리 */
 void handle_comm_mode(uint16_t data16)
 {
+    /* LV_COMM_MODE (0x140b): serial / ethernet-static / toggle-DHCP↔static
+     * (samd20 main.c:4039-4079). Updates temp_comm_mode shadow + DISP_COMM_MODE /
+     * DISP_EN_DHCP echoes + swaps between serial (_MHC/_STDC) and ethernet
+     * (_MHE/_STDE) pages. */
     lcd_app_state_t *state = app_lcd_state();
 
     if (data16 == 0) {                                  /* serial */
@@ -123,7 +124,7 @@ void handle_comm_mode(uint16_t data16)
  * Mojibake comments in the source ignored; logic ported verbatim.
  *--------------------------------------------------------------*/
 
-/* key: raw digit 0..9, or 'D' dot, 'B' backspace, 'E' enter. */
+/* IP 문자 입력 FSM */
 static void process_ip_char(uint8_t key)
 {
     lcd_app_state_t *state = app_lcd_state();
@@ -176,7 +177,7 @@ static void process_ip_char(uint8_t key)
     /* any other key ignored (samd20) */
 }
 
-/* Seed the ether FSM for a freshly selected field from its shadow octets. */
+/* ether 필드 선택 시드 */
 static void ether_select_field(uint8_t field, const uint8_t shadow[4])
 {
     lcd_app_state_t *state = app_lcd_state();
@@ -196,11 +197,12 @@ static void ether_select_field(uint8_t field, const uint8_t shadow[4])
     state->ether_has_input = 1u;
 }
 
-/* LV_ETHER_KEY (0x140f): field select 'I'/'M'/'G' or digit/'D'/'B'/'E' edit
- * (samd20 main.c:4080-4135). On enter-complete commit ether_temp_ip → the
- * selected temp_ether_* shadow; echo the live edit buffer to COMM_*_TXT. */
+/* ether 키 입력 처리 */
 void handle_ether_key(uint16_t data16)
 {
+    /* LV_ETHER_KEY (0x140f): field select 'I'/'M'/'G' or digit/'D'/'B'/'E' edit
+     * (samd20 main.c:4080-4135). On enter-complete commit ether_temp_ip → the
+     * selected temp_ether_* shadow; echo the live edit buffer to COMM_*_TXT. */
     lcd_app_state_t *state = app_lcd_state();
     uint8_t key = (uint8_t)data16;
     uint8_t disp_buf[COMM_IP_TXT_LEN];
@@ -246,10 +248,11 @@ void handle_ether_key(uint16_t data16)
  * DATA_SAVE (0x1050) — bulk commit / rollback (spec §8).
  *--------------------------------------------------------------*/
 
-/* Commit the addr/speed/parity comm shadows → live cfg if any changed, and on
- * change fire the comm-reconfigure hook (samd20 close_modbus/init_modbus). */
+/* serial 설정 커밋 */
 static void commit_comm_serial_shadows(void)
 {
+    /* Commit the addr/speed/parity comm shadows → live cfg if any changed, and on
+     * change fire the comm-reconfigure hook (samd20 close_modbus/init_modbus). */
     lcd_app_state_t *state = app_lcd_state();
     app_config_t    *cfg   = app_lcd_cfg();
 
@@ -265,13 +268,14 @@ static void commit_comm_serial_shadows(void)
     }
 }
 
-/* Commit comm_mode + ether shadows → live cfg, firing the ether hook on
- * ether OR comm_mode change (samd20 main.c:3327-3403 re-ran
- * close_tcps+network_init on save — M7 restores that liveness). HAND does
- * NOT do this; STD reaches here via the STD-persist deviation (fix-B 0xFF
- * guard below covers its unseeded-shadow case). */
+/* comm/ether 커밋 */
 static void commit_comm_mode_and_ether(void)
 {
+    /* Commit comm_mode + ether shadows → live cfg, firing the ether hook on
+     * ether OR comm_mode change (samd20 main.c:3327-3403 re-ran
+     * close_tcps+network_init on save — M7 restores that liveness). HAND does
+     * NOT do this; STD reaches here via the STD-persist deviation (fix-B 0xFF
+     * guard below covers its unseeded-shadow case). */
     lcd_app_state_t *state = app_lcd_state();
     app_config_t    *cfg   = app_lcd_cfg();
     bool ether_changed = false;
@@ -318,9 +322,10 @@ static void commit_comm_mode_and_ether(void)
     }
 }
 
-/* counter-reset shadow → work_cnt=0 + echo (samd20 main.c:3450-3454). */
+/* 카운터 리셋 커밋 */
 static void commit_cnt_reset(void)
 {
+    /* counter-reset shadow → work_cnt=0 + echo (samd20 main.c:3450-3454). */
     lcd_app_state_t *state = app_lcd_state();
     app_config_t    *cfg   = app_lcd_cfg();
 
@@ -331,9 +336,10 @@ static void commit_cnt_reset(void)
     }
 }
 
-/* DATA_SAVE == 1: commit live cfg → FRAM by current page group (spec §8.2). */
+/* DATA_SAVE 커밋 */
 void data_save_commit(void)
 {
+    /* DATA_SAVE == 1: commit live cfg → FRAM by current page group (spec §8.2). */
     lcd_app_state_t *state = app_lcd_state();
     app_config_t    *cfg   = app_lcd_cfg();
 
@@ -384,11 +390,12 @@ void data_save_commit(void)
     app_lcd_change_page(state->lcd_status);
 }
 
-/* DATA_SAVE == 0: rollback. Full FRAM re-read reverts the process params that
- * were live-mutated on touch; then re-arm the comm-shadow sentinel so the next
- * comm-page entry reloads shadows from live (samd20 main.c:3511-3630). */
+/* DATA_SAVE 롤백 */
 void data_save_cancel(void)
 {
+    /* DATA_SAVE == 0: rollback. Full FRAM re-read reverts the process params that
+     * were live-mutated on touch; then re-arm the comm-shadow sentinel so the next
+     * comm-page entry reloads shadows from live (samd20 main.c:3511-3630). */
     lcd_app_state_t *state = app_lcd_state();
     app_config_t    *cfg   = app_lcd_cfg();
 

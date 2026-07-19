@@ -47,26 +47,25 @@
 static uint16_t level_buf[20];
 static uint16_t time_buf[20];
 
-/*--------------------------------------------------------------
- * Output-power bar fill (port of send_outpower_data step==0, main.c:2616-2661).
- *
- * Thresholds (state->ref_lv_1/10/20) seed from model_freq in app_lcd_init_mode.
- * Set-point marker lands at slot (output_power * 20 / 100), clamped to 19.
- *
- *   curr_amp <= 10            -> all 20 slots 0
- *   curr_amp >  10            -> slot[0]=1
- *     curr_amp <= ref_lv_1    -> slots[1..19]=0
- *     curr_amp >  ref_lv_1
- *       curr_amp <= ref_lv_10 -> slots[2..2+t-1]=1 where t=(amp-ref_lv_1)*8/(ref_lv_10-ref_lv_1)
- *       curr_amp >  ref_lv_10
- *         curr_amp >= ref_lv_20 -> slots[1..19]=1 (full)
- *         else                  -> slots[2..9]=1 and slots[10..10+t-1]=1
- *                                  where t=(amp-ref_lv_10)*10/(ref_lv_20-ref_lv_10)
- * Then unconditionally: marker slot = 1.
- *--------------------------------------------------------------*/
+/* 출력 파워 바 계산 */
 static void disp_compute_output(uint16_t curr_amp, uint8_t out_power,
                                 const lcd_app_state_t *st)
 {
+    /* Output-power bar fill (port of send_outpower_data step==0, main.c:2616-2661).
+     *
+     * Thresholds (state->ref_lv_1/10/20) seed from model_freq in app_lcd_init_mode.
+     * Set-point marker lands at slot (output_power * 20 / 100), clamped to 19.
+     *
+     *   curr_amp <= 10            -> all 20 slots 0
+     *   curr_amp >  10            -> slot[0]=1
+     *     curr_amp <= ref_lv_1    -> slots[1..19]=0
+     *     curr_amp >  ref_lv_1
+     *       curr_amp <= ref_lv_10 -> slots[2..2+t-1]=1 where t=(amp-ref_lv_1)*8/(ref_lv_10-ref_lv_1)
+     *       curr_amp >  ref_lv_10
+     *         curr_amp >= ref_lv_20 -> slots[1..19]=1 (full)
+     *         else                  -> slots[2..9]=1 and slots[10..10+t-1]=1
+     *                                  where t=(amp-ref_lv_10)*10/(ref_lv_20-ref_lv_10)
+     * Then unconditionally: marker slot = 1. */
     uint8_t  i;
     uint8_t  marker;
     uint16_t span;          /* threshold gap, guarded != 0 before dividing */
@@ -126,34 +125,33 @@ static void disp_compute_output(uint16_t curr_amp, uint8_t out_power,
     level_buf[marker] = 1u;
 }
 
-/*--------------------------------------------------------------
- * Output-time bar fill (port of send_outtime_data step==5, main.c:2685-2689).
- * Slot i set when i < current_time (0..200 run-timer ticks → 20-slot bar).
- *--------------------------------------------------------------*/
+/* 출력 시간 바 계산 */
 static void disp_compute_time(uint8_t current_time)
 {
+    /* Output-time bar fill (port of send_outtime_data step==5, main.c:2685-2689).
+     * Slot i set when i < current_time (0..200 run-timer ticks → 20-slot bar). */
     uint8_t i;
     for (i = 0u; i < 20u; i++) {
         time_buf[i] = (i < current_time) ? 1u : 0u;
     }
 }
 
-/*--------------------------------------------------------------
- * VAR_POWER / VAR_AMP / VAR_FREQ / VAR_ENERGY (port of send_val_data, main.c:4163-4178).
- *
- * samd20 builds a 3-word array sent at VAR_POWER (0x1110), laying VAR_AMP (0x1111)
- * and VAR_FREQ (0x1112) into the same contiguous VP block, then a separate word at
- * VAR_ENERGY (0x1113):
- *   temp_buf[0] = power   = us_on ? max_power : last_power
- *   temp_buf[1] = current = us_on ? max_amp   : last_amp   (see note)
- *   temp_buf[2] = freq/100= (us_on ? curr_freq : last_freq) / 100
- *   VAR_ENERGY  = us_on ? curr_energy : last_energy
- *
- * NOTE(2026-07-05): max_amp/last_amp split는 power-ch1 슬라이스가 measure에
- * 공급 — VAR_AMP도 legacy(4167) 게이팅으로 정합 (구 "split 없음" 시절 curr_amp
- * 고정이 stale이었음; 정지 후 직전 런 피크 유지 = 사용자 벤치 확인 거동). */
+/* VAR_* 측정값 전송 */
 static void disp_send_val(const lcd_measure_t *m)
 {
+    /* VAR_POWER / VAR_AMP / VAR_FREQ / VAR_ENERGY (port of send_val_data, main.c:4163-4178).
+     *
+     * samd20 builds a 3-word array sent at VAR_POWER (0x1110), laying VAR_AMP (0x1111)
+     * and VAR_FREQ (0x1112) into the same contiguous VP block, then a separate word at
+     * VAR_ENERGY (0x1113):
+     *   temp_buf[0] = power   = us_on ? max_power : last_power
+     *   temp_buf[1] = current = us_on ? max_amp   : last_amp   (see note)
+     *   temp_buf[2] = freq/100= (us_on ? curr_freq : last_freq) / 100
+     *   VAR_ENERGY  = us_on ? curr_energy : last_energy
+     *
+     * NOTE(2026-07-05): max_amp/last_amp split는 power-ch1 슬라이스가 measure에
+     * 공급 — VAR_AMP도 legacy(4167) 게이팅으로 정합 (구 "split 없음" 시절 curr_amp
+     * 고정이 stale이었음; 정지 후 직전 런 피크 유지 = 사용자 벤치 확인 거동). */
     bool     on = (m->us_on_status != 0u);   /* run OR seek/reset (samd20 4167-4177) */
     uint16_t vals[3];
     uint16_t freq;
@@ -169,25 +167,24 @@ static void disp_send_val(const lcd_measure_t *m)
     dgus_write_u16(VAR_ENERGY, (uint16_t)energy);       /* samd20 casts u32 → u16 */
 }
 
-/*--------------------------------------------------------------
- * Step machine — one VP-group per call, 0..9 then wrap (spec §11).
- * Faithful port of the samd20 job_state display dispatch (main.c:5110-5202):
- *
- *   step 0   : compute LV_OUTPUT bar (send_outpower_data step==0)
- *   step 1-4 : LV_OUTPUT[0..19] in 4×5 chunks
- *   step 5   : compute LV_TIME bar (send_outtime_data step==5)
- *   step 6   : LV_TIME[0..4]
- *   step 7   : send_val_data (VAR_*) AND LV_TIME[5..9]   <- both, like samd20 case 7
- *   step 8   : LV_TIME[10..14]
- *   step 9   : LV_TIME[15..19], wrap to 0
- *
- * samd20 gates the time bar on sig_run_status (curr us_on_time_200m vs last_time);
- * lcd_measure_t carries no last_time, so we feed us_on_time_200m on both paths (per
- * the task spec; stub → 0 → empty bar). DISP_REMOTE/modbus_status (samd20 case 9)
- * is supplied since 2026-07-08 via app_modbus_remote_active() (edge-driven below).
- *--------------------------------------------------------------*/
+/* 표시 step 머신 1회 */
 void app_lcd_disp_step(void)
 {
+    /* Step machine — one VP-group per call, 0..9 then wrap (spec §11).
+     * Faithful port of the samd20 job_state display dispatch (main.c:5110-5202):
+     *
+     *   step 0   : compute LV_OUTPUT bar (send_outpower_data step==0)
+     *   step 1-4 : LV_OUTPUT[0..19] in 4×5 chunks
+     *   step 5   : compute LV_TIME bar (send_outtime_data step==5)
+     *   step 6   : LV_TIME[0..4]
+     *   step 7   : send_val_data (VAR_*) AND LV_TIME[5..9]   <- both, like samd20 case 7
+     *   step 8   : LV_TIME[10..14]
+     *   step 9   : LV_TIME[15..19], wrap to 0
+     *
+     * samd20 gates the time bar on sig_run_status (curr us_on_time_200m vs last_time);
+     * lcd_measure_t carries no last_time, so we feed us_on_time_200m on both paths (per
+     * the task spec; stub → 0 → empty bar). DISP_REMOTE/modbus_status (samd20 case 9)
+     * is supplied since 2026-07-08 via app_modbus_remote_active() (edge-driven below). */
     static uint8_t s = 0u;       /* not named `step` to avoid -Wshadow vs samd20 param */
     static bool prev_run_on = false;   /* slice 2b: ICON_RUN edge tracker */
 
@@ -256,37 +253,40 @@ void app_lcd_disp_step(void)
  * Event-driven helpers (NOT in the step machine — called by input/Stage D).
  *==============================================================*/
 
-/* Status icon set/clear (ICON_RESET/SEEK/RUN/OL/OUTERR). samd20 writes a u16 1/0
- * (send_lcd_data_var(ICON_*, 1|0)). */
+/* 상태 아이콘 on/off */
 void app_lcd_icon(uint16_t icon_vp, bool on)
 {
+    /* Status icon set/clear (ICON_RESET/SEEK/RUN/OL/OUTERR). samd20 writes a u16 1/0
+     * (send_lcd_data_var(ICON_*, 1|0)). */
     dgus_write_u16(icon_vp, on ? 1u : 0u);
 }
 
-/* Work-count display (LV_WORK_CNT, 32-bit). samd20 send_lcd_data_word. */
+/* 작업 카운트 표시 */
 void app_lcd_set_work_cnt(uint32_t cnt)
 {
+    /* Work-count display (LV_WORK_CNT, 32-bit). samd20 send_lcd_data_word. */
     dgus_write_u32(LV_WORK_CNT, cnt);
 }
 
-/* Error page entry (port of the samd20 do_control fault block, main.c:4209-4234).
- * error_code is the error_status bitmask (define.h: ERR_OVLD=1, ERR_OVTIME=2,
- * ERR_OUTERR=4). Picks the message by bit priority, writes VP_ERROR_MSG, and
- * switches to LCD_WARNING. dgus_write_text is the 10-byte-zero-pad equivalent of
- * samd20 send_lcd_txt (so "OUTPUT ERROR" truncates to "OUTPUT ERR" exactly as on
- * samd20 — verbatim wire behavior). The OL/OUTERR icons are written via the
- * event-driven path / Stage D; here we only render the page + message.
- *
- * error_status is control-fed (stub provider §4.3 returns 0), so this path is
- * UNREACHABLE until Stage D feeds real faults — implemented now so the error UX is
- * whole the moment regulation supplies faults. The clear side lives in the input
- * layer (KEY_ERROR_RESET). */
 #define ERR_BIT_OVLD    1u
 #define ERR_BIT_OVTIME  2u
 #define ERR_BIT_OUTERR  4u
 
+/* 에러 페이지 진입 */
 void app_lcd_show_error(uint8_t error_code)
 {
+    /* Error page entry (port of the samd20 do_control fault block, main.c:4209-4234).
+     * error_code is the error_status bitmask (define.h: ERR_OVLD=1, ERR_OVTIME=2,
+     * ERR_OUTERR=4). Picks the message by bit priority, writes VP_ERROR_MSG, and
+     * switches to LCD_WARNING. dgus_write_text is the 10-byte-zero-pad equivalent of
+     * samd20 send_lcd_txt (so "OUTPUT ERROR" truncates to "OUTPUT ERR" exactly as on
+     * samd20 — verbatim wire behavior). The OL/OUTERR icons are written via the
+     * event-driven path / Stage D; here we only render the page + message.
+     *
+     * error_status is control-fed (stub provider §4.3 returns 0), so this path is
+     * UNREACHABLE until Stage D feeds real faults — implemented now so the error UX is
+     * whole the moment regulation supplies faults. The clear side lives in the input
+     * layer (KEY_ERROR_RESET). */
     const char *msg;
 
     if (error_code == 0u) {

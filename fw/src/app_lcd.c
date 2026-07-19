@@ -13,9 +13,12 @@
 static lcd_app_state_t g_lcd;
 static app_config_t    g_cfg;   /* live config owner (loaded at boot, edited by input, saved to FRAM) */
 
+/* LCD 상태 싱글턴 접근 */
 lcd_app_state_t *app_lcd_state(void) { return &g_lcd; }
+/* 라이브 cfg 접근 */
 app_config_t    *app_lcd_cfg(void)   { return &g_cfg; }
 
+/* 측정값 제공 */
 const lcd_measure_t *app_lcd_measure(void)
 {
     /* Stage D slice 1: live regulation values (amp + scaled level). Cycle/freq/
@@ -23,6 +26,7 @@ const lcd_measure_t *app_lcd_measure(void)
     return app_reg_measure();
 }
 
+/* 진폭 POT hook */
 void app_lcd_hook_set_pot(uint8_t output_power)
 {
     /* output_power(%) → wiper DAC (언더플로 가드 + 상한 포화, i2c_pot.h) →
@@ -34,12 +38,14 @@ void app_lcd_hook_set_pot(uint8_t output_power)
                (unsigned)output_power, (unsigned)dac);
 }
 
+/* US 명령 hook */
 void app_lcd_hook_us_command(us_cmd_t cmd)
 {
     mon_printf("[lcd-hook] us_command=%u\r\n", (unsigned)cmd);
     app_reg_command(cmd, (uint8_t)US_TOUCH);   /* panel keys = touch source */
 }
 
+/* 통신 재설정 hook */
 void app_lcd_hook_comm_reconfigure(uint8_t speed_idx, uint8_t parity_idx, uint8_t address)
 {
     /* Intentionally log-only: app_modbus_tick() re-evaluates the occupancy
@@ -58,6 +64,7 @@ void app_lcd_hook_comm_reconfigure(uint8_t speed_idx, uint8_t parity_idx, uint8_
  * comm_reconfigure hook이 passive인 것과 같은 패턴.) */
 static bool s_ether_dirty = false;
 
+/* ether dirty 소비 */
 bool app_lcd_ether_dirty_take(void)
 {
     bool d = s_ether_dirty;
@@ -65,6 +72,7 @@ bool app_lcd_ether_dirty_take(void)
     return d;
 }
 
+/* ether 설정 hook */
 void app_lcd_hook_ether_apply(uint8_t mode, const uint8_t ip[4], const uint8_t nm[4], const uint8_t gw[4])
 {
     s_ether_dirty = true;   /* consumed by app_eth_tick -> eth_reapply (M7) */
@@ -75,12 +83,14 @@ void app_lcd_hook_ether_apply(uint8_t mode, const uint8_t ip[4], const uint8_t n
                (unsigned)gw[0], (unsigned)gw[1], (unsigned)gw[2], (unsigned)gw[3]);
 }
 
+/* horn 모드 hook */
 void app_lcd_hook_horn(bool down)
 {
     mon_printf("[lcd-hook] horn down=%u\r\n", (unsigned)down);
     app_horn_set_mode(down);   /* SYS_HORN 모드 진입/이탈 (구 스텁 → 실배선 2026-07-18) */
 }
 
+/* model별 런 페이지 */
 uint8_t app_lcd_run_page(const app_config_t *cfg)
 {
     if      (cfg->model_type == 0) return LCD_RUN_HAND;    /* 3 */
@@ -88,6 +98,7 @@ uint8_t app_lcd_run_page(const app_config_t *cfg)
     else                           return LCD_RUN_STD;     /* 9 */
 }
 
+/* 모델명 문자열 전송 */
 void app_lcd_send_model_str(uint8_t freq, uint8_t type)
 {
     /* GDSONIC build (samd20 main.c:2379-2426). Wire payload = 11 bytes incl. NUL at [10]. */
@@ -112,6 +123,7 @@ void app_lcd_send_model_str(uint8_t freq, uint8_t type)
     dgus_write_bytes(MODEL_NAME, s, 11);
 }
 
+/* LCD 모드 초기화 */
 void app_lcd_init_mode(const app_config_t *cfg)
 {
     uint8_t          run_page = app_lcd_run_page(cfg);
@@ -164,6 +176,7 @@ void app_lcd_init_mode(const app_config_t *cfg)
     app_lcd_change_page(run_page);
 }
 
+/* 런 페이지 확인/재전송 */
 bool app_lcd_ensure_run_page(const app_config_t *cfg)
 {
     uint8_t  run_page = app_lcd_run_page(cfg);
@@ -185,6 +198,7 @@ bool app_lcd_ensure_run_page(const app_config_t *cfg)
     return false;
 }
 
+/* LCD 주기 tick */
 void app_lcd_tick(void)
 {
     /* fault 표면: app_reg가 publish한 measure.error_status의 0→nonzero 엣지에

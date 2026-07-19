@@ -35,10 +35,11 @@ static const uint8_t VERSION_MSG[20] = {
     'G','D','S','-','U','S',' ','S','T','M','3','2',' ','v','0','.','1',' ',' ',' '
 };
 
-/* Render one panel page, then switch to it. Verbatim port of samd20
- * change_lcd_page (main.c:2942-3173). */
+/* 페이지 렌더+전환 */
 void app_lcd_change_page(uint8_t page)
 {
+    /* Render one panel page, then switch to it. Verbatim port of samd20
+     * change_lcd_page (main.c:2942-3173). */
     app_config_t    *cfg   = app_lcd_cfg();
     lcd_app_state_t *state = app_lcd_state();
 
@@ -239,12 +240,13 @@ void app_lcd_change_page(uint8_t page)
 #endif
 }
 
-/* TRIGGER 모드 SENSE_DN 상태 텍스트 — weld 글루가 레벨 변화 엣지에 호출.
- * Verbatim port of samd20 check_remote_input LCD side-effect (main.c:1230-1265);
- * 페이지 진입 초기값("SENSOR OFF")은 위 app_lcd_change_page가 담당. 바이트 수도
- * legacy와 동일(ON=10, OFF=11, NUL 포함). */
+/* SENSE_DN 상태 텍스트 */
 void app_lcd_weld_sensor_text(bool on)
 {
+    /* TRIGGER 모드 SENSE_DN 상태 텍스트 — weld 글루가 레벨 변화 엣지에 호출.
+     * Verbatim port of samd20 check_remote_input LCD side-effect (main.c:1230-1265);
+     * 페이지 진입 초기값("SENSOR OFF")은 위 app_lcd_change_page가 담당. 바이트 수도
+     * legacy와 동일(ON=10, OFF=11, NUL 포함). */
     uint8_t buf[11];
 
     buf[0] = 'S'; buf[1] = 'E'; buf[2] = 'N'; buf[3] = 'S';
@@ -258,10 +260,11 @@ void app_lcd_weld_sensor_text(bool on)
     }
 }
 
-/* Panel-var seed (samd20 lcd_var_init, main.c:2592-2603): initial key/model
- * widget state. Called at boot and on SYS_PIC_NOW==0 re-init. */
+/* 패널 변수 시드 */
 void app_lcd_var_init(void)
 {
+    /* Panel-var seed (samd20 lcd_var_init, main.c:2592-2603): initial key/model
+     * widget state. Called at boot and on SYS_PIC_NOW==0 re-init. */
     uint16_t seed[2];
 
     seed[0] = 0x0003;

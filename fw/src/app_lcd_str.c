@@ -23,6 +23,7 @@ const uint8_t comm_parity_txt[3][4] = {
     {'N','O','N','E'},
 };
 
+/* 초 → "X.XX" 문자열 */
 uint8_t time2str(uint16_t src, uint8_t *dest)
 {
     uint8_t  nibble, first_zero, pos;
@@ -62,6 +63,7 @@ uint8_t time2str(uint16_t src, uint8_t *dest)
     return pos;
 }
 
+/* 에너지 → 문자열 */
 uint8_t energy2str(uint32_t src, uint8_t *dest)
 {
     uint8_t  nibble, first_zero, pos;
@@ -116,6 +118,7 @@ uint8_t energy2str(uint32_t src, uint8_t *dest)
     return pos;
 }
 
+/* addr → 4자 문자열 */
 void conv_addr2str(uint8_t addr, uint8_t *buff)
 {
     uint8_t temp;
@@ -135,6 +138,7 @@ void conv_addr2str(uint8_t addr, uint8_t *buff)
     }
 }
 
+/* IP → 점표기 문자열 */
 uint8_t ip_to_string(const uint8_t ip[4], char *str_buffer)
 {
     uint8_t i;
@@ -155,6 +159,7 @@ uint8_t ip_to_string(const uint8_t ip[4], char *str_buffer)
     return 16;
 }
 
+/* NUL 이후 0 패딩 복사 */
 void lcd_data_pdd(uint8_t *dest, const uint8_t *src, uint8_t len)
 {
     uint8_t i, str_finish = 0;

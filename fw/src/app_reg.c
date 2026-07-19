@@ -88,17 +88,19 @@ typedef struct {
 static reg_state_t   g_reg;
 static lcd_measure_t g_measure;
 
+/* USOUT/OSC4 출력 구동 */
 void app_reg_hook_us_output(bool on)
 {
     io_usout(on);                    /* PB4 active-HIGH = 초음파 출력 enable */
     board_osc4(on);                  /* PB14 OSC4 active-LOW = 초음파 출력 중 LOW */
 }
 
-/* 자동 정지 공통 (on-time ceiling / energy-reached / OVTIME): 피크 래치 + IDLE.
- * TOUCH 런은 V30 데이터=0 release 페어링 위해 swallow_start 무장 (수동
- * RUN_RELEASE는 별도 — swallow 없음). */
+/* 런 자동 정지 공통 처리 */
 static void reg_stop_run(uint8_t rs)
 {
+    /* 자동 정지 공통 (on-time ceiling / energy-reached / OVTIME): 피크 래치 + IDLE.
+     * TOUCH 런은 V30 데이터=0 release 페어링 위해 swallow_start 무장 (수동
+     * RUN_RELEASE는 별도 — swallow 없음). */
     g_reg.last_power    = g_reg.max_power;
     g_reg.last_amp      = g_reg.max_amp;
     g_reg.last_energy   = g_measure.curr_energy;
@@ -109,6 +111,7 @@ static void reg_stop_run(uint8_t rs)
     }
 }
 
+/* 레귤레이션 상태 초기화 */
 void app_reg_init(void)
 {
     memset(&g_reg, 0, sizeof(g_reg));
@@ -125,12 +128,13 @@ void app_reg_init(void)
     g_reg.main_state = 1u;
 }
 
-/* START가 지금 수락될 상태인가 — app_reg_command의 START guard와 동일 조건의
- * 읽기 전용 쿼리 (상태 무변경). slice4 weld 글루가 사이클 진입 게이팅에 사용
- * (블라인드 사이클 차단, spec §4.3). swallow_start는 TOUCH 전용 소비라 조건에서
- * 제외 (US_CYCLE에 무관). */
+/* START 수락 가능 여부 쿼리 */
 bool app_reg_start_allowed(void)
 {
+    /* START가 지금 수락될 상태인가 — app_reg_command의 START guard와 동일 조건의
+     * 읽기 전용 쿼리 (상태 무변경). slice4 weld 글루가 사이클 진입 게이팅에 사용
+     * (블라인드 사이클 차단, spec §4.3). swallow_start는 TOUCH 전용 소비라 조건에서
+     * 제외 (US_CYCLE에 무관). */
     return (g_reg.main_state == 0u) &&                     /* boot warm-up 완료 */
            (g_reg.us_run_status == (uint8_t)US_IDLE) &&
            /* SEEK/RESET active 중 START 무시 (spec §3.4). 직교는 새 RUN 시작만
@@ -150,6 +154,7 @@ bool app_reg_start_allowed(void)
            (app_horn_mode_active() == 0u);
 }
 
+/* OVTIME fault 세터 */
 void app_reg_raise_ovtime(void)
 {
     /* weld(US_CYCLE) 에너지 backstop abort용 fault 세터 — 직접런 OVTIME과 같은
@@ -159,6 +164,7 @@ void app_reg_raise_ovtime(void)
     g_reg.error_status |= ERR_OVTIME;
 }
 
+/* US 명령 디스패치 */
 void app_reg_command(us_cmd_t cmd, uint8_t src)
 {
     switch (cmd) {
@@ -241,6 +247,7 @@ void app_reg_command(us_cmd_t cmd, uint8_t src)
 #endif
 }
 
+/* 측정값 포인터 반환 */
 const lcd_measure_t *app_reg_measure(void)
 {
     return &g_measure;
@@ -248,8 +255,7 @@ const lcd_measure_t *app_reg_measure(void)
 
 static uint32_t s_ch1_filt_x16;   /* ch1 표시 EMA 상태 (×16 고정소수 — acquire 노트) */
 
-/* One ADC conversion on BOTH channels, normalize, accumulate, and commit the
- * mean when the per-channel sample count is reached. Paced at REG_ACQ_MS. */
+/* ADC 2채널 샘플 누산 */
 static void reg_acquire_step(void)
 {
     uint16_t s0 = (uint16_t)(adc1_read(ADC1_CH_SENS_OUT) >> ADC_NORM_SHIFT);
@@ -284,6 +290,7 @@ static void reg_acquire_step(void)
     }
 }
 
+/* 측정값 publish 갱신 */
 static void reg_publish_measure(uint32_t now, int16_t freq_cal_val)
 {
     /* slice 2b run-gated: curr_power = live setpoint (0 when idle); max_power =
@@ -366,14 +373,15 @@ static void reg_publish_measure(uint32_t now, int16_t freq_cal_val)
     }
 }
 
-/* (1) Absolute on-time SAFETY ceiling — ON_TIME_SAFETY_MS (30 s). Fires for
- * ANY active ultrasonic run (TOUCH/COMM/REMOTE/CYCLE) in ANY mode,
- * independent of limit_on_time (fires even when limit_on_time==0), NOT
- * panel-editable. Transducer runaway backstop. run_start_ms is stamped at
- * every START edge (incl. US_CYCLE via app_weld), so the 30 s base is valid
- * for all sources. User decision 2026-06-27: unconditional, all incl. weld. */
+/* 30s 안전 ceiling 검사 */
 static void reg_check_safety_ceiling(uint32_t now)
 {
+    /* (1) Absolute on-time SAFETY ceiling — ON_TIME_SAFETY_MS (30 s). Fires for
+     * ANY active ultrasonic run (TOUCH/COMM/REMOTE/CYCLE) in ANY mode,
+     * independent of limit_on_time (fires even when limit_on_time==0), NOT
+     * panel-editable. Transducer runaway backstop. run_start_ms is stamped at
+     * every START edge (incl. US_CYCLE via app_weld), so the 30 s base is valid
+     * for all sources. User decision 2026-06-27: unconditional, all incl. weld. */
     uint8_t rs = g_reg.us_run_status;
     if ((rs == (uint8_t)US_TOUCH) || (rs == (uint8_t)US_COMM) ||
         (rs == (uint8_t)US_REMOTE) || (rs == (uint8_t)US_CYCLE)) {
@@ -386,16 +394,17 @@ static void reg_check_safety_ceiling(uint32_t now)
     }
 }
 
-/* (2) 런 자동 종료 — energy 모드면 에너지-도달 정상정지 + OVTIME이 운영
- * ceiling을 대체 (ovtime, legacy main.c:5270 분기; REMOTE는 slice-D가 소스
- * 추가). 비-energy면 legacy limit_on_time ceiling — slice-D 이중화 결정
- * (2026-06-27, samd20 main.c:5296-faithful): HAND 모드의 COMM/REMOTE만,
- * NOT TOUCH (V30 lost-release 리스크는 위 30 s 안전 ceiling이 커버).
- * US_CYCLE은 양쪽 모두 자연 제외 — WELD 길이는 weld-cycle FSM의
- * limit_delay_time2가 지배(app_weld). limit_*은 매 call cfg 주입(M1) —
- * 패널 편집 즉시 반영(mid-run 포함). */
+/* 런 자동 종료 판정 */
 static void reg_check_auto_terminate(uint32_t now, const reg_run_limits_t *lim)
 {
+    /* (2) 런 자동 종료 — energy 모드면 에너지-도달 정상정지 + OVTIME이 운영
+     * ceiling을 대체 (ovtime, legacy main.c:5270 분기; REMOTE는 slice-D가 소스
+     * 추가). 비-energy면 legacy limit_on_time ceiling — slice-D 이중화 결정
+     * (2026-06-27, samd20 main.c:5296-faithful): HAND 모드의 COMM/REMOTE만,
+     * NOT TOUCH (V30 lost-release 리스크는 위 30 s 안전 ceiling이 커버).
+     * US_CYCLE은 양쪽 모두 자연 제외 — WELD 길이는 weld-cycle FSM의
+     * limit_delay_time2가 지배(app_weld). limit_*은 매 call cfg 주입(M1) —
+     * 패널 편집 즉시 반영(mid-run 포함). */
     uint8_t rs = g_reg.us_run_status;
     if ((rs == (uint8_t)US_TOUCH) || (rs == (uint8_t)US_COMM) ||
         (rs == (uint8_t)US_REMOTE)) {
@@ -428,6 +437,7 @@ static void reg_check_auto_terminate(uint32_t now, const reg_run_limits_t *lim)
     }
 }
 
+/* 레귤레이션 주기 tick */
 void app_reg_tick(const reg_run_limits_t *lim)
 {
     uint32_t now = sys_tick_get_ms();

@@ -50,40 +50,44 @@
  * Multi-step branch helpers (keep the switch readable, <800 lines)
  *--------------------------------------------------------------*/
 
-/* Resolve the RUN page id for the active sys_mode (samd20 model_type branch).
- * non-static: app_lcd_comm.c의 data_save_commit이 공유 (app_lcd_input_priv.h). */
+/* 모드별 RUN 페이지 */
 uint8_t run_page_for_mode(uint8_t sys_mode)
 {
+    /* Resolve the RUN page id for the active sys_mode (samd20 model_type branch).
+     * non-static: app_lcd_comm.c의 data_save_commit이 공유 (app_lcd_input_priv.h). */
     if (sys_mode == SYS_HAND)  return LCD_RUN_HAND;     /* 3 */
     if (sys_mode == SYS_MULTI) return LCD_RUN_MULTI;    /* 3 */
     return LCD_RUN_STD;                                 /* 9 (SYS_STD) */
 }
 
-/* slice4 SETUP 게이트: 현재 run 페이지인가 (setup/model 페이지면 0).
- * samd20 sys_status==SYS_RUN 등가 — 페이지 기반 판정 (sys_status 필드는 미배선). */
+/* run 페이지 여부 */
 uint8_t app_lcd_in_run_page(void)
 {
+    /* slice4 SETUP 게이트: 현재 run 페이지인가 (setup/model 페이지면 0).
+     * samd20 sys_status==SYS_RUN 등가 — 페이지 기반 판정 (sys_status 필드는 미배선). */
     const lcd_app_state_t *st = app_lcd_state();
     return (st->lcd_status == run_page_for_mode(st->sys_mode)) ? 1u : 0u;
 }
 
-/* 런 페이지 복귀 공용 가드 — 경고 페이지를 점유하는 조건이 남아 있으면 복귀 금지.
- * 점유 조건 = E-stop(라이브 접근자) + OVTIME 계열 error_status(reg 미러가 fault
- * 래치 동안 지속 공급 — app_lcd.c:193-200). OVLD는 아이콘-only(아래)라 비차단.
- * E-stop에 막혀 경고가 유지될 때는 호출측이 VP 텍스트를 "E-STOP"으로 재기록. */
+/* 런 페이지 복귀 가드 */
 static bool lcd_may_restore_run_page(void)
 {
+    /* 런 페이지 복귀 공용 가드 — 경고 페이지를 점유하는 조건이 남아 있으면 복귀 금지.
+     * 점유 조건 = E-stop(라이브 접근자) + OVTIME 계열 error_status(reg 미러가 fault
+     * 래치 동안 지속 공급 — app_lcd.c:193-200). OVLD는 아이콘-only(아래)라 비차단.
+     * E-stop에 막혀 경고가 유지될 때는 호출측이 VP 텍스트를 "E-STOP"으로 재기록. */
     return (app_estop_active() == 0u) &&
            (app_lcd_state()->error_status == 0u);
 }
 
-/* 과부하 에러 표시 — app_overload 글루가 assert/deassert 엣지에 호출.
- * legacy do_control(main.c:4218-4227): OVLD/OUTERR는 VP 텍스트+아이콘만 —
- * LCD_WARNING 페이지 전환은 OVTIME 전용(4229-4233). 런 화면 유지 + ICON_OL
- * (2026-07-05 벤치 실장비 거동으로 페이지 전환 편차 발견·정정). deassert 복귀는
- * 경고 페이지 표시 중일 때만 — 아이콘-only라 setup 등 임의 페이지 납치 금지. */
+/* 과부하 표시 갱신 */
 void app_lcd_set_overload(bool on)
 {
+    /* 과부하 에러 표시 — app_overload 글루가 assert/deassert 엣지에 호출.
+     * legacy do_control(main.c:4218-4227): OVLD/OUTERR는 VP 텍스트+아이콘만 —
+     * LCD_WARNING 페이지 전환은 OVTIME 전용(4229-4233). 런 화면 유지 + ICON_OL
+     * (2026-07-05 벤치 실장비 거동으로 페이지 전환 편차 발견·정정). deassert 복귀는
+     * 경고 페이지 표시 중일 때만 — 아이콘-only라 setup 등 임의 페이지 납치 금지. */
     lcd_app_state_t *state = app_lcd_state();
 
     if (on) {
@@ -104,14 +108,15 @@ void app_lcd_set_overload(bool on)
     }
 }
 
-/* E-stop 표시 — app_input 글루가 enter/release 엣지에 호출. legacy는
- * sys_status=SYS_ESTOP 전이에서 VP_ERROR_MSG="E-STOP"+LCD_WARNING(do_control,
- * main.c:4209-4215), 해제 시 init_lcd_mode()로 런 페이지 복귀(4238-4241).
- * E-stop은 error_status 비트가 아님(레벨추종) — 비트 무조작. 복귀는 다른 에러
- * 활성 시 보류(overload off 경로와 동일 가드; legacy는 sys_status 단일값이라
- * 등가 상황 없음). */
+/* E-stop 표시 전환 */
 void app_lcd_set_estop(bool on)
 {
+    /* E-stop 표시 — app_input 글루가 enter/release 엣지에 호출. legacy는
+     * sys_status=SYS_ESTOP 전이에서 VP_ERROR_MSG="E-STOP"+LCD_WARNING(do_control,
+     * main.c:4209-4215), 해제 시 init_lcd_mode()로 런 페이지 복귀(4238-4241).
+     * E-stop은 error_status 비트가 아님(레벨추종) — 비트 무조작. 복귀는 다른 에러
+     * 활성 시 보류(overload off 경로와 동일 가드; legacy는 sys_status 단일값이라
+     * 등가 상황 없음). */
     lcd_app_state_t *state = app_lcd_state();
 
     if (on) {
@@ -126,15 +131,16 @@ void app_lcd_set_estop(bool on)
     }
 }
 
-/* fault 클리어 표면 — app_lcd_tick 미러가 measure.error_status nonzero→0
- * 엣지에 호출. legacy는 Modbus/물리 RESET 핸들러가 직접 런 페이지를 복귀
- * (samd20 main.c:4356-4370 / 4605-4617 set_lcd_page) — 이 포트에서는 클리어
- * 소스와 무관하게 이 한 지점이 커버한다(REMOTE/물리 B_RESET; KEY_ERROR_RESET
- * 터치 경로는 이미 복귀해 lcd_status != LCD_WARNING → no-op). 경고 페이지일
- * 때만 복귀(임의 페이지 납치 금지, overload off 경로와 동일 가드), E-stop
- * 활성이면 보류(레벨 해제 시 app_lcd_set_estop(false)가 복귀). */
+/* fault 클리어 복귀 */
 void app_lcd_fault_cleared(void)
 {
+    /* fault 클리어 표면 — app_lcd_tick 미러가 measure.error_status nonzero→0
+     * 엣지에 호출. legacy는 Modbus/물리 RESET 핸들러가 직접 런 페이지를 복귀
+     * (samd20 main.c:4356-4370 / 4605-4617 set_lcd_page) — 이 포트에서는 클리어
+     * 소스와 무관하게 이 한 지점이 커버한다(REMOTE/물리 B_RESET; KEY_ERROR_RESET
+     * 터치 경로는 이미 복귀해 lcd_status != LCD_WARNING → no-op). 경고 페이지일
+     * 때만 복귀(임의 페이지 납치 금지, overload off 경로와 동일 가드), E-stop
+     * 활성이면 보류(레벨 해제 시 app_lcd_set_estop(false)가 복귀). */
     lcd_app_state_t *state = app_lcd_state();
 
     if (state->lcd_status != LCD_WARNING) {
@@ -148,7 +154,7 @@ void app_lcd_fault_cleared(void)
     }
 }
 
-/* Resolve the setup-page-1 id for the active sys_mode (SETUP_PARAM / _MOOHAN). */
+/* 모드별 SETUP1 페이지 */
 static uint8_t setup1_page_for_mode(uint8_t sys_mode)
 {
     if (sys_mode == SYS_HAND)  return LCD_SETUP_HAND;   /* 7 */
@@ -163,25 +169,27 @@ static uint8_t setup1_page_for_mode(uint8_t sys_mode)
  * means the release edge will never arrive (§4.4). */
 static uint8_t s_run_key_down;
 
-/* 런 페이지를 떠나는 페이지 전환(경고: show_error/E-stop)에서 호출 — 눌린 채
- * 페이지가 바뀌면 V30 런-키 컨트롤이 사라져 release data=0 이벤트가 영영 안
- * 오고, 토글이 "눌림"에 고착돼 press↔release가 반전됨(2026-07-18 에너지 모드
- * OVTIME 중 홀드 벤치 증상: 떼면 START). SYS_PIC_NOW 패널-리셋 처리와 동일
- * 패턴: RUN_RELEASE(IDLE이면 no-op + 자동정지가 무장한 swallow_start 정리 —
- * 안 하면 fault 후 첫 탭 1회 무시) + 토글 재앵커. */
+/* RUN 키 토글 재앵커 */
 void app_lcd_input_run_key_reanchor(void)
 {
+    /* 런 페이지를 떠나는 페이지 전환(경고: show_error/E-stop)에서 호출 — 눌린 채
+     * 페이지가 바뀌면 V30 런-키 컨트롤이 사라져 release data=0 이벤트가 영영 안
+     * 오고, 토글이 "눌림"에 고착돼 press↔release가 반전됨(2026-07-18 에너지 모드
+     * OVTIME 중 홀드 벤치 증상: 떼면 START). SYS_PIC_NOW 패널-리셋 처리와 동일
+     * 패턴: RUN_RELEASE(IDLE이면 no-op + 자동정지가 무장한 swallow_start 정리 —
+     * 안 하면 fault 후 첫 탭 1회 무시) + 토글 재앵커. */
     app_lcd_hook_us_command(US_CMD_RUN_RELEASE);
     s_run_key_down = 0u;
 }
 
-/* KEY_MULTI (0x1080): 1=RESET / 2=SEEK / 3=RUN(press) / 4=RUN(release); the V30
- * DGUS asset additionally returns 0=RUN on both edges (toggle-mapped — §4.4).
- * Raise the ultrasonic command hook only (Stage D owns the us/sig/energy FSM).
- * RUN press also writes the DAC. RESET in an OVLD/OUTERR error clears those bits,
- * blanks the icons, and restores the run page (samd20 main.c:3633-3706). */
+/* KEY_MULTI 키 처리 */
 static void handle_key_multi(uint16_t data16)
 {
+    /* KEY_MULTI (0x1080): 1=RESET / 2=SEEK / 3=RUN(press) / 4=RUN(release); the V30
+     * DGUS asset additionally returns 0=RUN on both edges (toggle-mapped — §4.4).
+     * Raise the ultrasonic command hook only (Stage D owns the us/sig/energy FSM).
+     * RUN press also writes the DAC. RESET in an OVLD/OUTERR error clears those bits,
+     * blanks the icons, and restores the run page (samd20 main.c:3633-3706). */
     lcd_app_state_t *state = app_lcd_state();
     app_config_t    *cfg   = app_lcd_cfg();
 
@@ -238,10 +246,11 @@ static void handle_key_multi(uint16_t data16)
     }
 }
 
-/* KEY_ERROR_RESET (0x1408): ==1 raises RESET; an OVTIME fault is cleared and the
- * run page restored (samd20 main.c:3707-3732). */
+/* 에러 RESET 키 처리 */
 static void handle_key_error_reset(uint16_t data16)
 {
+    /* KEY_ERROR_RESET (0x1408): ==1 raises RESET; an OVTIME fault is cleared and the
+     * run page restored (samd20 main.c:3707-3732). */
     lcd_app_state_t *state = app_lcd_state();
 
     if (data16 != 1) {
@@ -260,24 +269,25 @@ static void handle_key_error_reset(uint16_t data16)
     }
 }
 
-/* SETUP_MODEL / SETUP_PARAM_MOOHAN long-press FSM.
- *
- * samd20 (main.c) assumed the panel reports data==0 on touch-down and data==2
- * on touch-up, timing the release to detect a >= KEY_HOLD_MS hold. HW-verify
- * (2026-05-27) found this panel's 0x1084 button instead emits data==0 on BOTH
- * down AND up (one event each, no auto-repeat) and NEVER data==2 — so the
- * verbatim port could never complete a long-press (the release event was
- * misread as a fresh press). See docs/superpowers/analysis/2026-05-27-lcd-
- * setup-model-longpress.md.
- *
- * Fix: pair consecutive same-VP data==0 events. The first arms the press
- * (records key_press_ms + key_press_vp); the second is the release and fires
- * if held >= KEY_HOLD_MS. data==2 is still honoured as an explicit release for
- * any button/panel that does send it (backward compatible). key_press_vp is
- * keyed by VP so the two long-press buttons (0x1084 / 0x1094) don't interfere.
- * Returns true only on a qualifying (long) release. */
+/* 롱프레스 판정 */
 static bool long_press_released(uint16_t vp, uint16_t data16)
 {
+    /* SETUP_MODEL / SETUP_PARAM_MOOHAN long-press FSM.
+     *
+     * samd20 (main.c) assumed the panel reports data==0 on touch-down and data==2
+     * on touch-up, timing the release to detect a >= KEY_HOLD_MS hold. HW-verify
+     * (2026-05-27) found this panel's 0x1084 button instead emits data==0 on BOTH
+     * down AND up (one event each, no auto-repeat) and NEVER data==2 — so the
+     * verbatim port could never complete a long-press (the release event was
+     * misread as a fresh press). See docs/superpowers/analysis/2026-05-27-lcd-
+     * setup-model-longpress.md.
+     *
+     * Fix: pair consecutive same-VP data==0 events. The first arms the press
+     * (records key_press_ms + key_press_vp); the second is the release and fires
+     * if held >= KEY_HOLD_MS. data==2 is still honoured as an explicit release for
+     * any button/panel that does send it (backward compatible). key_press_vp is
+     * keyed by VP so the two long-press buttons (0x1084 / 0x1094) don't interfere.
+     * Returns true only on a qualifying (long) release. */
     lcd_app_state_t *state = app_lcd_state();
 
     if (data16 == 0) {
@@ -301,10 +311,11 @@ static bool long_press_released(uint16_t vp, uint16_t data16)
     return false;
 }
 
-/* SETUP_MODEL (0x1084) release action: enter the model-setup page and echo the
- * model/cal VPs (samd20 main.c:3734-3753). */
+/* 모델 설정 페이지 진입 */
 static void enter_model_setup(void)
 {
+    /* SETUP_MODEL (0x1084) release action: enter the model-setup page and echo the
+     * model/cal VPs (samd20 main.c:3734-3753). */
     lcd_app_state_t *state = app_lcd_state();
     app_config_t    *cfg   = app_lcd_cfg();
 
@@ -317,11 +328,12 @@ static void enter_model_setup(void)
     dgus_write_u16(VAR_FREQ_CAL_VAL, (uint16_t)cfg->freq_cal_val);
 }
 
-/* STD_SETUP_PARAM (0x1020) page-nav cases 1..5 (samd20 main.c:3885-3963).
- * Updates state->lcd_status and switches page. NB case 1 uses set_page only
- * (no render rebuild); cases 2/3/4 use change_lcd_page. */
+/* SETUP 페이지 내비 */
 static void handle_std_setup_param(uint16_t data16)
 {
+    /* STD_SETUP_PARAM (0x1020) page-nav cases 1..5 (samd20 main.c:3885-3963).
+     * Updates state->lcd_status and switches page. NB case 1 uses set_page only
+     * (no render rebuild); cases 2/3/4 use change_lcd_page. */
     lcd_app_state_t *state = app_lcd_state();
     app_config_t    *cfg   = app_lcd_cfg();
 
@@ -377,13 +389,15 @@ static void handle_std_setup_param(uint16_t data16)
 }
 
 /* comm/ether shadow 편집 + DATA_SAVE commit/rollback → app_lcd_comm.c (분할). */
-/* M4: 클램프 + 패널 에코 (클램프 발동 시에만 재전송 — LV_MO_TIME 관례). */
+/* max 클램프+에코 */
 static uint16_t clamp_echo_max(uint16_t vp, uint16_t v, uint16_t max)
 {
+    /* M4: 클램프 + 패널 에코 (클램프 발동 시에만 재전송 — LV_MO_TIME 관례). */
     uint16_t c = cfg_clamp_max(v, max);
     if (c != v) { dgus_write_u16(vp, c); }
     return c;
 }
+/* power 클램프+에코 */
 static uint16_t clamp_echo_power(uint16_t vp, uint16_t v)
 {
     uint16_t c = cfg_clamp_power(v);
@@ -395,6 +409,7 @@ static uint16_t clamp_echo_power(uint16_t vp, uint16_t v)
  * Public entry — VP → action dispatch
  *--------------------------------------------------------------*/
 
+/* 터치 키 디스패치 */
 void app_lcd_input_dispatch(const dgus_frame_t *f)
 {
     /* §3: act only on RD (0x83) touch/key reports; ignore WR (0x82) echoes. */
