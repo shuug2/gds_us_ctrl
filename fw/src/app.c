@@ -19,6 +19,7 @@
 #include "app_buzzer.h"
 #include "app_fault_alarm.h"
 
+/* FRAM 로드+LCD 부팅 */
 void app_init(void)
 {
     app_config_t *cfg = app_lcd_cfg();   /* config owned by the LCD subsystem */
@@ -81,6 +82,7 @@ void app_init(void)
     app_lcd_state()->boot_complete = true;
 }
 
+/* 슈퍼루프 1회 반복 */
 void app_loop_iter(void)
 {
     /* 1. LCD RX drain — 매 iter 호출. ring 비어 있으면 dgus_rx_poll 즉시 false (저비용). */

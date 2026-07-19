@@ -8,6 +8,7 @@
  * PB12·PB13은 io.c가 입력으로 설정(PB12=초음파 출력 피드백, PB13=OVLD sense). */
 #define CTRL_OSC_OUT_PINS (GPIO_PIN_2 | GPIO_PIN_10 | GPIO_PIN_14)
 
+/* OSC 출력 GPIO 초기화 */
 void board_init(void) {
     __HAL_RCC_GPIOB_CLK_ENABLE();
 
@@ -21,18 +22,21 @@ void board_init(void) {
     HAL_GPIO_Init(GPIOB, &out);
 }
 
+/* 초음파 게이트 구동 */
 void board_osc4(bool on)
 {
     /* PB14 초음파 게이트 active-LOW open-drain: 출력 중 = LOW(드레인 on), idle = hi-Z. */
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, on ? GPIO_PIN_RESET : GPIO_PIN_SET);
 }
 
+/* OSC RESET 라인 구동 */
 void board_reset(bool on)
 {
     /* PB10 OSC_OUT1 active-LOW open-drain: RESET 중 = LOW, idle = hi-Z. */
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10, on ? GPIO_PIN_RESET : GPIO_PIN_SET);
 }
 
+/* OSC SEEK 라인 구동 */
 void board_seek(bool on)
 {
     /* PB2 OSC_OUT0 active-LOW open-drain: SEEK 중 = LOW, idle = hi-Z. */

@@ -2,6 +2,7 @@
 #include "fram.h"
 #include "i2c1.h"
 
+/* FRAM 바이트 읽기 */
 bool fram_read_byte(uint8_t addr, uint8_t *out)
 {
     uint8_t b;
@@ -12,6 +13,7 @@ bool fram_read_byte(uint8_t addr, uint8_t *out)
     return true;
 }
 
+/* FRAM u16 읽기 */
 bool fram_read_u16(uint8_t addr, uint16_t *out)
 {
     uint8_t b[2];
@@ -22,6 +24,7 @@ bool fram_read_u16(uint8_t addr, uint16_t *out)
     return true;
 }
 
+/* FRAM u32 읽기 */
 bool fram_read_u32(uint8_t addr, uint32_t *out)
 {
     uint8_t b[4];
@@ -33,11 +36,13 @@ bool fram_read_u32(uint8_t addr, uint32_t *out)
     return true;
 }
 
+/* FRAM 바이트 쓰기 */
 void fram_write_byte(uint8_t addr, uint8_t v)
 {
     i2c1_mem_write(FRAM_I2C_ADDR_7B, addr, &v, 1);
 }
 
+/* FRAM u16 쓰기 */
 void fram_write_u16(uint8_t addr, uint16_t v)
 {
     uint8_t b[2];
@@ -46,6 +51,7 @@ void fram_write_u16(uint8_t addr, uint16_t v)
     i2c1_mem_write(FRAM_I2C_ADDR_7B, addr, b, 2);
 }
 
+/* FRAM u32 쓰기 */
 void fram_write_u32(uint8_t addr, uint32_t v)
 {
     uint8_t b[4];

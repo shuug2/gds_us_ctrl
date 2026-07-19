@@ -18,6 +18,7 @@
 static volatile uint8_t s_rx_dma_buf[RX_DMA_SIZE]; /* DMA circular 목적지 (.bss SRAM). volatile: DMA가 비동기로 씀 */
 static uint16_t s_rx_tail;                 /* loop reader 인덱스 (단독 소유) */
 
+/* USART1 초기화 */
 void usart1_init(void)
 {
     /* 1. 클럭 */
@@ -75,12 +76,14 @@ void usart1_init(void)
     SET_BIT(USART1->CR3, USART_CR3_DMAR);
 }
 
+/* 폴링 블로킹 송신 */
 HAL_StatusTypeDef usart1_send_blocking(const uint8_t *buf, uint16_t len)
 {
     /* 폴링 TX. 10 ms timeout — 케이블 빠짐/멈춤 시 HAL_TIMEOUT 반환, fault 진입 ✗. */
     return HAL_UART_Transmit(&huart1, (uint8_t *)buf, len, /*timeout_ms=*/10);
 }
 
+/* RX 링 1바이트 팝 */
 bool usart1_rx_pop(uint8_t *out_byte)
 {
     /* DMA write 위치 = SIZE - NDTR. tail 단독 소유라 락 불필요.
@@ -97,5 +100,7 @@ bool usart1_rx_pop(uint8_t *out_byte)
 
 /* DMA circular RX 에는 ring-full / 재무장 실패 / IT-ORE 개념이 없음.
  * API/심볼 안정성 위해 유지하되 0 반환. RX 건강 신호는 dgus_rx_drop_count (파서 레벨). */
+/* RX drop 카운트 stub */
 uint16_t usart1_rx_drop_count(void)  { return 0; }
+/* RX 에러 카운트 stub */
 uint16_t usart1_rx_error_count(void) { return 0; }

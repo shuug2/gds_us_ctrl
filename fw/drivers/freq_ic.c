@@ -7,6 +7,7 @@
 #include "freq_ic.h"
 #include "app_freq_fsm.h"
 
+/* FREQ 입력캡처 초기화 */
 void freq_ic_init(void)
 {
     freq_fsm_init();                 /* IRQ 켜기 전에 소비자 상태 리셋 */

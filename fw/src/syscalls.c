@@ -7,6 +7,7 @@ extern char _end;
 
 static char *s_heap_end;
 
+/* newlib close 스텁 */
 int _close(int file)
 {
     (void)file;
@@ -14,6 +15,7 @@ int _close(int file)
     return -1;
 }
 
+/* newlib exit 스텁 */
 void _exit(int status)
 {
     (void)status;
@@ -21,6 +23,7 @@ void _exit(int status)
     }
 }
 
+/* newlib fstat 스텁 */
 int _fstat(int file, struct stat *st)
 {
     (void)file;
@@ -28,17 +31,20 @@ int _fstat(int file, struct stat *st)
     return 0;
 }
 
+/* newlib getpid 스텁 */
 int _getpid(void)
 {
     return 1;
 }
 
+/* newlib isatty 스텁 */
 int _isatty(int file)
 {
     (void)file;
     return 1;
 }
 
+/* newlib kill 스텁 */
 int _kill(int pid, int sig)
 {
     (void)pid;
@@ -47,6 +53,7 @@ int _kill(int pid, int sig)
     return -1;
 }
 
+/* newlib lseek 스텁 */
 off_t _lseek(int file, off_t ptr, int dir)
 {
     (void)file;
@@ -55,6 +62,7 @@ off_t _lseek(int file, off_t ptr, int dir)
     return 0;
 }
 
+/* newlib read 스텁 */
 ssize_t _read(int file, void *ptr, size_t len)
 {
     (void)file;
@@ -63,6 +71,7 @@ ssize_t _read(int file, void *ptr, size_t len)
     return 0;
 }
 
+/* newlib write 스텁 */
 ssize_t _write(int file, const void *ptr, size_t len)
 {
     (void)file;
@@ -70,6 +79,7 @@ ssize_t _write(int file, const void *ptr, size_t len)
     return (ssize_t)len;
 }
 
+/* 힙 확장 sbrk 스텁 */
 caddr_t _sbrk(int incr)
 {
     char *prev_heap_end;

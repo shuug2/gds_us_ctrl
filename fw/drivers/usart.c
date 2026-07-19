@@ -3,6 +3,7 @@
 #include "periph.h"
 #include "clock.h"  /* Error_Handler */
 
+/* USART6 초기화 */
 void usart6_init(void) {
     __HAL_RCC_GPIOC_CLK_ENABLE();
     GPIO_InitTypeDef g = {

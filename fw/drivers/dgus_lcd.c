@@ -46,6 +46,7 @@ static uint16_t      s_dgus_rx_drop_count;             /* SWD 정적 read 진단
  * 공개 — init / accessor
  *--------------------------------------------------------------*/
 
+/* DGUS 상태 초기화 */
 void dgus_init(void)
 {
     s_parse_state           = PS_IDLE;
@@ -57,6 +58,7 @@ void dgus_init(void)
     /* USART1 / RX ring 책임은 usart1_init. 여기선 dgus 레이어 상태만 */
 }
 
+/* WR 에코 판별 */
 bool dgus_is_echo(const dgus_frame_t *f)
 {
     return f->cmd == DGUS_CMD_WR;
@@ -66,11 +68,12 @@ bool dgus_is_echo(const dgus_frame_t *f)
  * TX 빌더 — samd20 9 함수 풀 패리티
  *--------------------------------------------------------------*/
 
-/* 단일 프레임 전송 helper. plen = payload byte 수.
- * 프레임: 5A A5 LEN(=3+plen) cmd AH AL [payload].
- */
+/* DGUS 프레임 송신 */
 static void send_frame(uint8_t cmd, uint16_t vp, const uint8_t *payload, uint8_t plen)
 {
+    /* 단일 프레임 전송 helper. plen = payload byte 수.
+     * 프레임: 5A A5 LEN(=3+plen) cmd AH AL [payload].
+     */
     s_tx_buf[0] = DGUS_SYNC1;
     s_tx_buf[1] = DGUS_SYNC2;
     s_tx_buf[2] = (uint8_t)(3 + plen);                  /* LEN = cmd+addr(3) + payload */
@@ -85,23 +88,26 @@ static void send_frame(uint8_t cmd, uint16_t vp, const uint8_t *payload, uint8_t
     }
 }
 
-/* samd20 reset_dgus_lcd: VP_LCD_RESET 0x04, payload = 55 AA 5A A5 (DWIN reset magic) */
+/* LCD 리셋 명령 */
 void dgus_reset_lcd(void)
 {
+    /* samd20 reset_dgus_lcd: VP_LCD_RESET 0x04, payload = 55 AA 5A A5 (DWIN reset magic) */
     static const uint8_t magic[4] = { 0x55, 0xAA, 0x5A, 0xA5 };
     send_frame(DGUS_CMD_WR, VP_LCD_RESET, magic, 4);
 }
 
-/* samd20 set_lcd_page: VP_LCD_SETPAGE 0x84, payload = 5A 01 00 page */
+/* LCD 페이지 전환 */
 void dgus_set_page(uint8_t page)
 {
+    /* samd20 set_lcd_page: VP_LCD_SETPAGE 0x84, payload = 5A 01 00 page */
     uint8_t pl[4] = { 0x5A, 0x01, 0x00, page };
     send_frame(DGUS_CMD_WR, VP_LCD_SETPAGE, pl, 4);
 }
 
-/* samd20 send_lcd_data_var */
+/* u16 VP 쓰기 */
 void dgus_write_u16(uint16_t vp, uint16_t value)
 {
+    /* samd20 send_lcd_data_var */
     uint8_t pl[2] = {
         (uint8_t)(value >> 8),
         (uint8_t)(value & 0xFF),
@@ -109,9 +115,10 @@ void dgus_write_u16(uint16_t vp, uint16_t value)
     send_frame(DGUS_CMD_WR, vp, pl, 2);
 }
 
-/* samd20 send_lcd_data_word — big-endian 4 byte */
+/* u32 VP 쓰기 */
 void dgus_write_u32(uint16_t vp, uint32_t value)
 {
+    /* samd20 send_lcd_data_word — big-endian 4 byte */
     uint8_t pl[4] = {
         (uint8_t)(value >> 24),
         (uint8_t)(value >> 16),
@@ -121,18 +128,20 @@ void dgus_write_u32(uint16_t vp, uint32_t value)
     send_frame(DGUS_CMD_WR, vp, pl, 4);
 }
 
-/* samd20 send_lcd_byte_array */
+/* 바이트 배열 쓰기 */
 void dgus_write_bytes(uint16_t vp, const uint8_t *buf, uint8_t n)
 {
+    /* samd20 send_lcd_byte_array */
     if (n > DGUS_MAX_DATA) {
         n = DGUS_MAX_DATA;                              /* 무경계 입력 안전 */
     }
     send_frame(DGUS_CMD_WR, vp, buf, n);
 }
 
-/* samd20 send_lcd_int_array — u16 array, big-endian */
+/* u16 배열 쓰기 */
 void dgus_write_u16_array(uint16_t vp, const uint16_t *buf, uint8_t n)
 {
+    /* samd20 send_lcd_int_array — u16 array, big-endian */
     if (n > (DGUS_MAX_DATA / 2)) {
         n = (uint8_t)(DGUS_MAX_DATA / 2);
     }
@@ -144,11 +153,12 @@ void dgus_write_u16_array(uint16_t vp, const uint16_t *buf, uint8_t n)
     send_frame(DGUS_CMD_WR, vp, pl, (uint8_t)(n * 2));
 }
 
-/* samd20 send_lcd_txt — 10 byte zero-pad. txt 가 NULL 또는 빈 문자열이면 nothing 송신.
- * samd20 라인 257-283 의 행동을 그대로 보존.
- */
+/* 텍스트 10B 쓰기 */
 void dgus_write_text(uint16_t vp, const char *txt)
 {
+    /* samd20 send_lcd_txt — 10 byte zero-pad. txt 가 NULL 또는 빈 문자열이면 nothing 송신.
+     * samd20 라인 257-283 의 행동을 그대로 보존.
+     */
     if (txt == 0 || txt[0] == '\0') {
         return;
     }
@@ -165,9 +175,10 @@ void dgus_write_text(uint16_t vp, const char *txt)
     send_frame(DGUS_CMD_WR, vp, pl, 10);
 }
 
-/* samd20 read_system_var — RD 0x83, payload = 1 (1 word read) */
+/* 시스템 변수 RD 요청 */
 void dgus_read_var(uint8_t var)
 {
+    /* samd20 read_system_var — RD 0x83, payload = 1 (1 word read) */
     uint8_t pl[1] = { 1 };
     send_frame(DGUS_CMD_RD, (uint16_t)var, pl, 1);
 }
@@ -184,9 +195,10 @@ void dgus_read_var(uint8_t var)
 #define DGUS_LEN_MAX          26
 #define DGUS_FRAME_TIMEOUT_MS 50
 
-/* 1바이트 처리. true 리턴 시 out 에 완성 프레임 적재. */
+/* RX 1바이트 파싱 */
 static bool parser_step(uint8_t b, dgus_frame_t *out)
 {
+    /* 1바이트 처리. true 리턴 시 out 에 완성 프레임 적재. */
     switch (s_parse_state) {
 
     case PS_IDLE:
@@ -248,6 +260,7 @@ static bool parser_step(uint8_t b, dgus_frame_t *out)
     return false;
 }
 
+/* RX 링 폴링 파싱 */
 bool dgus_rx_poll(dgus_frame_t *out)
 {
     uint8_t b;
@@ -269,12 +282,13 @@ bool dgus_rx_poll(dgus_frame_t *out)
  *  ref/samd20/main.c:4933-5022). 부트 전용 blocking — 메인 루프용 아님.
  *--------------------------------------------------------------*/
 
-/* addr 한 워드를 RD 요청하고 timeout_ms 안에 0x83 응답을 기다림.
- * 대기 동안 RX ring 을 계속 drain. 응답 수신 시 *out_val 적재 후 true.
- * RD 응답 payload 레이아웃(samd20): data[0]=word count, data[1]=hi, data[2]=lo.
- */
+/* VP 워드 블로킹 읽기 */
 bool dgus_read_word(uint16_t addr, uint16_t *out_val, uint32_t timeout_ms)
 {
+    /* addr 한 워드를 RD 요청하고 timeout_ms 안에 0x83 응답을 기다림.
+     * 대기 동안 RX ring 을 계속 drain. 응답 수신 시 *out_val 적재 후 true.
+     * RD 응답 payload 레이아웃(samd20): data[0]=word count, data[1]=hi, data[2]=lo.
+     */
     dgus_frame_t f;
     while (dgus_rx_poll(&f)) {
         /* 이전 요청 잔여 / 터치 프레임 비움 */
@@ -294,9 +308,10 @@ bool dgus_read_word(uint16_t addr, uint16_t *out_val, uint32_t timeout_ms)
     return false;
 }
 
-/* 패널이 SYS_PIC_NOW read 에 응답할 때까지(UART 기동) 또는 timeout 까지 폴링. */
+/* 패널 부팅 대기 */
 bool dgus_wait_ready(uint32_t timeout_ms)
 {
+    /* 패널이 SYS_PIC_NOW read 에 응답할 때까지(UART 기동) 또는 timeout 까지 폴링. */
     uint16_t pg;
     uint32_t t0 = sys_tick_get_ms();
     do {

@@ -27,6 +27,7 @@ extern void board_init(void);    /* src/board.c */
 
 #define BOOT_BEEP_MS  100u   /* 부팅 완료 1회 beep 길이 (점멸계 250ms와 구분) */
 
+/* 부팅 초기화+슈퍼루프 */
 int main(void) {
     HAL_Init();
     clock_init();      /* 96 MHz */

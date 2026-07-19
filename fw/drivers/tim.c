@@ -3,6 +3,7 @@
 #include "periph.h"
 #include "clock.h"
 
+/* TIM11 초기화 */
 void tim11_init(void) {
     __HAL_RCC_TIM11_CLK_ENABLE();
     htim11.Instance               = TIM11;

@@ -7,6 +7,7 @@
  * 틀어지므로 크리스탈 회로 점검 필요. */
 static uint8_t s_clk_hsi_fallback;
 
+/* 96MHz 클럭 설정 */
 void clock_init(void) {
     RCC_OscInitTypeDef osc = {0};
     RCC_ClkInitTypeDef clk = {0};

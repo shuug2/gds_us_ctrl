@@ -35,6 +35,7 @@
 #define SOL_DN_PORT     GPIOB
 #define SOL_DN_PIN      GPIO_PIN_5
 
+/* 패널 GPIO 초기화 */
 void io_init(void)
 {
     __HAL_RCC_GPIOA_CLK_ENABLE();
@@ -75,17 +76,30 @@ void io_init(void)
     out.Pin = SOL_DN_PIN;   HAL_GPIO_Init(SOL_DN_PORT,   &out);
 }
 
+/* START 입력 읽기 */
 uint8_t io_read_start(void)      { return (uint8_t)HAL_GPIO_ReadPin(START_PORT,   START_PIN);   }
+/* RESET 입력 읽기 */
 uint8_t io_read_reset(void)      { return (uint8_t)HAL_GPIO_ReadPin(PANEL_RESET_PORT,   PANEL_RESET_PIN);   }
+/* ESTOP/SEEK 읽기 */
 uint8_t io_read_estop_seek(void) { return (uint8_t)HAL_GPIO_ReadPin(ESTOP_PORT,   ESTOP_PIN);   }
+/* KEY1 입력 읽기 */
 uint8_t io_read_key1(void)       { return (uint8_t)HAL_GPIO_ReadPin(KEY1_PORT,    KEY1_PIN);    }
+/* KEY2 입력 읽기 */
 uint8_t io_read_key2(void)       { return (uint8_t)HAL_GPIO_ReadPin(KEY2_PORT,    KEY2_PIN);    }
+/* SENS_UP 읽기 */
 uint8_t io_read_sens_up(void)    { return (uint8_t)HAL_GPIO_ReadPin(SENS_UP_PORT, SENS_UP_PIN); }
+/* SENS_DN 읽기 */
 uint8_t io_read_sens_dn(void)    { return (uint8_t)HAL_GPIO_ReadPin(SENS_DN_PORT, SENS_DN_PIN); }
+/* overload 입력 읽기 */
 uint8_t io_read_overload(void)   { return (uint8_t)HAL_GPIO_ReadPin(OVLD_IN_PORT, OVLD_IN_PIN); }
+/* US 피드백 읽기 */
 uint8_t io_read_usfb(void)       { return (uint8_t)HAL_GPIO_ReadPin(USFB_PORT,    USFB_PIN);    }
 
+/* USOUT 출력 설정 */
 void io_usout(bool on)      { HAL_GPIO_WritePin(USOUT_PORT,    USOUT_PIN,    on ? GPIO_PIN_SET : GPIO_PIN_RESET); }
+/* OVLD 릴레이 설정 */
 void io_ovld_relay(bool on) { HAL_GPIO_WritePin(OVLD_RLY_PORT, OVLD_RLY_PIN, on ? GPIO_PIN_SET : GPIO_PIN_RESET); }
+/* 부저 출력 설정 */
 void io_buzzer(bool on)     { HAL_GPIO_WritePin(BUZZER_PORT,   BUZZER_PIN,   on ? GPIO_PIN_SET : GPIO_PIN_RESET); }
+/* SOL_DN 출력 설정 */
 void io_sol_dn(bool on)     { HAL_GPIO_WritePin(SOL_DN_PORT,   SOL_DN_PIN,   on ? GPIO_PIN_RESET : GPIO_PIN_SET); } /* active-LOW */
