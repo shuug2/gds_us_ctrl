@@ -366,6 +366,68 @@ static void reg_publish_measure(uint32_t now, int16_t freq_cal_val)
     }
 }
 
+/* (1) Absolute on-time SAFETY ceiling — ON_TIME_SAFETY_MS (30 s). Fires for
+ * ANY active ultrasonic run (TOUCH/COMM/REMOTE/CYCLE) in ANY mode,
+ * independent of limit_on_time (fires even when limit_on_time==0), NOT
+ * panel-editable. Transducer runaway backstop. run_start_ms is stamped at
+ * every START edge (incl. US_CYCLE via app_weld), so the 30 s base is valid
+ * for all sources. User decision 2026-06-27: unconditional, all incl. weld. */
+static void reg_check_safety_ceiling(uint32_t now)
+{
+    uint8_t rs = g_reg.us_run_status;
+    if ((rs == (uint8_t)US_TOUCH) || (rs == (uint8_t)US_COMM) ||
+        (rs == (uint8_t)US_REMOTE) || (rs == (uint8_t)US_CYCLE)) {
+        if ((uint32_t)(now - g_reg.run_start_ms) >= ON_TIME_SAFETY_MS) {
+            reg_stop_run(rs);
+#ifdef REG_TRACE
+            mon_printf("[reg] 30s safety ceiling -> stop\r\n");
+#endif
+        }
+    }
+}
+
+/* (2) 런 자동 종료 — energy 모드면 에너지-도달 정상정지 + OVTIME이 운영
+ * ceiling을 대체 (ovtime, legacy main.c:5270 분기; REMOTE는 slice-D가 소스
+ * 추가). 비-energy면 legacy limit_on_time ceiling — slice-D 이중화 결정
+ * (2026-06-27, samd20 main.c:5296-faithful): HAND 모드의 COMM/REMOTE만,
+ * NOT TOUCH (V30 lost-release 리스크는 위 30 s 안전 ceiling이 커버).
+ * US_CYCLE은 양쪽 모두 자연 제외 — WELD 길이는 weld-cycle FSM의
+ * limit_delay_time2가 지배(app_weld). limit_*은 매 call cfg 주입(M1) —
+ * 패널 편집 즉시 반영(mid-run 포함). */
+static void reg_check_auto_terminate(uint32_t now, const reg_run_limits_t *lim)
+{
+    uint8_t rs = g_reg.us_run_status;
+    if ((rs == (uint8_t)US_TOUCH) || (rs == (uint8_t)US_COMM) ||
+        (rs == (uint8_t)US_REMOTE)) {
+        uint32_t elapsed = (uint32_t)(now - g_reg.run_start_ms);
+        if (lim->energy_ctrl != 0u) {
+            reg_energy_outcome_t oc = reg_energy_termination(
+                lim->energy_ctrl, g_measure.curr_energy, lim->limit_energy,
+                elapsed, lim->limit_out_time);
+            if (oc != REG_RUN_CONTINUE) {
+                reg_stop_run(rs);
+                if (oc == REG_RUN_FAULT_OVTIME) {
+                    g_reg.error_status |= ERR_OVTIME;   /* samd20 main.c:5292 */
+                }
+#ifdef REG_TRACE
+                mon_printf("[reg] energy stop oc=%u (e=%lu/%lu t=%lums)\r\n",
+                           (unsigned)oc, (unsigned long)g_measure.curr_energy,
+                           (unsigned long)lim->limit_energy, (unsigned long)elapsed);
+#endif
+            }
+        } else if ((lim->model_type == MODEL_TYPE_HAND) &&
+                   ((rs == (uint8_t)US_COMM) || (rs == (uint8_t)US_REMOTE)) &&
+                   (lim->limit_on_time != 0u) &&
+                   (elapsed >= (uint32_t)lim->limit_on_time * ON_TIME_UNIT_MS)) {
+            reg_stop_run(rs);   /* COMM/REMOTE: no swallow (legacy) */
+#ifdef REG_TRACE
+            mon_printf("[reg] on-time ceiling (%u x10ms) -> stop\r\n",
+                       (unsigned)lim->limit_on_time);
+#endif
+        }
+    }
+}
+
 void app_reg_tick(const reg_run_limits_t *lim)
 {
     uint32_t now = sys_tick_get_ms();
@@ -386,65 +448,8 @@ void app_reg_tick(const reg_run_limits_t *lim)
         }
     }
 
-    /* (1) Absolute on-time SAFETY ceiling — ON_TIME_SAFETY_MS (30 s). Fires for
-     * ANY active ultrasonic run (TOUCH/COMM/REMOTE/CYCLE) in ANY mode,
-     * independent of limit_on_time (fires even when limit_on_time==0), NOT
-     * panel-editable. Transducer runaway backstop. run_start_ms is stamped at
-     * every START edge (incl. US_CYCLE via app_weld), so the 30 s base is valid
-     * for all sources. User decision 2026-06-27: unconditional, all incl. weld. */
-    {
-        uint8_t rs = g_reg.us_run_status;
-        if ((rs == (uint8_t)US_TOUCH) || (rs == (uint8_t)US_COMM) ||
-            (rs == (uint8_t)US_REMOTE) || (rs == (uint8_t)US_CYCLE)) {
-            if ((uint32_t)(now - g_reg.run_start_ms) >= ON_TIME_SAFETY_MS) {
-                reg_stop_run(rs);
-#ifdef REG_TRACE
-                mon_printf("[reg] 30s safety ceiling -> stop\r\n");
-#endif
-            }
-        }
-    }
-
-    /* (2) 런 자동 종료 — energy 모드면 에너지-도달 정상정지 + OVTIME이 운영
-     * ceiling을 대체 (ovtime, legacy main.c:5270 분기; REMOTE는 slice-D가 소스
-     * 추가). 비-energy면 legacy limit_on_time ceiling — slice-D 이중화 결정
-     * (2026-06-27, samd20 main.c:5296-faithful): HAND 모드의 COMM/REMOTE만,
-     * NOT TOUCH (V30 lost-release 리스크는 위 30 s 안전 ceiling이 커버).
-     * US_CYCLE은 양쪽 모두 자연 제외 — WELD 길이는 weld-cycle FSM의
-     * limit_delay_time2가 지배(app_weld). limit_*은 매 call cfg 주입(M1) —
-     * 패널 편집 즉시 반영(mid-run 포함). */
-    {
-        uint8_t rs = g_reg.us_run_status;
-        if ((rs == (uint8_t)US_TOUCH) || (rs == (uint8_t)US_COMM) ||
-            (rs == (uint8_t)US_REMOTE)) {
-            uint32_t elapsed = (uint32_t)(now - g_reg.run_start_ms);
-            if (lim->energy_ctrl != 0u) {
-                reg_energy_outcome_t oc = reg_energy_termination(
-                    lim->energy_ctrl, g_measure.curr_energy, lim->limit_energy,
-                    elapsed, lim->limit_out_time);
-                if (oc != REG_RUN_CONTINUE) {
-                    reg_stop_run(rs);
-                    if (oc == REG_RUN_FAULT_OVTIME) {
-                        g_reg.error_status |= ERR_OVTIME;   /* samd20 main.c:5292 */
-                    }
-#ifdef REG_TRACE
-                    mon_printf("[reg] energy stop oc=%u (e=%lu/%lu t=%lums)\r\n",
-                               (unsigned)oc, (unsigned long)g_measure.curr_energy,
-                               (unsigned long)lim->limit_energy, (unsigned long)elapsed);
-#endif
-                }
-            } else if ((lim->model_type == MODEL_TYPE_HAND) &&
-                       ((rs == (uint8_t)US_COMM) || (rs == (uint8_t)US_REMOTE)) &&
-                       (lim->limit_on_time != 0u) &&
-                       (elapsed >= (uint32_t)lim->limit_on_time * ON_TIME_UNIT_MS)) {
-                reg_stop_run(rs);   /* COMM/REMOTE: no swallow (legacy) */
-#ifdef REG_TRACE
-                mon_printf("[reg] on-time ceiling (%u x10ms) -> stop\r\n",
-                           (unsigned)lim->limit_on_time);
-#endif
-            }
-        }
-    }
+    reg_check_safety_ceiling(now);
+    reg_check_auto_terminate(now, lim);
 
     if ((uint32_t)(now - g_reg.prev_acq_ms) >= REG_ACQ_MS) {
         g_reg.prev_acq_ms = now;
