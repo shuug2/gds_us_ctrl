@@ -60,24 +60,45 @@ gds_us_ctrl/
 
 ---
 
-## 빌드
+## 빌드 · 플래시
+
+루트의 `fw.sh`를 쓴다. 어느 디렉토리에서 실행해도 된다.
+
+```bash
+./fw.sh            # 빌드 (기본)
+./fw.sh flash      # 빌드 + 플래시 (ST-LINK 필요)
+./fw.sh reset      # 보드 리셋만
+./fw.sh test       # host 테스트 (fw/test)
+./fw.sh gdb        # 빌드 + GDB 접속
+./fw.sh reconfig   # cmake 강제 재구성 후 빌드
+```
+
+스크립트가 대신 피해주는 함정 2개 — **수동으로 cmake를 부를 땐 직접 챙겨야 한다**:
+
+1. `$STM32_TOOLCHAIN`이 stale 경로를 가리켜 cmake가 실패 → `env -u STM32_TOOLCHAIN cmake ...`
+   (상세: `docs/superpowers/historical/2026-05-05-RESUME.md` §2.2)
+2. `CMakeLists.txt:91`의 `file(GLOB src/*.c drivers/*.c)`는 **configure 타임 고정** → `.c`가
+   추가/삭제된 브랜치로 전환한 뒤 증분 빌드만 하면 새 파일이 링크되지 않아 undefined
+   reference로 터진다. `fw.sh`는 소스 목록을 `build/.src-glob` 스탬프와 비교해 달라졌을
+   때만 재구성한다.
+
+수동 등가 명령:
 
 ```bash
 cd fw
-cmake -B build -G Ninja
-cmake --build build
+env -u STM32_TOOLCHAIN cmake -B build -G Ninja                # 재구성
+env -u STM32_TOOLCHAIN cmake --build build                    # 빌드
+env -u STM32_TOOLCHAIN cmake --build build --target flash     # 플래시
+# openocd 직접: openocd -f openocd/stm32f410.cfg \
+#     -c "program build/gds_us_ctrl.elf verify reset exit"
 ```
 
-> `$STM32_TOOLCHAIN` env var가 stale 경로를 가리키면 `env -u STM32_TOOLCHAIN cmake ...`로 우회. 자세한 사항은 `docs/superpowers/historical/2026-05-05-RESUME.md` §2.2 참조.
+플래시 타깃 정의 = `fw/CMakeLists.txt:123` (`reset`:130 / `server`:135 / `gdb`:140),
+어댑터 설정 = `fw/openocd/stm32f410.cfg` (ST-LINK / hla_swd / stm32f4x).
+성공 판정은 openocd 출력의 `** Verified OK **` + `** Resetting Target **`.
 
-## 플래시
-
-```bash
-cd fw
-cmake --build build --target flash
-# 또는 직접:
-# openocd -f openocd/stm32f410.cfg -c "program build/gds_us_ctrl.elf verify reset exit"
-```
+> ⚠ 런타임 검증에 SWD gdb halt 금지 — sys_tick이 멈춰 오진을 부른다. 검증은 mbpoll +
+> LCD 육안으로. SWD는 플래시 또는 부팅 직후 정적 read 1회만.
 
 ---
 
