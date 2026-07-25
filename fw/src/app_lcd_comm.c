@@ -2,6 +2,7 @@
  * app_lcd_input.c에서 분할 (2026-07-19, 순수 코드 이동 — samd20 parse_lcd_comm tail).
  * Port source: ref/samd20/main.c 2850-2925 (process_ip_char), 3327-3630 (save/cancel),
  * 4026-4135 (comm/ether rows). Spec: §7, §8. */
+#include <string.h>
 #include "app_lcd.h"
 #include "dgus_lcd.h"
 #include "mon.h"
@@ -184,8 +185,13 @@ static void ether_select_field(uint8_t field, const uint8_t shadow[4])
     uint8_t i;
 
     state->ether_what_input = field;
+    /* 커서는 실제 글자 수. ip_to_string은 DGUS 쓰기 길이용으로 항상 16을 돌려주고
+     * 남는 자리를 NUL로 채우므로(app_lcd_str.c:156-159), 그 값을 그대로 커서로 쓰면
+     * 백스페이스가 16-strlen 번은 NUL만 먹는다 (samd20 main.c:4094 동일 버그 —
+     * 의도적 이탈). 헛 백스페이스는 ether_current_number를 /10씩 깎기도 했다. */
+    ip_to_string(shadow, (char *)state->ether_input_buffer);
     state->ether_buffer_pos =
-        ip_to_string(shadow, (char *)state->ether_input_buffer);
+        (uint8_t)strlen((const char *)state->ether_input_buffer);
     for (i = 0; i < 4u; i++) {
         state->ether_temp_ip[i] = shadow[i];
     }
