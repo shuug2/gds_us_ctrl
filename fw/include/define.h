@@ -12,13 +12,16 @@
  * 접두어뿐 아니라 freq/type -> 문자 매핑 자체가 브랜드마다 다르다.
  *   GDSONIC   "GDS-20H   "   DIAMT   "DIS-20H   "
  *   POWERTECH "PTW-2020DH"   MOOHAN  "MH-1520DH "
+ *   MAKETECH  "SMT-H15D  "   (samd20에 없던 신규 — type이 숫자 앞에 온다)
  */
 #define GDSONIC
-/* #define DIAMT     */
-/* #define POWERTECH */
-/* #define MOOHAN    */
+//#define DIAMT     
+//#define POWERTECH 
+//#define MOOHAN    
+//#define MAKETECH  
 
-#if (defined(GDSONIC) + defined(DIAMT) + defined(POWERTECH) + defined(MOOHAN)) != 1
+#if (defined(GDSONIC) + defined(DIAMT) + defined(POWERTECH) + defined(MOOHAN) \
+   + defined(MAKETECH)) != 1
 #error "define.h: 모델 브랜드는 정확히 하나만 정의할 것"
 #endif
 

@@ -149,6 +149,28 @@ void app_lcd_send_model_str(uint8_t freq, uint8_t type)
         default: s[8] = 'D'; s[9] = 'H'; break;
     }
     s[10] = '\0';
+#elif defined(MAKETECH)
+    /* samd20에 대응 블록 없는 신규 브랜드. "SMT-" + type문자 + freq 2자리 + 'D'.
+     *   hand "SMT-H15D" / multi "SMT-A15D" / std "SMT-S15D"
+     * 패널 선택지는 15K/20K/35K. 나머지 freq 코드는 GDSONIC과 같이 실제 주파수를
+     * 그대로 찍는다 (MOOHAN처럼 30K를 35로 접지 않음 — 접을 근거가 legacy에 없음). */
+    s[0] = 'S'; s[1] = 'M'; s[2] = 'T'; s[3] = '-';
+    switch (type) {
+        case 0:  s[4] = 'H'; break;                                       /* hand */
+        case 1:  s[4] = 'A'; break;                                       /* multi */
+        case 2:  s[4] = 'S'; break;                                       /* standard */
+        default: s[4] = 'H'; break;
+    }
+    switch (freq) {
+        case 0:  s[5] = '1'; s[6] = '5'; break;
+        case 1:  s[5] = '2'; s[6] = '0'; break;
+        case 2:  s[5] = '3'; s[6] = '0'; break;
+        case 3:  s[5] = '3'; s[6] = '5'; break;
+        case 4:  s[5] = '4'; s[6] = '0'; break;
+        case 5:  s[5] = '5'; s[6] = '0'; break;
+        default: s[5] = '1'; s[6] = '5'; break;
+    }
+    s[7] = 'D'; s[8] = ' '; s[9] = ' '; s[10] = '\0';
 #else   /* MOOHAN */
     /* samd20 main.c:2532-2585. 30K/35K 모두 "1535" (legacy 그대로). */
     s[0] = 'M'; s[1] = 'H'; s[2] = '-';
