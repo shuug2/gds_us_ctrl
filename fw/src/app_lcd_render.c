@@ -16,6 +16,7 @@
  * app_lcd_hook_set_pot() (no real I2C this stage — U4 identity is open Q F2).
  */
 #include <stdint.h>
+#include "define.h"    /* VERSION_MSG */
 #include "app_lcd.h"
 #include "app_config.h"
 #include "dgus_lcd.h"
@@ -30,10 +31,9 @@
 #define MODE_TRIGGER  1
 
 /* DISP_VERSION payload — 20 bytes, NO trailing NUL (sent raw via dgus_write_bytes).
- * samd20 had its own VERSION_MSG ("V2.9.1_250629   "); STM32 port string below. */
-static const uint8_t VERSION_MSG[20] = {
-    'G','D','S','-','U','S',' ','S','T','M','3','2',' ','v','0','.','1',' ',' ',' '
-};
+ * 문자열은 define.h. samd20은 17바이트 리터럴을 20으로 보내 3바이트 over-read
+ * (main.c:3046) — 포트는 길이를 여기서 강제한다. */
+_Static_assert(sizeof(VERSION_MSG) - 1u == 20u, "VERSION_MSG must be exactly 20 chars");
 
 /* 페이지 렌더+전환 */
 void app_lcd_change_page(uint8_t page)
@@ -104,7 +104,7 @@ void app_lcd_change_page(uint8_t page)
             dgus_write_bytes(DISP_STD_DATA3, buf, (uint8_t)(n + 4));
         }
     } else if (page == LCD_SETUP_HAND || page == LCD_SETUP_MULTI || page == LCD_SETUP_STD1) {
-        dgus_write_bytes(DISP_VERSION, VERSION_MSG, 20);
+        dgus_write_bytes(DISP_VERSION, (const uint8_t *)VERSION_MSG, 20);
         dgus_write_u16(LV_MAX_ON_TIME, cfg->limit_on_time);
         dgus_write_u16(LV_OUT_POWER,   cfg->output_power);
         app_lcd_hook_set_pot(cfg->output_power);   /* samd20 inline I2C_POT write -> hook (F2 open) */

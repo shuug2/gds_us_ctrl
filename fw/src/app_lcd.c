@@ -1,4 +1,5 @@
 /* fw/src/app_lcd.c — LCD app: init_lcd_mode port + subsystem state owner + stub hooks. */
+#include "define.h"    /* 모델 브랜드 선택 (GDSONIC/DIAMT/POWERTECH/MOOHAN) */
 #include "app_lcd.h"
 #include "dgus_lcd.h"
 #include "sys_tick.h"
@@ -101,9 +102,18 @@ uint8_t app_lcd_run_page(const app_config_t *cfg)
 /* 모델명 문자열 전송 */
 void app_lcd_send_model_str(uint8_t freq, uint8_t type)
 {
-    /* GDSONIC build (samd20 main.c:2379-2426). Wire payload = 11 bytes incl. NUL at [10]. */
+    /* 브랜드는 define.h가 고른다 (samd20 main.c:2379-2586, 브랜드당 #ifdef 1블록).
+     * Wire payload = 11 bytes incl. NUL at [10]. samd20은 freq/type이 범위를
+     * 벗어나면 버퍼를 미초기화로 남겼다 — 포트는 default로 첫 케이스를 쓴다. */
     uint8_t s[11];
-    s[0] = 'G'; s[1] = 'D'; s[2] = 'S'; s[3] = '-';
+#if defined(GDSONIC) || defined(DIAMT)
+    /* samd20 main.c:2379-2426 (GDS) / 2428-2475 (DIS) — 접두 3바이트만 다르다. */
+#ifdef GDSONIC
+    s[0] = 'G'; s[1] = 'D'; s[2] = 'S';
+#else
+    s[0] = 'D'; s[1] = 'I'; s[2] = 'S';
+#endif
+    s[3] = '-';
     switch (freq) {
         case 0:  s[4] = '1'; s[5] = '5'; break;
         case 1:  s[4] = '2'; s[5] = '0'; break;
@@ -120,6 +130,45 @@ void app_lcd_send_model_str(uint8_t freq, uint8_t type)
         default: s[6] = 'H'; break;
     }
     s[7] = ' '; s[8] = ' '; s[9] = ' '; s[10] = '\0';
+#elif defined(POWERTECH)
+    /* samd20 main.c:2477-2530. 30K/35K 모두 " 735" (legacy 그대로). */
+    s[0] = 'P'; s[1] = 'T'; s[2] = 'W'; s[3] = '-';
+    switch (freq) {
+        case 0:  s[4] = '2'; s[5] = '5'; s[6] = '1'; s[7] = '5'; break;   /* 15K */
+        case 1:  s[4] = '2'; s[5] = '0'; s[6] = '2'; s[7] = '0'; break;   /* 20K */
+        case 2:  s[4] = ' '; s[5] = '7'; s[6] = '3'; s[7] = '5'; break;   /* 30K */
+        case 3:  s[4] = ' '; s[5] = '7'; s[6] = '3'; s[7] = '5'; break;   /* 35K */
+        case 4:  s[4] = ' '; s[5] = '7'; s[6] = '4'; s[7] = '0'; break;   /* 40K */
+        case 5:  s[4] = ' '; s[5] = '7'; s[6] = '5'; s[7] = '0'; break;   /* 50K */
+        default: s[4] = '2'; s[5] = '5'; s[6] = '1'; s[7] = '5'; break;
+    }
+    switch (type) {
+        case 0:  s[8] = 'D'; s[9] = 'H'; break;
+        case 1:  s[8] = 'M'; s[9] = 'D'; break;
+        case 2:  s[8] = 'S'; s[9] = 'D'; break;
+        default: s[8] = 'D'; s[9] = 'H'; break;
+    }
+    s[10] = '\0';
+#else   /* MOOHAN */
+    /* samd20 main.c:2532-2585. 30K/35K 모두 "1535" (legacy 그대로). */
+    s[0] = 'M'; s[1] = 'H'; s[2] = '-';
+    switch (freq) {
+        case 0:  s[3] = '1'; s[4] = '5'; s[5] = '1'; s[6] = '5'; break;   /* 15K */
+        case 1:  s[3] = '1'; s[4] = '5'; s[5] = '2'; s[6] = '0'; break;   /* 20K */
+        case 2:  s[3] = '1'; s[4] = '5'; s[5] = '3'; s[6] = '5'; break;   /* 30K */
+        case 3:  s[3] = '1'; s[4] = '5'; s[5] = '3'; s[6] = '5'; break;   /* 35K */
+        case 4:  s[3] = '1'; s[4] = '5'; s[5] = '4'; s[6] = '0'; break;   /* 40K */
+        case 5:  s[3] = '1'; s[4] = '5'; s[5] = '5'; s[6] = '0'; break;   /* 50K */
+        default: s[3] = '1'; s[4] = '5'; s[5] = '1'; s[6] = '5'; break;
+    }
+    switch (type) {
+        case 0:  s[7] = 'D'; s[8] = 'H'; break;
+        case 1:  s[7] = 'D'; s[8] = 'M'; break;
+        case 2:  s[7] = 'D'; s[8] = 'S'; break;
+        default: s[7] = 'D'; s[8] = 'H'; break;
+    }
+    s[9] = ' '; s[10] = '\0';
+#endif
     dgus_write_bytes(MODEL_NAME, s, 11);
 }
 
