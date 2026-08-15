@@ -104,7 +104,18 @@ cmake --build build --target flash
 
 **먼저 `docs/NEXT_STEPS.md`를 읽고 진행 상황과 다음 작업을 확인.**
 
-**현재 진행 (2026-07-11)**: **FW 벤치 — 신규 3건 중 2건+α HW PASS**: #1 유령 런 소멸·#2 REMOTE icon(**V30 에셋 0x120e 렌더 첫 입증**)·energy/OVTIME 타이밍(EMA 리뷰 MEDIUM 해소, t≈1.0–1.09s ×3). #3 EMA 체감·전류 0.60A=전류계 이월(2회째). 벤치 중 사용자 발견 **OVTIME 경고화면 복귀 버그 fix 2커밋+HW 재검증 PASS**: `83498e7`(원격/물리 RESET 클리어 시 페이지 복귀 부재 → `app_lcd_fault_cleared()` 미러 nonzero→0 엣지) + `88faf08`(**근본원인=show_error의 `lcd_status=LCD_WARNING` 스탬프 누락**, legacy main.c:4232 쌍 상실 — 1차 fix 단독은 HW 실패였고 리뷰어도 오독, HW 벤치가 유일 검출; 교훈=dgus_set_page는 state 스탬프와 쌍). ⚠부수: model_type=multi(1) 잔재에서 Modbus 직접런 ceiling 미적용=정상(HAND 전용 설계, 30s 캡만 — 테스트 후 STOP 필수). **보드=`88faf08` 플래시·검증됨**(ETH_STATIC .199, 잔재 원복 EN_ENERGY=0/TIMEOVER=8) + **push=main `88faf08`까지 완료**(남은 것=마감 docs 커밋+이월 태그 `hw-revA_fw-stage-mbtcp-hardening`, 사람 터미널). 남은 것 = **★① HMI Task 8**(`~/dev/work/gds_us_hmi` 새 세션+그쪽 HANDOFF.md, RS-485 어댑터+LCD에서 SERIAL/addr=1 복원, research doc rs485-first-write §6 지참) + **② 전류 실측 이월분**(전류계 세션, 플래시 불필요) + **③ 6b·B-SEAM**(사용자 보류). 상세 진입 = 루트 `HANDOFF.md`(2026-07-11판) + `docs/NEXT_STEPS.md`, 세션별 상태 = `docs/superpowers/RESUME.md`(자동 로드), 변경 이력 = `docs/changelog.md`.
+**현재 진행 (2026-08-15)**: **포팅 본체 종료 — main은 안정, 열린 것은 4건.** 2026-07-18~19 사용자 벤치 신규 8건(표시 데드밴드 0.15A·부팅 유령 SEEK·부팅 beep·fault 부저 알람·경고 페이지 터치 토글 반전·SYS_HORN horn-down·STD weld OVTIME 알람) **전건 HW PASS**, USOUT(PB4) 미출력=**PCB 원인 확정**(펌웨어 무수정). 보드=main `61524c1` 플래시·검증됨(⚠세션 말미 전원 OFF·잔재 설정 불확정).
+
+열린 항목:
+1. **★ HMI SP1 Task 8 실보드 E2E** — `~/dev/work/gds_us_hmi`(별도 repo) 세션. RS-485 어댑터 + LCD에서 SERIAL/addr=1/9600/EVEN 복원 필요, `docs/superpowers/research/2026-07-05-rs485-first-write.md` §6 지참.
+2. **★ `refactor/ponytail-cleanup` 브랜치 HW 재검증→머지** (main 대비 +12커밋, origin 푸시됨, **미머지**) — 07-19 리팩토링 4스테이지(죽은코드·`app_lcd_input.c` 분할+`app_lcd_comm.c` 신설·`app_reg_tick` 헬퍼 추출·주석 통일) + 07-25 4커밋(`define.h` 브랜드/버전 분리·MAKETECH·**ether IP 편집 커서 fix**·`fw.sh`). 게이트=벤치 3항목(§ NEXT_STEPS §2.2).
+3. **원격 제어 활성화 게이트** — 2026-08-02 정책 승인, **이 저장소 미구현·착수 전**. 레지스터 `0x2A~0x2D`(LCD 전용 활성화, 비영속) + `0x1E~0x29`(comm/eth 노출). 결정 기록=`docs/superpowers/specs/2026-08-02-remote-enable-gate-decision.md`, 설계 정본=`gds_us_remote` repo. 원격 START 허용의 유일 선행(원격기 파일럿은 블로킹 안 함).
+4. **전류 0.60A 실측**(3회째 이월, 전류계 세션·플래시 불필요) / **6b·B-SEAM**(사용자 보류).
+
+⚠ push: main·브랜치 모두 origin 동기. **태그 7개 미푸시**(`-eth-reapply`/`-fram-robust`/`-mbtcp-hardening`/`-physio-b`/`-physio-d`/`-power-ch1`/`-weld4`) — 사람 터미널 `git push origin --tags`.
+⚠ model_type=multi(1) 잔재에서 Modbus 직접런 ceiling 미적용=정상(HAND 전용 설계, 30s 캡만 — 테스트 후 STOP 필수).
+
+상세 진입 = 루트 `HANDOFF.md` + `docs/NEXT_STEPS.md`, 세션별 상태 = `docs/superpowers/RESUME.md`(자동 로드), 변경 이력 = `docs/changelog.md`.
 
 해소된 핵심 질문 (V30 회로도 + ATmega16 분석으로 확정):
 1. ATmega16 PA4 = 초음파 출력개시 신호 입력 / PC0 = overload 출력 / PC1·PC4 = 초음파 보드 신호 입력

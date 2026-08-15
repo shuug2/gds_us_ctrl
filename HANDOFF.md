@@ -1,8 +1,29 @@
 # Handoff: 2026-07-18~19 사용자 신규 8건(fix/기능) 전건 HW PASS + USOUT=PCB 확정, 다음 = HMI Task 8
 
 **Generated**: 2026-07-19 (풀배선 벤치 인터랙티브 세션, Fable→Opus)
-**Branch**: `main` tip `61524c1`(+이 docs 커밋) — **미푸시**: 코드 8커밋(`6af9882`..`61524c1`) + 직전 docs(`7258f7c`) + **태그 `hw-revA_fw-stage-mbtcp-hardening`**. 사람 터미널: `git push origin main && git push origin hw-revA_fw-stage-mbtcp-hardening`
+**Branch**: `main` tip `61524c1` → 이후 docs 커밋 진행, 현재 main = `1364e5e`. **코드·docs push 완료**(main == origin/main). ⚠ **태그 7개 미푸시** — 사람 터미널: `git push origin --tags`
 **Status**: 사용자 신규 8건 전건 벤치 검증 완료. **★ 다음 세션 = HMI Task 8** (`~/dev/work/gds_us_hmi`, 별도 repo).
+
+---
+
+## ⟳ 2026-08-15 갱신 — 이 문서 작성 이후 발생한 것
+
+이 아래 §Goal부터는 **2026-07-19 세션 기록 그대로**다. 그 뒤로 아래 3건이 추가됐고, 진입 시 반드시 함께 볼 것.
+
+**① 미머지 브랜치 `refactor/ponytail-cleanup`** (main 대비 +12커밋, base `8eaac71`, **origin 푸시됨** tip `753778d`)
+- 2026-07-19 리팩토링 4스테이지: 죽은 코드 삭제(`b02f5b1`, 바이너리 동일) / `app_lcd_input.c` 1038→622 분할 + 신규 `app_lcd_comm.c`(`e195564`) / `app_reg_tick` 118→57 헬퍼 추출(`30d001c`) / 전 269함수 한국어 ≤20자 주석 통일(바이너리 동일).
+- 2026-07-25 4커밋: 모델 브랜드+버전을 `fw/include/define.h`로 분리 — 5종 컴파일-타임 선택(`7d9b7da`) / **MAKETECH** 신설 `SMT-{H|A|S}{freq}D`(`ebfd7d5`) / **ether IP 편집 커서 fix**(`e8e84fb`, `ip_to_string` 반환 16=필드폭이지 글자수 아님 → 헛 백스페이스) / `fw.sh` 빌드·플래시 스크립트(`753778d`).
+- 게이트: 전 스테이지 0-warning + host 14스위트 PASS + cpp-review APPROVE. **머지 = 벤치 HW 재검증 3항목** ⓐ LCD SETUP comm/ether 편집 + DATA_SAVE 저장/복귀(분할 이동 경로) ⓑ 직접런 560ms ceiling + OVTIME 무회귀 ⓒ Modbus FC03/06 스모크. 07-25분 추가 육안 = 모델명 문자열 + IP 편집 백스페이스 1회 삭제. PASS 시 `git merge --no-ff`(태그 불요).
+- ⚠ **보드는 이 브랜치 코드로 미플래시** (여전히 `61524c1`). ⚠ 브랜치 전환 시 `app_lcd_comm.c` 생감 → **`cmake -B build` 재구성 필수**(`fw.sh`가 자동 처리).
+
+**② 원격 제어 활성화 게이트 — 정책 승인됨, 이 저장소 미구현**(`1364e5e`, 2026-08-02)
+- 결정 기록 = `docs/superpowers/specs/2026-08-02-remote-enable-gate-decision.md`. 설계 정본 = `~/dev/work/gds_us_remote`.
+- 요지: **현행 펌웨어에 원격 제어 권한 게이트가 전혀 없다** — Modbus 도달 가능한 누구나 `START(0x1B)` 쓰기 가능, 물리 인터록도 없음, 30s 절대 상한이 유일 backstop. 게다가 `mb_write_reg`는 미사용 영역 write도 "성공" 에코 → 구 펌웨어에 원격기를 붙이면 활성화 오판 가능(capability probe가 이를 막음).
+- 필요 작업: 레지스터 `0x2A~0x2D`(활성화 상태·비영속·LCD 전용 조작·링크 침묵/E-STOP 해제) + `0x1E~0x29`(comm/eth 노출, staging+commit·교차 경로).
+- **착수 전 사용자 협의 2건**: 활성 창 길이 / 링크 침묵 임계, LCD 활성화 UI 방식(DGUS 자산 변경 여부).
+- 원격기 파일럿(STOP·읽기·파라미터만)은 이것에 블로킹되지 않음. **원격 START의 유일한 선행.**
+
+**③ push 상태 정정** — 이 문서 원본의 "코드·docs 미푸시"는 stale. main == origin/main == `1364e5e`. 실제 미푸시 = **태그 7개**: `hw-revA_fw-stage-` + `eth-reapply` / `fram-robust` / `mbtcp-hardening` / `physio-b` / `physio-d` / `power-ch1` / `weld4`.
 
 > **요약**: 사용자가 벤치에서 발견한 표시/부팅/알람/모드 이슈 8건을 fix/구현하고 전건 HW PASS. ⑴ 표시 데드밴드 20→14(최소 표시 0.15A=legacy 실효 게이트 복원) ⑵ 부팅 유령 SEEK 소멸(물리입력 bak zero-init) ⑶ 부팅 beep 신설+전원 직후로 이동 ⑷ fault 부저 알람 글루(OVTIME 등 무음이던 것) ⑸ 경고 페이지 전환 시 터치 RUN-키 토글 반전("떼면 시작") 해소 ⑹ SYS_HORN horn-down 모드 포팅(양손 키=솔 토글, 초음파/weld 배제) ⑺ STD 에너지 weld backstop→ERR_OVTIME(양손 weld OVTIME 알람 미발생) ⑻ USOUT(PB4) 미출력 = **코드 정상, PCB 원인 확정**(무수정). EMA α=1/2 유지·숫자 피크홀드·cal_val=16은 무변경 결정.
 
@@ -25,8 +46,10 @@
 ## Not Yet Done
 
 - [ ] **★ HMI SP1 Task 8 실보드 E2E** — `~/dev/work/gds_us_hmi` 세션 + 그쪽 HANDOFF.md. RS-485 어댑터 연결 + 보드를 LCD에서 SERIAL/addr=1/9600/EVEN 복원 필요(잔재 확인 필요). 이 repo `docs/superpowers/research/2026-07-05-rs485-first-write.md` §6 지참.
+- [ ] **★ `refactor/ponytail-cleanup` HW 재검증 3항목 → `--no-ff` 머지** (2026-08-15 갱신 §① — 상세는 문서 상단).
+- [ ] **원격 제어 활성화 게이트 구현** — 착수 전 계획 수립 + 미결 2건 사용자 협의 (2026-08-15 갱신 §②).
 - [ ] (이월 3회째) **전류 표시 0.60A 실측** + **energy-exit 실전류** — 전류계 준비된 FW 벤치 세션. (EMA 체감은 2026-07-18 종결: α=1/2 유지 확정).
-- [ ] **push** (사람 터미널) — 코드 8 + docs + 태그 `hw-revA_fw-stage-mbtcp-hardening`.
+- [ ] **태그 push** (사람 터미널) — `git push origin --tags` (7개, 상단 §③). 코드·docs push는 완료됨.
 - [ ] 6b 잔여 / B-SEAM — ⏸ 사용자 보류 유지.
 
 ## Failed Approaches (Don't Repeat These)

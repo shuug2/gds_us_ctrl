@@ -2,7 +2,8 @@
 
 > CLAUDE.md 에 명시된 first-load 문서. 새 세션 시작 시 본 파일을 가장 먼저 읽고 진행 상황 + 다음 작업을 확인.
 >
-> **본 문서 최신화: 2026-07-19** — 풀배선 벤치: 사용자 신규 8건(fix/기능) 전건 HW PASS. **`6af9882`** 표시 데드밴드 20→14(최소 표시 0.15A) · **`a46eaf3`** 부팅 유령 SEEK 소멸(bak zero-init) · **`2ea5c2d`+`2cee1cc`** 부팅 beep(전원 직후) · **`6e30499`** fault 부저 알람 글루 · **`789f347`** 경고 페이지 터치 토글 반전 fix · **`519d908`** SYS_HORN horn-down 포팅 · **`61524c1`** STD weld OVTIME 알람. **USOUT(PB4)=코드 정상·PCB 원인**(무수정). 무변경 결정=EMA α=1/2·숫자 피크홀드·cal_val=16. 보드=`61524c1` 플래시됨(⚠세션 말미 전원 OFF·잔재 불확정). **★ 다음=HMI Task 8**(gds_us_hmi). push 미실행=코드 8+docs+태그. 상세=루트 `HANDOFF.md`(2026-07-19판).
+> **본 문서 최신화: 2026-08-15** — 문서/깃 대조 갱신(코드 무변경). ⓐ **push 상태 정정**: 코드·docs는 이미 push 완료(main == origin/main == `1364e5e`) — 실제 미푸시는 **태그 7개**(`-eth-reapply`/`-fram-robust`/`-mbtcp-hardening`/`-physio-b`/`-physio-d`/`-power-ch1`/`-weld4`). ⓑ **미머지 브랜치 `refactor/ponytail-cleanup` 편입**(main+12커밋, origin 푸시됨, HW 재검증 3항목 게이트 — §2.2). ⓒ **원격 제어 활성화 게이트 로드맵 편입**(2026-08-02 정책 승인·미구현, `specs/2026-08-02-remote-enable-gate-decision.md` — §2.2). 보드는 여전히 main `61524c1`.
+> (직전 최신화 2026-07-19 — 풀배선 벤치: 사용자 신규 8건(fix/기능) 전건 HW PASS. **`6af9882`** 표시 데드밴드 20→14(최소 표시 0.15A) · **`a46eaf3`** 부팅 유령 SEEK 소멸(bak zero-init) · **`2ea5c2d`+`2cee1cc`** 부팅 beep(전원 직후) · **`6e30499`** fault 부저 알람 글루 · **`789f347`** 경고 페이지 터치 토글 반전 fix · **`519d908`** SYS_HORN horn-down 포팅 · **`61524c1`** STD weld OVTIME 알람. **USOUT(PB4)=코드 정상·PCB 원인**(무수정). 무변경 결정=EMA α=1/2·숫자 피크홀드·cal_val=16. 보드=`61524c1` 플래시됨(⚠세션 말미 전원 OFF·잔재 불확정). **★ 다음=HMI Task 8**(gds_us_hmi). 상세=루트 `HANDOFF.md`. — ⚠"push 미실행=코드 8+docs+태그"는 stale, 위 2026-08-15 ⓐ 참조.)
 > (직전 최신화 2026-07-11 — FW 벤치: 신규 3건 중 #1 유령 런·#2 REMOTE icon·energy/OVTIME 타이밍 HW PASS + OVTIME 경고화면 복귀 fix 2커밋 `83498e7`/`88faf08`.)
 > (직전 최신화 2026-07-08 — 사용자 신규 3건 전부 코드-완료: 부팅 터치 유령 런 fix(`e26e15b`) + REMOTE icon(`60792da`) + 전류 EMA τ≈100ms(`78a1e43`).)
 > (직전 최신화 2026-07-05 — weld 사이클 E2E 전항목 PASS(풀배선 벤치) + 벤치 수정 6커밋(§1.1 표 하단): 클럭 **HSI→HSE**(주파수/타이밍 편차 원천 제거), 전류 표시 실동작(rig-fit), RESET/SEEK 물리 구동(**스윕 주체=보드측 실증** — B-SEAM 최대 미지수 해소), E-stop LCD/부저, SENSOR ON/OFF, overload 아이콘-only. HW-gated 백로그 대폭 축소(§1.2/§2.2). 보드 상태=§2.3-a.)
@@ -92,15 +93,22 @@ make -C fw/test test                                # 5 스위트 PASS 기대 (r
 
 ### 2.2 다음 작업 후보
 
-**2026-07-08 현재: 사용자 신규 3건 전부 코드-완료(HW 벤치 게이트)** — 활성 = FW 벤치 검증 세션 + HMI Task 8, 나머지는 사용자 보류.
+**2026-08-15 현재 우선순위**: ① HMI Task 8 → ② ponytail-cleanup 머지 → ③ 전류 실측 → ④ 원격 게이트 구현 → ⑤ 6b·B-SEAM(보류).
 
+- **★ `refactor/ponytail-cleanup` HW 재검증 → 머지** (main 대비 +12커밋, base `8eaac71`, tip `753778d`, **origin 푸시됨·미머지**). 내용 = 07-19 리팩토링 4스테이지(죽은코드 삭제 / `app_lcd_input.c` 1038→622 분할 + 신규 `app_lcd_comm.c` / `app_reg_tick` 118→57 헬퍼 추출 / 전 269함수 주석 통일 — 앞 2·4스테이지는 바이너리 동일 입증) + 07-25 4커밋(`define.h` 브랜드/버전 분리 5종 · **MAKETECH** `SMT-{H|A|S}{freq}D` · **ether IP 편집 커서 fix** `e8e84fb` · `fw.sh`). 게이트 = 벤치 3항목:
+  1. LCD SETUP comm/ether 편집 + DATA_SAVE 저장/복귀 (분할로 코드가 이동한 경로)
+  2. 직접런 560ms ceiling + OVTIME 무회귀 (`app_reg_tick` 헬퍼 추출 경로)
+  3. Modbus FC03/FC06 스모크
+  \+ 07-25분 육안 2건: SETUP 모델명 문자열 / IP 편집이 백스페이스 1회로 지워지는지.
+  PASS 시 `git merge --no-ff` (태그 불요). ⚠ 보드 **미플래시**(현 `61524c1`) — 검증하려면 이 브랜치로 빌드·플래시 필요. ⚠ 브랜치 전환 시 `app_lcd_comm.c` 생감 → `cmake -B build` 재구성 필수(`./fw.sh`가 자동 처리).
+- **원격 제어 활성화 게이트 구현** — 2026-08-02 정책 승인, **이 저장소 미구현·착수 전**. 결정 기록 = `docs/superpowers/specs/2026-08-02-remote-enable-gate-decision.md`, 설계 정본 = `~/dev/work/gds_us_remote`. 요지 = **현행 펌웨어에 원격 제어 권한 게이트가 없다**(Modbus 도달 가능한 누구나 `START(0x1B)` 쓰기 가능, 물리 인터록 없음, 30s 절대 상한이 유일 backstop; `mb_write_reg`가 미사용 영역 write도 "성공" 에코 → 활성화 오판 위험). 필요 = 레지스터 `0x2A~0x2D`(LCD 전용 활성화·비영속·링크 침묵/E-STOP 해제·capability probe) + `0x1E~0x29`(comm/eth 노출, staging+commit·교차 경로만 허용). **착수 전 사용자 협의 2건** = 활성 창 길이/링크 침묵 임계, LCD 활성화 UI 방식(DGUS 자산 변경 여부). 원격기 파일럿(STOP·읽기·파라미터만)은 블로킹되지 않으나 **원격 START의 유일 선행**. 진입 절차 = §3(brainstorming부터).
 - ~~**[2026-07-06 사용자 신규 등록 3건]**~~ — ✅ **전부 코드-완료 2026-07-08**(`e26e15b`/`60792da`/`78a1e43`, 전건 cpp-review 0 Crit/High, main 직접 커밋): ① 부팅 터치 유령 런 = data=0 물리 토글 fix ② REMOTE icon = samd20 case 9 포팅(1s hold) ③ 전류 EMA α 1/8→1/2(τ≈100ms). **벤치 검증 미실시**(보드 미플래시) — 체크리스트 = 루트 `HANDOFF.md` §Resume (유령 런 소멸/REMOTE 에셋 렌더/반응 체감+energy 타이밍[리뷰 MEDIUM]).
 - **HMI SP1 Task 8 실보드 E2E** — 진입 = `~/dev/work/gds_us_hmi` 폴더 세션 + 그쪽 HANDOFF.md (이 repo 아님). RS-485 어댑터 필요. **병행: RS-485 첫-write 재현 절차 실행** — `docs/superpowers/research/2026-07-05-rs485-first-write.md` §6 (전원사이클→첫 FC06 ×10 기록; 최유력=글리치 병합, V-A/V-B 시나리오 분리).
 - **6b signal calibration 잔여** — ⏸ **사용자 보류(2026-07-05 c)**. 전류 다점/2점 fit(낮은 부하 실측점 — 오프셋 제거로 중간 구간 편차 가능), ch0 도메인, weld energy 절대 E2E + divisor, EMA↔에너지 적분 디커플링(리뷰 MEDIUM), OUTERR(하위 항목).
 - **B-SEAM 잔여** — ⏸ **사용자 보류(2026-07-05 c)**. 스코프 파형 정밀 관측 + PB12 용도 + 진폭 추종 (구동·스윕 주체는 해소).
 - **후속 소소(비긴급)**: app_eth STATIC_UP 링크 재폴링 부재(선재 — KA로 완화됨, 근본 수정은 링크 FSM 확장) / KA 무송신-피어 잔여(Modbus 실질 무해) / defer Minor 목록 = `.superpowers/sdd/progress.md`(mbtcp) + 구 ledger들.
 - 진입 절차 = **§3** (brainstorming → spec → writing-plans → subagent-driven → finishing).
-- ⚠ 머지/푸시 정책: origin(SSH) — 머지 후 `git push origin main` + 태그 푸시(§6). **현재 미푸시: 마감 docs 커밋 + tag `hw-revA_fw-stage-mbtcp-hardening`**(main `88faf08`까지는 push 완료 — 2026-07-11 확인).
+- ⚠ 머지/푸시 정책: origin(SSH) — 머지 후 `git push origin main` + 태그 푸시(§6). **2026-08-15 실측: 코드·docs는 push 완료**(main == origin/main == `1364e5e`, `refactor/ponytail-cleanup`도 푸시됨). **미푸시 = 태그 7개**: `hw-revA_fw-stage-` + `eth-reapply`/`fram-robust`/`mbtcp-hardening`/`physio-b`/`physio-d`/`power-ch1`/`weld4` → 사람 터미널 `git push origin --tags`.
 
 ### 2.3-a 보드 현 상태 (2026-07-19 마감 — 최신)
 
@@ -113,7 +121,8 @@ make -C fw/test test                                # 5 스위트 PASS 기대 (r
 - ⚠ 이월(3회째, 전류계 세션): **전류 표시 0.60A**(RUN+전류계 0.6A↔표시 0.60A, 유휴 0.00) + **energy-exit 실전류**. (EMA 체감은 2026-07-18 종결: α=1/2 유지 확정 — 숫자는 피크홀드라 α 무관, 바그래프만 실시간.)
 - ⚠ 빌드마다 bss 주소 이동 — SWD read 전 현재 ELF에서 `arm-none-eabi-gdb -batch -ex "p/x &심볼"` 재확보 필수. 비침습 샘플러 = openocd TCL 루프(read_memory, halt 없음, ~1.4ms/샘플).
 - ⚠ mbpoll: 쓰기 값은 **IP 뒤**(`mbpoll ... .199 1`) / 부팅 직후·연속 TCP 트랜잭션 간헐 실패 → 재시도(0.4s ×3) 필수.
-- ⚠ push: 미실행 — 코드 8커밋(`6af9882`..`61524c1`) + 마감 docs 커밋 + 태그 `hw-revA_fw-stage-mbtcp-hardening`. 사람 터미널: `git push origin main && git push origin hw-revA_fw-stage-mbtcp-hardening`.
+- ⚠ push(2026-08-15 정정): 코드·docs 완료(main == origin/main == `1364e5e`). **미푸시 = 태그 7개** → `git push origin --tags`(사람 터미널).
+- ⚠ **보드 ≠ 최신 브랜치**: 보드는 main `61524c1`. 미머지 `refactor/ponytail-cleanup`(+12커밋)은 **미플래시** — 그 브랜치 검증 세션은 빌드·플래시부터 시작(`./fw.sh flash`).
 
 ### 2.3 보드 현 상태 (2026-06-20 마감 시점)
 
