@@ -112,7 +112,7 @@ cmake --build build --target flash
 3. **원격 제어 활성화 게이트 — T-1~T-4 CODE-COMPLETE** (브랜치 `feat/remote-enable-gate`, base=ponytail, origin 푸시됨). 순수 FSM+레지스터 `0x2A~0x2D`+글루+`apply_writes` 게이트 완료, **T-5(LCD 조작/표시)=DGUS 자산 대기**. ⚠ **기본 빌드 플래시 금지** — 게이트를 켤 수단이 없어 원격 명령이 전부 막히고 mbpoll 벤치가 죽는다. 벤치는 `-DREMOTE_EN_GATE_BYPASS=ON`. **T-5 없이 main 머지 금지.** 진입=브랜치 `HANDOFF.md`, 설계=`docs/superpowers/specs/2026-08-15-remote-enable-gate-design.md`. F-A(`0x1E~0x29` comm/eth)는 별도 스테이지.
 4. **전류 0.60A 실측**(3회째 이월, 전류계 세션·플래시 불필요) / **6b·B-SEAM**(사용자 보류).
 
-⚠ push: main·브랜치 모두 origin 동기. **태그 7개 미푸시**(`-eth-reapply`/`-fram-robust`/`-mbtcp-hardening`/`-physio-b`/`-physio-d`/`-power-ch1`/`-weld4`) — 사람 터미널 `git push origin --tags`.
+✅ push: **2026-08-16 실측 — 브랜치 3개·태그 21개 전부 origin 동기. 미푸시 없음.**
 ⚠ model_type=multi(1) 잔재에서 Modbus 직접런 ceiling 미적용=정상(HAND 전용 설계, 30s 캡만 — 테스트 후 STOP 필수).
 
 상세 진입 = 루트 `HANDOFF.md` + `docs/NEXT_STEPS.md`, 세션별 상태 = `docs/superpowers/RESUME.md`(자동 로드), 변경 이력 = `docs/changelog.md`.

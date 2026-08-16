@@ -2,7 +2,8 @@
 
 > CLAUDE.md 에 명시된 first-load 문서. 새 세션 시작 시 본 파일을 가장 먼저 읽고 진행 상황 + 다음 작업을 확인.
 >
-> **본 문서 최신화: 2026-08-15** — 문서/깃 대조 갱신(코드 무변경). ⓐ **push 상태 정정**: 코드·docs는 이미 push 완료(main == origin/main == `1364e5e`) — 실제 미푸시는 **태그 7개**(`-eth-reapply`/`-fram-robust`/`-mbtcp-hardening`/`-physio-b`/`-physio-d`/`-power-ch1`/`-weld4`). ⓑ **미머지 브랜치 `refactor/ponytail-cleanup` 편입**(main+12커밋, origin 푸시됨, HW 재검증 3항목 게이트 — §2.2). ⓒ **원격 제어 활성화 게이트 로드맵 편입**(2026-08-02 정책 승인·미구현, `specs/2026-08-02-remote-enable-gate-decision.md` — §2.2). 보드는 여전히 main `61524c1`.
+> **본 문서 최신화: 2026-08-16** — 원격 게이트 T-1~T-4 반영 + push 상태 재정정. **✅ 브랜치 3개(main/ponytail/remote-gate)·태그 21개 전부 origin 동기 — 미푸시 없음**(8-15판의 "태그 7개 미푸시"는 그 직후 푸시로 해소). **IWDG 워치독**을 §1.2에 재편입(2026-07-02 감사 D3 "H4+IWDG 별도 슬라이스"가 이후 로드맵에서 유실돼 있었음).
+> (2026-08-15 — 문서/깃 대조 갱신, 코드 무변경.) ⓑ **미머지 브랜치 `refactor/ponytail-cleanup` 편입**(main+12커밋, origin 푸시됨, HW 재검증 3항목 게이트 — §2.2). ⓒ **원격 제어 활성화 게이트 로드맵 편입**(2026-08-02 정책 승인·미구현, `specs/2026-08-02-remote-enable-gate-decision.md` — §2.2). 보드는 여전히 main `61524c1`.
 > (직전 최신화 2026-07-19 — 풀배선 벤치: 사용자 신규 8건(fix/기능) 전건 HW PASS. **`6af9882`** 표시 데드밴드 20→14(최소 표시 0.15A) · **`a46eaf3`** 부팅 유령 SEEK 소멸(bak zero-init) · **`2ea5c2d`+`2cee1cc`** 부팅 beep(전원 직후) · **`6e30499`** fault 부저 알람 글루 · **`789f347`** 경고 페이지 터치 토글 반전 fix · **`519d908`** SYS_HORN horn-down 포팅 · **`61524c1`** STD weld OVTIME 알람. **USOUT(PB4)=코드 정상·PCB 원인**(무수정). 무변경 결정=EMA α=1/2·숫자 피크홀드·cal_val=16. 보드=`61524c1` 플래시됨(⚠세션 말미 전원 OFF·잔재 불확정). **★ 다음=HMI Task 8**(gds_us_hmi). 상세=루트 `HANDOFF.md`. — ⚠"push 미실행=코드 8+docs+태그"는 stale, 위 2026-08-15 ⓐ 참조.)
 > (직전 최신화 2026-07-11 — FW 벤치: 신규 3건 중 #1 유령 런·#2 REMOTE icon·energy/OVTIME 타이밍 HW PASS + OVTIME 경고화면 복귀 fix 2커밋 `83498e7`/`88faf08`.)
 > (직전 최신화 2026-07-08 — 사용자 신규 3건 전부 코드-완료: 부팅 터치 유령 런 fix(`e26e15b`) + REMOTE icon(`60792da`) + 전류 EMA τ≈100ms(`78a1e43`).)
@@ -54,6 +55,8 @@
   - **(하위 항목) #7 출력이상 ERR_OUTERR 포팅** — samd20 출력이상 검출(`curr_amp <= USOUT_TH(25)` ×`USOUT_ERR_CNT_MAX(8)`, multi 모드, main.c:4318-4338)은 **트리거 `re_outerr_issued=1`이 주석처리(4333)=legacy에서 비활성**. 실 `curr_amp`(ADC 측정 진폭)에 의존하므로 **6b 종속** — 6b로 진폭 절대 보정이 서야 검출 임계가 의미를 가짐. 살리려면 ① 트리거 주석 해제 ② 실 curr_amp. fault 표면 인프라(error_status/ICON_OUTERR/`MB_STATUS_OUTERR=0x10`/RESET 복구)는 이미 main에 완비(미공급). 분석 = `docs/superpowers/specs/2026-06-28-ovtime-energy-run-design.md` §1·§8.
 - ~~**overload 보호**~~ — ✅ **실동작 E2E 사용자 벤치 PASS 2026-07-05 c** (체인 전체 정상, 코드 무변경 — physical-io 이월 3건[EMSW·OSC 구동·overload] 전부 소진). 잔여 LOW: handle_key_multi RESET의 OVLD/OUTERR 비트 휘발성(후속).
 - **[2026-07-05 c 신규 완료 참고]** seek/reset 중 측정값 라이브 표시(`e2003e1`, us_on_status 복원+벤치 4항목 PASS) / 표시 전류 전달함수 재정의(`54e5220`, 재앵커 ch1≈126 + 오프셋 제거: GAIN 59/126·OFFSET 0·DEADBAND 20 — ⚠ **최종 벤치 0.60A 표시 명시 확인 미기록 = 다음 벤치 첫 항목**; 중간 구간 2점 fit은 6b).
+
+- **IWDG 워치독 슬라이스** — ⚠ **로드맵 유실분, 2026-08-16 재편입**. `docs/requirements.md` FW3-6이 요구하고 2026-07-02 감사 D3가 "H4 + IWDG는 별도 슬라이스"로 분리했는데(§1.3 D3), 그 뒤 어느 로드맵 항목에도 다시 나타나지 않아 추적에서 빠져 있었다. **HW 불요 · 1세션 규모 · 다른 작업에 비의존** — 벤치 대기 사이에 넣기 좋다. 착수 시 슈퍼루프 kick 지점과 부팅 리셋-원인 판별(IWDG 리셋 vs POR) 설계 필요.
 
 **설계상 이연(slice 2)**: DHCP 핫플러그(링크 드롭 후 재획득 — 현재 LINKWAIT→UP 단방향), SERIAL boot-skip.
 
@@ -116,7 +119,7 @@ make -C fw/test test                                # 5 스위트 PASS 기대 (r
 - **B-SEAM 잔여** — ⏸ **사용자 보류(2026-07-05 c)**. 스코프 파형 정밀 관측 + PB12 용도 + 진폭 추종 (구동·스윕 주체는 해소).
 - **후속 소소(비긴급)**: app_eth STATIC_UP 링크 재폴링 부재(선재 — KA로 완화됨, 근본 수정은 링크 FSM 확장) / KA 무송신-피어 잔여(Modbus 실질 무해) / defer Minor 목록 = `.superpowers/sdd/progress.md`(mbtcp) + 구 ledger들.
 - 진입 절차 = **§3** (brainstorming → spec → writing-plans → subagent-driven → finishing).
-- ⚠ 머지/푸시 정책: origin(SSH) — 머지 후 `git push origin main` + 태그 푸시(§6). **2026-08-15 실측: 코드·docs는 push 완료**(main, `refactor/ponytail-cleanup`, `feat/remote-enable-gate` 3개 브랜치 전부 origin 동기). **미푸시 = 태그 7개**: `hw-revA_fw-stage-` + `eth-reapply`/`fram-robust`/`mbtcp-hardening`/`physio-b`/`physio-d`/`power-ch1`/`weld4` → 사람 터미널 `git push origin --tags`.
+- ⚠ 머지/푸시 정책: origin(SSH) — 머지 후 `git push origin main` + 태그 푸시(§6). **2026-08-16 실측: 브랜치 3개(main/`refactor/ponytail-cleanup`/`feat/remote-enable-gate`)·태그 21개 전부 origin 동기 — 미푸시 없음.**
 
 ### 2.3-a 보드 현 상태 (2026-07-19 마감 — 최신)
 
@@ -129,7 +132,7 @@ make -C fw/test test                                # 5 스위트 PASS 기대 (r
 - ⚠ 이월(3회째, 전류계 세션): **전류 표시 0.60A**(RUN+전류계 0.6A↔표시 0.60A, 유휴 0.00) + **energy-exit 실전류**. (EMA 체감은 2026-07-18 종결: α=1/2 유지 확정 — 숫자는 피크홀드라 α 무관, 바그래프만 실시간.)
 - ⚠ 빌드마다 bss 주소 이동 — SWD read 전 현재 ELF에서 `arm-none-eabi-gdb -batch -ex "p/x &심볼"` 재확보 필수. 비침습 샘플러 = openocd TCL 루프(read_memory, halt 없음, ~1.4ms/샘플).
 - ⚠ mbpoll: 쓰기 값은 **IP 뒤**(`mbpoll ... .199 1`) / 부팅 직후·연속 TCP 트랜잭션 간헐 실패 → 재시도(0.4s ×3) 필수.
-- ⚠ push(2026-08-15 정정): 코드·docs 완료(main == origin/main == `1364e5e`). **미푸시 = 태그 7개** → `git push origin --tags`(사람 터미널).
+- ✅ push(2026-08-16 실측): 브랜치 3개·태그 21개 전부 origin 동기, 미푸시 없음.
 - ⚠ **보드 ≠ 최신 브랜치**: 보드는 main `61524c1`. 미머지 `refactor/ponytail-cleanup`(+12커밋)은 **미플래시** — 그 브랜치 검증 세션은 빌드·플래시부터 시작(`./fw.sh flash`).
 
 ### 2.3 보드 현 상태 (2026-06-20 마감 시점)

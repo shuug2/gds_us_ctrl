@@ -1,7 +1,7 @@
 # Handoff: 2026-07-18~19 사용자 신규 8건(fix/기능) 전건 HW PASS + USOUT=PCB 확정, 다음 = HMI Task 8
 
 **Generated**: 2026-07-19 (풀배선 벤치 인터랙티브 세션, Fable→Opus)
-**Branch**: `main` tip `61524c1` → 이후 docs 커밋 진행, 현재 main = `1364e5e`. **코드·docs push 완료**(main == origin/main). ⚠ **태그 7개 미푸시** — 사람 터미널: `git push origin --tags`
+**Branch**: `main` tip `61524c1` → 이후 docs 커밋 진행, 현재 main = `1364e5e`. **push 완료** — 2026-08-16 실측: 브랜치 3개·태그 21개 전부 origin 동기, 미푸시 없음.
 **Status**: 사용자 신규 8건 전건 벤치 검증 완료. **★ 다음 세션 = HMI Task 8** (`~/dev/work/gds_us_hmi`, 별도 repo).
 
 ---
@@ -28,7 +28,7 @@
 - 확정 상수: 활성 창 **10분** / 링크 침묵 **10초**(VR-13 실측으로 확정), probe 매직 `0x5201` — **write-back 값은 비영값이어야 한다**(0이면 링크 전이 0-리셋과 구분 불가; 결정 기록의 예시 `0x0000`은 채택 안 함 → **원격기 spec 역반영 필요**).
 - 원격기 파일럿(STOP·읽기·파라미터만)은 이것에 블로킹되지 않음. **원격 START의 유일한 선행.**
 
-**③ push 상태 정정** — 이 문서 원본의 "코드·docs 미푸시"는 stale. main == origin/main == `1364e5e`. 실제 미푸시 = **태그 7개**: `hw-revA_fw-stage-` + `eth-reapply` / `fram-robust` / `mbtcp-hardening` / `physio-b` / `physio-d` / `power-ch1` / `weld4`.
+**③ push 상태** — 이 문서 원본의 "코드·docs 미푸시"는 stale이었고, 뒤이어 태그 7개도 푸시됐다. **2026-08-16 실측 = 브랜치 3개·태그 21개 전부 origin 동기, 미푸시 없음.** (8-15 갱신본이 한동안 "태그 7개 미푸시"로 남아 있었으나 그 시점 이후 푸시 완료 — 재시도 불요.)
 
 > **요약**: 사용자가 벤치에서 발견한 표시/부팅/알람/모드 이슈 8건을 fix/구현하고 전건 HW PASS. ⑴ 표시 데드밴드 20→14(최소 표시 0.15A=legacy 실효 게이트 복원) ⑵ 부팅 유령 SEEK 소멸(물리입력 bak zero-init) ⑶ 부팅 beep 신설+전원 직후로 이동 ⑷ fault 부저 알람 글루(OVTIME 등 무음이던 것) ⑸ 경고 페이지 전환 시 터치 RUN-키 토글 반전("떼면 시작") 해소 ⑹ SYS_HORN horn-down 모드 포팅(양손 키=솔 토글, 초음파/weld 배제) ⑺ STD 에너지 weld backstop→ERR_OVTIME(양손 weld OVTIME 알람 미발생) ⑻ USOUT(PB4) 미출력 = **코드 정상, PCB 원인 확정**(무수정). EMA α=1/2 유지·숫자 피크홀드·cal_val=16은 무변경 결정.
 
@@ -54,7 +54,7 @@
 - [ ] **★ `refactor/ponytail-cleanup` HW 재검증 3항목 → `--no-ff` 머지** (2026-08-15 갱신 §① — 상세는 문서 상단).
 - [ ] **원격 제어 활성화 게이트 T-5** — DGUS 자산 3종(사용자) → LCD 글루 → T-6 리뷰 → T-7 벤치 → T-8 머지. T-1~T-4는 브랜치에 완료 (2026-08-15 갱신 §②).
 - [ ] (이월 3회째) **전류 표시 0.60A 실측** + **energy-exit 실전류** — 전류계 준비된 FW 벤치 세션. (EMA 체감은 2026-07-18 종결: α=1/2 유지 확정).
-- [ ] **태그 push** (사람 터미널) — `git push origin --tags` (7개, 상단 §③). 코드·docs push는 완료됨.
+- [x] ~~태그 push~~ — ✅ 완료(2026-08-16 실측, 태그 21개 동기).
 - [ ] 6b 잔여 / B-SEAM — ⏸ 사용자 보류 유지.
 
 ## Failed Approaches (Don't Repeat These)
