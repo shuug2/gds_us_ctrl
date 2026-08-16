@@ -109,7 +109,7 @@ cmake --build build --target flash
 열린 항목:
 1. **★ HMI SP1 Task 8 실보드 E2E** — `~/dev/work/gds_us_hmi`(별도 repo) 세션. RS-485 어댑터 + LCD에서 SERIAL/addr=1/9600/EVEN 복원 필요, `docs/superpowers/research/2026-07-05-rs485-first-write.md` §6 지참.
 2. **★ `refactor/ponytail-cleanup` 브랜치 HW 재검증→머지** (main 대비 +12커밋, origin 푸시됨, **미머지**) — 07-19 리팩토링 4스테이지(죽은코드·`app_lcd_input.c` 분할+`app_lcd_comm.c` 신설·`app_reg_tick` 헬퍼 추출·주석 통일) + 07-25 4커밋(`define.h` 브랜드/버전 분리·MAKETECH·**ether IP 편집 커서 fix**·`fw.sh`). 게이트=벤치 3항목(§ NEXT_STEPS §2.2).
-3. **원격 제어 활성화 게이트** — 2026-08-02 정책 승인, **이 저장소 미구현·착수 전**. 레지스터 `0x2A~0x2D`(LCD 전용 활성화, 비영속) + `0x1E~0x29`(comm/eth 노출). 결정 기록=`docs/superpowers/specs/2026-08-02-remote-enable-gate-decision.md`, 설계 정본=`gds_us_remote` repo. 원격 START 허용의 유일 선행(원격기 파일럿은 블로킹 안 함).
+3. **원격 제어 활성화 게이트 — T-1~T-4 CODE-COMPLETE** (브랜치 `feat/remote-enable-gate`, base=ponytail, origin 푸시됨). 순수 FSM+레지스터 `0x2A~0x2D`+글루+`apply_writes` 게이트 완료, **T-5(LCD 조작/표시)=DGUS 자산 대기**. ⚠ **기본 빌드 플래시 금지** — 게이트를 켤 수단이 없어 원격 명령이 전부 막히고 mbpoll 벤치가 죽는다. 벤치는 `-DREMOTE_EN_GATE_BYPASS=ON`. **T-5 없이 main 머지 금지.** 진입=브랜치 `HANDOFF.md`, 설계=`docs/superpowers/specs/2026-08-15-remote-enable-gate-design.md`. F-A(`0x1E~0x29` comm/eth)는 별도 스테이지.
 4. **전류 0.60A 실측**(3회째 이월, 전류계 세션·플래시 불필요) / **6b·B-SEAM**(사용자 보류).
 
 ⚠ push: main·브랜치 모두 origin 동기. **태그 7개 미푸시**(`-eth-reapply`/`-fram-robust`/`-mbtcp-hardening`/`-physio-b`/`-physio-d`/`-power-ch1`/`-weld4`) — 사람 터미널 `git push origin --tags`.

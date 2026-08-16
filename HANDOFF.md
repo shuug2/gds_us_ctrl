@@ -10,17 +10,22 @@
 
 이 아래 §Goal부터는 **2026-07-19 세션 기록 그대로**다. 그 뒤로 아래 3건이 추가됐고, 진입 시 반드시 함께 볼 것.
 
+> **브랜치 스택**: `main` ← `refactor/ponytail-cleanup`(+12, HW 게이트) ← `feat/remote-enable-gate`(+8, T-5 대기). 3개 전부 origin 동기. 첫 HW 세션 선두에서 ponytail 3항목 → main 머지 → 원격 게이트 재베이스가 계획된 순서.
+
 **① 미머지 브랜치 `refactor/ponytail-cleanup`** (main 대비 +12커밋, base `8eaac71`, **origin 푸시됨** tip `753778d`)
 - 2026-07-19 리팩토링 4스테이지: 죽은 코드 삭제(`b02f5b1`, 바이너리 동일) / `app_lcd_input.c` 1038→622 분할 + 신규 `app_lcd_comm.c`(`e195564`) / `app_reg_tick` 118→57 헬퍼 추출(`30d001c`) / 전 269함수 한국어 ≤20자 주석 통일(바이너리 동일).
 - 2026-07-25 4커밋: 모델 브랜드+버전을 `fw/include/define.h`로 분리 — 5종 컴파일-타임 선택(`7d9b7da`) / **MAKETECH** 신설 `SMT-{H|A|S}{freq}D`(`ebfd7d5`) / **ether IP 편집 커서 fix**(`e8e84fb`, `ip_to_string` 반환 16=필드폭이지 글자수 아님 → 헛 백스페이스) / `fw.sh` 빌드·플래시 스크립트(`753778d`).
 - 게이트: 전 스테이지 0-warning + host 14스위트 PASS + cpp-review APPROVE. **머지 = 벤치 HW 재검증 3항목** ⓐ LCD SETUP comm/ether 편집 + DATA_SAVE 저장/복귀(분할 이동 경로) ⓑ 직접런 560ms ceiling + OVTIME 무회귀 ⓒ Modbus FC03/06 스모크. 07-25분 추가 육안 = 모델명 문자열 + IP 편집 백스페이스 1회 삭제. PASS 시 `git merge --no-ff`(태그 불요).
 - ⚠ **보드는 이 브랜치 코드로 미플래시** (여전히 `61524c1`). ⚠ 브랜치 전환 시 `app_lcd_comm.c` 생감 → **`cmake -B build` 재구성 필수**(`fw.sh`가 자동 처리).
 
-**② 원격 제어 활성화 게이트 — 정책 승인됨, 이 저장소 미구현**(`1364e5e`, 2026-08-02)
-- 결정 기록 = `docs/superpowers/specs/2026-08-02-remote-enable-gate-decision.md`. 설계 정본 = `~/dev/work/gds_us_remote`.
-- 요지: **현행 펌웨어에 원격 제어 권한 게이트가 전혀 없다** — Modbus 도달 가능한 누구나 `START(0x1B)` 쓰기 가능, 물리 인터록도 없음, 30s 절대 상한이 유일 backstop. 게다가 `mb_write_reg`는 미사용 영역 write도 "성공" 에코 → 구 펌웨어에 원격기를 붙이면 활성화 오판 가능(capability probe가 이를 막음).
-- 필요 작업: 레지스터 `0x2A~0x2D`(활성화 상태·비영속·LCD 전용 조작·링크 침묵/E-STOP 해제) + `0x1E~0x29`(comm/eth 노출, staging+commit·교차 경로).
-- **착수 전 사용자 협의 2건**: 활성 창 길이 / 링크 침묵 임계, LCD 활성화 UI 방식(DGUS 자산 변경 여부).
+**② 원격 제어 활성화 게이트 — T-1~T-4 CODE-COMPLETE**(브랜치 `feat/remote-enable-gate`, base=ponytail, **origin 푸시됨** tip `b0c22df`)
+- 진입 정본 = **그 브랜치의 `HANDOFF.md`**. 설계 = `docs/superpowers/specs/2026-08-15-remote-enable-gate-design.md`, 실행 계획 = `plans/2026-08-15-remote-enable-gate-t1-t4.md`, 정책 결정 = `specs/2026-08-02-remote-enable-gate-decision.md`(`1364e5e`), 원격기 정본 = `~/dev/work/gds_us_remote`.
+- **왜 필요한가**: 구 펌웨어에는 원격 제어 권한 게이트가 전혀 없다 — Modbus 도달 가능한 누구나 `START(0x1B)` 쓰기 가능, 물리 인터록도 없고 30s 절대 상한이 유일 backstop. `mb_write_reg`가 미사용 영역 write도 "성공" 에코하므로 원격기가 활성화 오판까지 할 수 있다(capability probe가 이를 막음).
+- **완료(T-1~T-4)**: 순수 FSM `app_remote_en_fsm`(**host 15번째 스위트**) / 레지스터 `0x2A~0x2D` 계약 / `app_modbus.c` 글루(매 tick step·미러 3종·접근자 3종) / `apply_writes` 선두 게이트(명령 소거 불변식·STOP 상시 통과·cfg 체인 skip). `/code-review high` 3건 반영. FLASH 49.73%→49.77%.
+- **남은 것**: **T-5(LCD 조작/표시) = DGUS 자산 대기** → T-6 리뷰 → T-7 벤치 VR-1~13 → T-8 머지(태그 `hw-revA_fw-stage-remote-gate`). **F-A(comm/eth `0x1E~0x29`)는 별도 스테이지로 분리**(비의존·덩치 큼).
+- **사용자 작업 = DGUS 자산 3종**: 게이트 버튼 `0x1086`(**touch-down/up 양 이벤트 송신 필수** — 없으면 롱프레스 판정 불가), 상태 아이콘 `0x1155`, 잔여 초 `0x1211`. 반입 후 `LCD_TRACE_RX` 실물 트레이스 선행(추론 구현 금지 — `KEY_MULTI=0`·`0x120e` 전례).
+- ⚠ **기본 빌드 플래시 금지** — 게이트를 켤 수단이 아직 없어 원격 명령이 RTU·TCP 양쪽에서 전부 막히고, **mbpoll 벤치 흐름과 `gds_us_hmi` 계약이 죽는다**(보드에서 복구 불가). 벤치는 `cmake -S fw -B build -G Ninja -DREMOTE_EN_GATE_BYPASS=ON`. 기본 OFF=게이트 유효이며 ON이면 CMake 경고 + 부팅 mon 경고가 나온다. **T-5 없이 main 머지 금지.**
+- 확정 상수: 활성 창 **10분** / 링크 침묵 **10초**(VR-13 실측으로 확정), probe 매직 `0x5201` — **write-back 값은 비영값이어야 한다**(0이면 링크 전이 0-리셋과 구분 불가; 결정 기록의 예시 `0x0000`은 채택 안 함 → **원격기 spec 역반영 필요**).
 - 원격기 파일럿(STOP·읽기·파라미터만)은 이것에 블로킹되지 않음. **원격 START의 유일한 선행.**
 
 **③ push 상태 정정** — 이 문서 원본의 "코드·docs 미푸시"는 stale. main == origin/main == `1364e5e`. 실제 미푸시 = **태그 7개**: `hw-revA_fw-stage-` + `eth-reapply` / `fram-robust` / `mbtcp-hardening` / `physio-b` / `physio-d` / `power-ch1` / `weld4`.
@@ -47,7 +52,7 @@
 
 - [ ] **★ HMI SP1 Task 8 실보드 E2E** — `~/dev/work/gds_us_hmi` 세션 + 그쪽 HANDOFF.md. RS-485 어댑터 연결 + 보드를 LCD에서 SERIAL/addr=1/9600/EVEN 복원 필요(잔재 확인 필요). 이 repo `docs/superpowers/research/2026-07-05-rs485-first-write.md` §6 지참.
 - [ ] **★ `refactor/ponytail-cleanup` HW 재검증 3항목 → `--no-ff` 머지** (2026-08-15 갱신 §① — 상세는 문서 상단).
-- [ ] **원격 제어 활성화 게이트 구현** — 착수 전 계획 수립 + 미결 2건 사용자 협의 (2026-08-15 갱신 §②).
+- [ ] **원격 제어 활성화 게이트 T-5** — DGUS 자산 3종(사용자) → LCD 글루 → T-6 리뷰 → T-7 벤치 → T-8 머지. T-1~T-4는 브랜치에 완료 (2026-08-15 갱신 §②).
 - [ ] (이월 3회째) **전류 표시 0.60A 실측** + **energy-exit 실전류** — 전류계 준비된 FW 벤치 세션. (EMA 체감은 2026-07-18 종결: α=1/2 유지 확정).
 - [ ] **태그 push** (사람 터미널) — `git push origin --tags` (7개, 상단 §③). 코드·docs push는 완료됨.
 - [ ] 6b 잔여 / B-SEAM — ⏸ 사용자 보류 유지.
