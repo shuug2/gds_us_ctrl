@@ -1,4 +1,5 @@
 /* fw/src/app_lcd.c — LCD app: init_lcd_mode port + subsystem state owner + stub hooks. */
+#include "define.h"    /* 모델 브랜드 선택 (GDSONIC/DIAMT/POWERTECH/MOOHAN) */
 #include "app_lcd.h"
 #include "dgus_lcd.h"
 #include "sys_tick.h"
@@ -13,9 +14,12 @@
 static lcd_app_state_t g_lcd;
 static app_config_t    g_cfg;   /* live config owner (loaded at boot, edited by input, saved to FRAM) */
 
+/* LCD 상태 싱글턴 접근 */
 lcd_app_state_t *app_lcd_state(void) { return &g_lcd; }
+/* 라이브 cfg 접근 */
 app_config_t    *app_lcd_cfg(void)   { return &g_cfg; }
 
+/* 측정값 제공 */
 const lcd_measure_t *app_lcd_measure(void)
 {
     /* Stage D slice 1: live regulation values (amp + scaled level). Cycle/freq/
@@ -23,6 +27,7 @@ const lcd_measure_t *app_lcd_measure(void)
     return app_reg_measure();
 }
 
+/* 진폭 POT hook */
 void app_lcd_hook_set_pot(uint8_t output_power)
 {
     /* output_power(%) → wiper DAC (언더플로 가드 + 상한 포화, i2c_pot.h) →
@@ -34,12 +39,14 @@ void app_lcd_hook_set_pot(uint8_t output_power)
                (unsigned)output_power, (unsigned)dac);
 }
 
+/* US 명령 hook */
 void app_lcd_hook_us_command(us_cmd_t cmd)
 {
     mon_printf("[lcd-hook] us_command=%u\r\n", (unsigned)cmd);
     app_reg_command(cmd, (uint8_t)US_TOUCH);   /* panel keys = touch source */
 }
 
+/* 통신 재설정 hook */
 void app_lcd_hook_comm_reconfigure(uint8_t speed_idx, uint8_t parity_idx, uint8_t address)
 {
     /* Intentionally log-only: app_modbus_tick() re-evaluates the occupancy
@@ -58,6 +65,7 @@ void app_lcd_hook_comm_reconfigure(uint8_t speed_idx, uint8_t parity_idx, uint8_
  * comm_reconfigure hook이 passive인 것과 같은 패턴.) */
 static bool s_ether_dirty = false;
 
+/* ether dirty 소비 */
 bool app_lcd_ether_dirty_take(void)
 {
     bool d = s_ether_dirty;
@@ -65,6 +73,7 @@ bool app_lcd_ether_dirty_take(void)
     return d;
 }
 
+/* ether 설정 hook */
 void app_lcd_hook_ether_apply(uint8_t mode, const uint8_t ip[4], const uint8_t nm[4], const uint8_t gw[4])
 {
     s_ether_dirty = true;   /* consumed by app_eth_tick -> eth_reapply (M7) */
@@ -75,12 +84,14 @@ void app_lcd_hook_ether_apply(uint8_t mode, const uint8_t ip[4], const uint8_t n
                (unsigned)gw[0], (unsigned)gw[1], (unsigned)gw[2], (unsigned)gw[3]);
 }
 
+/* horn 모드 hook */
 void app_lcd_hook_horn(bool down)
 {
     mon_printf("[lcd-hook] horn down=%u\r\n", (unsigned)down);
     app_horn_set_mode(down);   /* SYS_HORN 모드 진입/이탈 (구 스텁 → 실배선 2026-07-18) */
 }
 
+/* model별 런 페이지 */
 uint8_t app_lcd_run_page(const app_config_t *cfg)
 {
     if      (cfg->model_type == 0) return LCD_RUN_HAND;    /* 3 */
@@ -88,11 +99,21 @@ uint8_t app_lcd_run_page(const app_config_t *cfg)
     else                           return LCD_RUN_STD;     /* 9 */
 }
 
+/* 모델명 문자열 전송 */
 void app_lcd_send_model_str(uint8_t freq, uint8_t type)
 {
-    /* GDSONIC build (samd20 main.c:2379-2426). Wire payload = 11 bytes incl. NUL at [10]. */
+    /* 브랜드는 define.h가 고른다 (samd20 main.c:2379-2586, 브랜드당 #ifdef 1블록).
+     * Wire payload = 11 bytes incl. NUL at [10]. samd20은 freq/type이 범위를
+     * 벗어나면 버퍼를 미초기화로 남겼다 — 포트는 default로 첫 케이스를 쓴다. */
     uint8_t s[11];
-    s[0] = 'G'; s[1] = 'D'; s[2] = 'S'; s[3] = '-';
+#if defined(GDSONIC) || defined(DIAMT)
+    /* samd20 main.c:2379-2426 (GDS) / 2428-2475 (DIS) — 접두 3바이트만 다르다. */
+#ifdef GDSONIC
+    s[0] = 'G'; s[1] = 'D'; s[2] = 'S';
+#else
+    s[0] = 'D'; s[1] = 'I'; s[2] = 'S';
+#endif
+    s[3] = '-';
     switch (freq) {
         case 0:  s[4] = '1'; s[5] = '5'; break;
         case 1:  s[4] = '2'; s[5] = '0'; break;
@@ -109,9 +130,71 @@ void app_lcd_send_model_str(uint8_t freq, uint8_t type)
         default: s[6] = 'H'; break;
     }
     s[7] = ' '; s[8] = ' '; s[9] = ' '; s[10] = '\0';
+#elif defined(POWERTECH)
+    /* samd20 main.c:2477-2530. 30K/35K 모두 " 735" (legacy 그대로). */
+    s[0] = 'P'; s[1] = 'T'; s[2] = 'W'; s[3] = '-';
+    switch (freq) {
+        case 0:  s[4] = '2'; s[5] = '5'; s[6] = '1'; s[7] = '5'; break;   /* 15K */
+        case 1:  s[4] = '2'; s[5] = '0'; s[6] = '2'; s[7] = '0'; break;   /* 20K */
+        case 2:  s[4] = ' '; s[5] = '7'; s[6] = '3'; s[7] = '5'; break;   /* 30K */
+        case 3:  s[4] = ' '; s[5] = '7'; s[6] = '3'; s[7] = '5'; break;   /* 35K */
+        case 4:  s[4] = ' '; s[5] = '7'; s[6] = '4'; s[7] = '0'; break;   /* 40K */
+        case 5:  s[4] = ' '; s[5] = '7'; s[6] = '5'; s[7] = '0'; break;   /* 50K */
+        default: s[4] = '2'; s[5] = '5'; s[6] = '1'; s[7] = '5'; break;
+    }
+    switch (type) {
+        case 0:  s[8] = 'D'; s[9] = 'H'; break;
+        case 1:  s[8] = 'M'; s[9] = 'D'; break;
+        case 2:  s[8] = 'S'; s[9] = 'D'; break;
+        default: s[8] = 'D'; s[9] = 'H'; break;
+    }
+    s[10] = '\0';
+#elif defined(MAKETECH)
+    /* samd20에 대응 블록 없는 신규 브랜드. "SMT-" + type문자 + freq 2자리 + 'D'.
+     *   hand "SMT-H15D" / multi "SMT-A15D" / std "SMT-S15D"
+     * 패널 선택지는 15K/20K/35K. 나머지 freq 코드는 GDSONIC과 같이 실제 주파수를
+     * 그대로 찍는다 (MOOHAN처럼 30K를 35로 접지 않음 — 접을 근거가 legacy에 없음). */
+    s[0] = 'S'; s[1] = 'M'; s[2] = 'T'; s[3] = '-';
+    switch (type) {
+        case 0:  s[4] = 'H'; break;                                       /* hand */
+        case 1:  s[4] = 'A'; break;                                       /* multi */
+        case 2:  s[4] = 'S'; break;                                       /* standard */
+        default: s[4] = 'H'; break;
+    }
+    switch (freq) {
+        case 0:  s[5] = '1'; s[6] = '5'; break;
+        case 1:  s[5] = '2'; s[6] = '0'; break;
+        case 2:  s[5] = '3'; s[6] = '0'; break;
+        case 3:  s[5] = '3'; s[6] = '5'; break;
+        case 4:  s[5] = '4'; s[6] = '0'; break;
+        case 5:  s[5] = '5'; s[6] = '0'; break;
+        default: s[5] = '1'; s[6] = '5'; break;
+    }
+    s[7] = 'D'; s[8] = ' '; s[9] = ' '; s[10] = '\0';
+#else   /* MOOHAN */
+    /* samd20 main.c:2532-2585. 30K/35K 모두 "1535" (legacy 그대로). */
+    s[0] = 'M'; s[1] = 'H'; s[2] = '-';
+    switch (freq) {
+        case 0:  s[3] = '1'; s[4] = '5'; s[5] = '1'; s[6] = '5'; break;   /* 15K */
+        case 1:  s[3] = '1'; s[4] = '5'; s[5] = '2'; s[6] = '0'; break;   /* 20K */
+        case 2:  s[3] = '1'; s[4] = '5'; s[5] = '3'; s[6] = '5'; break;   /* 30K */
+        case 3:  s[3] = '1'; s[4] = '5'; s[5] = '3'; s[6] = '5'; break;   /* 35K */
+        case 4:  s[3] = '1'; s[4] = '5'; s[5] = '4'; s[6] = '0'; break;   /* 40K */
+        case 5:  s[3] = '1'; s[4] = '5'; s[5] = '5'; s[6] = '0'; break;   /* 50K */
+        default: s[3] = '1'; s[4] = '5'; s[5] = '1'; s[6] = '5'; break;
+    }
+    switch (type) {
+        case 0:  s[7] = 'D'; s[8] = 'H'; break;
+        case 1:  s[7] = 'D'; s[8] = 'M'; break;
+        case 2:  s[7] = 'D'; s[8] = 'S'; break;
+        default: s[7] = 'D'; s[8] = 'H'; break;
+    }
+    s[9] = ' '; s[10] = '\0';
+#endif
     dgus_write_bytes(MODEL_NAME, s, 11);
 }
 
+/* LCD 모드 초기화 */
 void app_lcd_init_mode(const app_config_t *cfg)
 {
     uint8_t          run_page = app_lcd_run_page(cfg);
@@ -164,6 +247,7 @@ void app_lcd_init_mode(const app_config_t *cfg)
     app_lcd_change_page(run_page);
 }
 
+/* 런 페이지 확인/재전송 */
 bool app_lcd_ensure_run_page(const app_config_t *cfg)
 {
     uint8_t  run_page = app_lcd_run_page(cfg);
@@ -185,6 +269,7 @@ bool app_lcd_ensure_run_page(const app_config_t *cfg)
     return false;
 }
 
+/* LCD 주기 tick */
 void app_lcd_tick(void)
 {
     /* fault 표면: app_reg가 publish한 measure.error_status의 0→nonzero 엣지에

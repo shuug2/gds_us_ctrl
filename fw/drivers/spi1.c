@@ -13,9 +13,12 @@ static SPI_HandleTypeDef s_spi1;
 #define ETH_INT_PORT   GPIOC
 #define ETH_INT_PIN    GPIO_PIN_4
 
+/* CS 어서트 */
 void spi1_cs_low(void)  { HAL_GPIO_WritePin(ETH_CS_PORT, ETH_CS_PIN, GPIO_PIN_RESET); }
+/* CS 디어서트 */
 void spi1_cs_high(void) { HAL_GPIO_WritePin(ETH_CS_PORT, ETH_CS_PIN, GPIO_PIN_SET);   }
 
+/* W5500 하드 리셋 */
 void spi1_eth_reset(void)
 {
     HAL_GPIO_WritePin(ETH_RST_PORT, ETH_RST_PIN, GPIO_PIN_SET);
@@ -25,6 +28,7 @@ void spi1_eth_reset(void)
     HAL_Delay(60);                /* PLL lock >= 50ms before access */
 }
 
+/* SPI 1바이트 교환 */
 uint8_t spi1_xfer_byte(uint8_t tx)
 {
     uint8_t rx = 0u;
@@ -32,20 +36,25 @@ uint8_t spi1_xfer_byte(uint8_t tx)
     return rx;
 }
 
+/* SPI 1바이트 수신 */
 uint8_t spi1_rb(void)      { return spi1_xfer_byte(0xFFu); }
+/* SPI 1바이트 송신 */
 void    spi1_wb(uint8_t b) { (void)spi1_xfer_byte(b); }
 
+/* SPI 버스트 읽기 */
 void spi1_burst_read(uint8_t *buf, uint16_t len)
 {
     /* W5500 burst read: clock out 0xFF, capture MISO. */
     for (uint16_t i = 0u; i < len; i++) { buf[i] = spi1_xfer_byte(0xFFu); }
 }
 
+/* SPI 버스트 쓰기 */
 void spi1_burst_write(uint8_t *buf, uint16_t len)
 {
     (void)HAL_SPI_Transmit(&s_spi1, buf, len, 100u);
 }
 
+/* SPI1 초기화 */
 void spi1_init(void)
 {
     __HAL_RCC_GPIOA_CLK_ENABLE();

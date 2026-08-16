@@ -32,6 +32,7 @@ static uint32_t s_baud   = 19200u;
 static uint8_t  s_gap_ms = 2u;
 static bool     s_open;
 
+/* DMA 쓰기 위치 조회 */
 static uint16_t rx_head(void)
 {
     /* DMA write position = SIZE - NDTR; mask the NDTR reload edge (reads 0 ->
@@ -41,6 +42,7 @@ static uint16_t rx_head(void)
     return (uint16_t)(head & (MB_RX_DMA_SIZE - 1u));
 }
 
+/* Modbus 포트 열기 */
 void usart6_mb_open(uint8_t speed_idx, uint8_t parity_idx)
 {
     /* Double-open guard: the app_modbus state machine always closes before
@@ -110,6 +112,7 @@ void usart6_mb_open(uint8_t speed_idx, uint8_t parity_idx)
     s_open = true;
 }
 
+/* Modbus 포트 닫기 */
 void usart6_mb_close(void)
 {
     if (!s_open) {
@@ -123,6 +126,7 @@ void usart6_mb_close(void)
     /* caller re-runs usart6_init() to restore the mon line config */
 }
 
+/* RTU 프레임 수신 */
 uint8_t usart6_mb_rx_frame(uint8_t *buf, uint8_t maxlen)
 {
     if (!s_open) {
@@ -159,6 +163,7 @@ uint8_t usart6_mb_rx_frame(uint8_t *buf, uint8_t maxlen)
     return (uint8_t)n;
 }
 
+/* RTU 프레임 송신 */
 void usart6_mb_send(const uint8_t *buf, uint8_t len)
 {
     if (!s_open) {

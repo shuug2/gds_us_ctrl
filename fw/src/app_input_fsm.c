@@ -11,6 +11,7 @@ static uint8_t s_seek_bak;    /* active-LOW idle = 1 (init은 의도적 0) */
 static uint8_t s_emsw_bak;    /* active-HIGH idle = 0 */
 static uint8_t s_estop_active;
 
+/* 입력 FSM 초기화 */
 void input_fsm_init(void)
 {
     /* bak = 0("눌림 가정") — legacy re_*_bak 전역 zero-init 충실(main.c:490).
@@ -24,6 +25,7 @@ void input_fsm_init(void)
     s_estop_active = 0u;
 }
 
+/* 입력 FSM 1틱 진행 */
 input_out_t input_fsm_step(const input_in_t *in)
 {
     input_out_t out = { 0u, 0u, 0u, 0u, 0u, 0u };

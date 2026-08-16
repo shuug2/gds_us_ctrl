@@ -8,12 +8,15 @@
 #include "mon.h"
 #define MON_TX_TIMEOUT_MS  50u   /* 진단 채널이 앱을 영구 블록하지 못하게 */
 
+/* mon 초기화(no-op) */
 void mon_init(void) { /* huart6는 usart6_init이 이미 초기화 */ }
 
 static bool s_mon_enabled = true;
 
+/* mon 출력 on/off */
 void mon_set_enabled(bool on) { s_mon_enabled = on; }
 
+/* mon 바이트 송신 */
 void mon_write(const uint8_t *buf, size_t len) {
     if (!s_mon_enabled) {
         return;   /* Modbus owns USART6 — keep the RS-485 bus clean */
@@ -21,11 +24,13 @@ void mon_write(const uint8_t *buf, size_t len) {
     HAL_UART_Transmit(&huart6, (uint8_t *)buf, len, MON_TX_TIMEOUT_MS);
 }
 
+/* mon 줄 단위 송신 */
 void mon_writeln(const char *s) {
     mon_write((const uint8_t *)s, strlen(s));
     mon_write((const uint8_t *)"\r\n", 2);
 }
 
+/* mon printf 송신 */
 int mon_printf(const char *fmt, ...) {
     char buf[128];
     va_list ap; va_start(ap, fmt);

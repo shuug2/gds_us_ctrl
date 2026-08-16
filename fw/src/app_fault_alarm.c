@@ -23,6 +23,7 @@ static uint32_t s_prev_ms;
 static uint32_t s_blink_ms;
 static uint8_t  s_prev_err;
 
+/* fault 알람 초기화 */
 void app_fault_alarm_init(void)
 {
     s_prev_ms  = sys_tick_get_ms();
@@ -30,6 +31,7 @@ void app_fault_alarm_init(void)
     s_prev_err = 0u;
 }
 
+/* fault 부저 점멸 tick */
 void app_fault_alarm_tick(void)
 {
     uint32_t now = sys_tick_get_ms();

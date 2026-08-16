@@ -15,6 +15,7 @@ static uint8_t s_key1_bak;    /* active-LOW idle = 1 (init은 의도적 0) */
 static uint8_t s_key2_bak;    /* active-LOW idle = 1 (init은 의도적 0) */
 static uint8_t s_horn;        /* 솔레노이드 상태 (1=하강) */
 
+/* horn FSM 초기화 */
 void horn_fsm_init(void)
 {
     s_mode_prev = 0u;
@@ -23,6 +24,7 @@ void horn_fsm_init(void)
     s_horn      = 0u;
 }
 
+/* horn FSM 1틱 진행 */
 uint8_t horn_fsm_step(const horn_in_t *in)
 {
     uint8_t press = 0u;

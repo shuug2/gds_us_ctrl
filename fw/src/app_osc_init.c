@@ -12,12 +12,14 @@
 
 static uint32_t s_prev_ms;
 
+/* OSC init 글루 초기화 */
 void app_osc_init_init(void)
 {
     osc_init_fsm_init();
     s_prev_ms = sys_tick_get_ms();
 }
 
+/* 부팅 FSM 완주 블로킹 */
 void app_osc_init_run_to_done(void)
 {
     /* 부팅 블로킹: PB12 펄스(전원 후 ~600~1200ms)는 LCD 부팅(app_init) 블로킹 구간에
@@ -28,6 +30,7 @@ void app_osc_init_run_to_done(void)
     }
 }
 
+/* OSC init 10ms tick */
 void app_osc_init_tick(void)
 {
     uint32_t now = sys_tick_get_ms();

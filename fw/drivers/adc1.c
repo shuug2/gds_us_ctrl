@@ -7,6 +7,7 @@
 #include "clock.h"   /* Error_Handler */
 #include "adc1.h"
 
+/* ADC1 초기화 */
 void adc1_init(void)
 {
     __HAL_RCC_GPIOB_CLK_ENABLE();
@@ -33,6 +34,7 @@ void adc1_init(void)
     if (HAL_ADC_Init(&hadc1) != HAL_OK) Error_Handler();
 }
 
+/* ADC 채널 폴링 읽기 */
 uint16_t adc1_read(adc1_ch_t ch)
 {
     ADC_ChannelConfTypeDef s = {

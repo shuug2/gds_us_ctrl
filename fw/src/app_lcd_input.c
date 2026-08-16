@@ -5,7 +5,7 @@
  *
  * Scope (Task 6): act only on DGUS_CMD_RD (0x83) touch/key reports. Config edits write
  * app_lcd_cfg() directly (samd20 immediate-to-live); transient/shadows write app_lcd_state().
- * DATA_SAVE / comm / ethernet rows are DEFERRED to Task 7 (placeholder no-ops below).
+ * DATA_SAVE / comm / ethernet 핸들러는 app_lcd_comm.c로 분할 (2026-07-19, 심=app_lcd_input_priv.h).
  *
  * Stage D owns us/measure state; this layer only RAISES the command via hooks — it does
  * NOT mutate us_run_status / sig_* / energy accumulators (those live behind the read-only
@@ -18,6 +18,7 @@
 #include "cfg_clamp.h"
 #include "app_input.h"     /* app_estop_active — 런 페이지 복귀 가드 */
 #include "app_horn.h"      /* app_horn_mode_active — SETUP horn 체크박스 미러 */
+#include "app_lcd_input_priv.h"   /* app_lcd_comm.c 분할 심 */
 
 /*--------------------------------------------------------------
  * samd20 define.h / main.c constants (file-local — verbatim values)
@@ -36,34 +37,10 @@
 #define SYS_MULTI  1u
 #define SYS_STD    2u
 
-/* comm_mode values (ref/samd20/define.h:85-87) */
-#define COMM_SERIAL      0u
-#define COMM_ETH_STATIC  1u
-#define COMM_ETH_DHCP    2u
-
 /* DATA_SAVE payload: 1 = SAVE, 0 = CANCEL (ref/samd20/main.c:3298,3511). */
 #define SAVE_COMMIT  1u
 
-/* LV_ETHER_KEY field-select / edit key codes (ref/samd20/main.c:4081-4112).
- * 'I'/'M'/'G' select IP/NM/GW; digits arrive raw 0..9; 'D' dot, 'B' backspace,
- * 'E' enter (process_ip_char, ref/samd20/main.c:2850). */
-#define ETHER_KEY_IP    0x49u   /* 'I' */
-#define ETHER_KEY_NM    0x4Du   /* 'M' */
-#define ETHER_KEY_GW    0x47u   /* 'G' */
-#define ETHER_KEY_DOT   0x44u   /* 'D' */
-#define ETHER_KEY_BKSP  0x42u   /* 'B' */
-#define ETHER_KEY_ENTER 0x45u   /* 'E' */
-
-/* IP/NM/GW text VP stride: COMM_IP_TXT + 0x10*field (ref/samd20/main.c:4124). */
-#define COMM_TXT_STRIDE 0x10u
-
-/* Comm-config string table widths (ref/samd20/main.c:160-161). */
-#define COMM_SPEED_TXT_LEN   6u
-#define COMM_PARITY_TXT_LEN  4u
-#define COMM_ADDR_TXT_LEN    4u
-#define COMM_IP_TXT_LEN      16u
-#define COMM_SPEED_IDX_MAX   CFG_COMM_SPEED_IDX_MAX   /* app_config.h 공용 (M3) */
-#define COMM_PARITY_IDX_MAX  CFG_COMM_PARITY_IDX_MAX
+/* comm/ether 전용 상수(COMM_*, ETHER_KEY_*)는 app_lcd_comm.c로 이동. */
 
 /* Long-press hold threshold. samd20 KEY_HOLD_TH=200 ticks of the 10ms key timer
  * (ref/samd20/define.h:34) => 2000 ms wall-clock (clean STM32 equivalent). */
@@ -73,39 +50,44 @@
  * Multi-step branch helpers (keep the switch readable, <800 lines)
  *--------------------------------------------------------------*/
 
-/* Resolve the RUN page id for the active sys_mode (samd20 model_type branch). */
-static uint8_t run_page_for_mode(uint8_t sys_mode)
+/* 모드별 RUN 페이지 */
+uint8_t run_page_for_mode(uint8_t sys_mode)
 {
+    /* Resolve the RUN page id for the active sys_mode (samd20 model_type branch).
+     * non-static: app_lcd_comm.c의 data_save_commit이 공유 (app_lcd_input_priv.h). */
     if (sys_mode == SYS_HAND)  return LCD_RUN_HAND;     /* 3 */
     if (sys_mode == SYS_MULTI) return LCD_RUN_MULTI;    /* 3 */
     return LCD_RUN_STD;                                 /* 9 (SYS_STD) */
 }
 
-/* slice4 SETUP 게이트: 현재 run 페이지인가 (setup/model 페이지면 0).
- * samd20 sys_status==SYS_RUN 등가 — 페이지 기반 판정 (sys_status 필드는 미배선). */
+/* run 페이지 여부 */
 uint8_t app_lcd_in_run_page(void)
 {
+    /* slice4 SETUP 게이트: 현재 run 페이지인가 (setup/model 페이지면 0).
+     * samd20 sys_status==SYS_RUN 등가 — 페이지 기반 판정 (sys_status 필드는 미배선). */
     const lcd_app_state_t *st = app_lcd_state();
     return (st->lcd_status == run_page_for_mode(st->sys_mode)) ? 1u : 0u;
 }
 
-/* 런 페이지 복귀 공용 가드 — 경고 페이지를 점유하는 조건이 남아 있으면 복귀 금지.
- * 점유 조건 = E-stop(라이브 접근자) + OVTIME 계열 error_status(reg 미러가 fault
- * 래치 동안 지속 공급 — app_lcd.c:193-200). OVLD는 아이콘-only(아래)라 비차단.
- * E-stop에 막혀 경고가 유지될 때는 호출측이 VP 텍스트를 "E-STOP"으로 재기록. */
+/* 런 페이지 복귀 가드 */
 static bool lcd_may_restore_run_page(void)
 {
+    /* 런 페이지 복귀 공용 가드 — 경고 페이지를 점유하는 조건이 남아 있으면 복귀 금지.
+     * 점유 조건 = E-stop(라이브 접근자) + OVTIME 계열 error_status(reg 미러가 fault
+     * 래치 동안 지속 공급 — app_lcd.c:193-200). OVLD는 아이콘-only(아래)라 비차단.
+     * E-stop에 막혀 경고가 유지될 때는 호출측이 VP 텍스트를 "E-STOP"으로 재기록. */
     return (app_estop_active() == 0u) &&
            (app_lcd_state()->error_status == 0u);
 }
 
-/* 과부하 에러 표시 — app_overload 글루가 assert/deassert 엣지에 호출.
- * legacy do_control(main.c:4218-4227): OVLD/OUTERR는 VP 텍스트+아이콘만 —
- * LCD_WARNING 페이지 전환은 OVTIME 전용(4229-4233). 런 화면 유지 + ICON_OL
- * (2026-07-05 벤치 실장비 거동으로 페이지 전환 편차 발견·정정). deassert 복귀는
- * 경고 페이지 표시 중일 때만 — 아이콘-only라 setup 등 임의 페이지 납치 금지. */
+/* 과부하 표시 갱신 */
 void app_lcd_set_overload(bool on)
 {
+    /* 과부하 에러 표시 — app_overload 글루가 assert/deassert 엣지에 호출.
+     * legacy do_control(main.c:4218-4227): OVLD/OUTERR는 VP 텍스트+아이콘만 —
+     * LCD_WARNING 페이지 전환은 OVTIME 전용(4229-4233). 런 화면 유지 + ICON_OL
+     * (2026-07-05 벤치 실장비 거동으로 페이지 전환 편차 발견·정정). deassert 복귀는
+     * 경고 페이지 표시 중일 때만 — 아이콘-only라 setup 등 임의 페이지 납치 금지. */
     lcd_app_state_t *state = app_lcd_state();
 
     if (on) {
@@ -126,14 +108,15 @@ void app_lcd_set_overload(bool on)
     }
 }
 
-/* E-stop 표시 — app_input 글루가 enter/release 엣지에 호출. legacy는
- * sys_status=SYS_ESTOP 전이에서 VP_ERROR_MSG="E-STOP"+LCD_WARNING(do_control,
- * main.c:4209-4215), 해제 시 init_lcd_mode()로 런 페이지 복귀(4238-4241).
- * E-stop은 error_status 비트가 아님(레벨추종) — 비트 무조작. 복귀는 다른 에러
- * 활성 시 보류(overload off 경로와 동일 가드; legacy는 sys_status 단일값이라
- * 등가 상황 없음). */
+/* E-stop 표시 전환 */
 void app_lcd_set_estop(bool on)
 {
+    /* E-stop 표시 — app_input 글루가 enter/release 엣지에 호출. legacy는
+     * sys_status=SYS_ESTOP 전이에서 VP_ERROR_MSG="E-STOP"+LCD_WARNING(do_control,
+     * main.c:4209-4215), 해제 시 init_lcd_mode()로 런 페이지 복귀(4238-4241).
+     * E-stop은 error_status 비트가 아님(레벨추종) — 비트 무조작. 복귀는 다른 에러
+     * 활성 시 보류(overload off 경로와 동일 가드; legacy는 sys_status 단일값이라
+     * 등가 상황 없음). */
     lcd_app_state_t *state = app_lcd_state();
 
     if (on) {
@@ -148,15 +131,16 @@ void app_lcd_set_estop(bool on)
     }
 }
 
-/* fault 클리어 표면 — app_lcd_tick 미러가 measure.error_status nonzero→0
- * 엣지에 호출. legacy는 Modbus/물리 RESET 핸들러가 직접 런 페이지를 복귀
- * (samd20 main.c:4356-4370 / 4605-4617 set_lcd_page) — 이 포트에서는 클리어
- * 소스와 무관하게 이 한 지점이 커버한다(REMOTE/물리 B_RESET; KEY_ERROR_RESET
- * 터치 경로는 이미 복귀해 lcd_status != LCD_WARNING → no-op). 경고 페이지일
- * 때만 복귀(임의 페이지 납치 금지, overload off 경로와 동일 가드), E-stop
- * 활성이면 보류(레벨 해제 시 app_lcd_set_estop(false)가 복귀). */
+/* fault 클리어 복귀 */
 void app_lcd_fault_cleared(void)
 {
+    /* fault 클리어 표면 — app_lcd_tick 미러가 measure.error_status nonzero→0
+     * 엣지에 호출. legacy는 Modbus/물리 RESET 핸들러가 직접 런 페이지를 복귀
+     * (samd20 main.c:4356-4370 / 4605-4617 set_lcd_page) — 이 포트에서는 클리어
+     * 소스와 무관하게 이 한 지점이 커버한다(REMOTE/물리 B_RESET; KEY_ERROR_RESET
+     * 터치 경로는 이미 복귀해 lcd_status != LCD_WARNING → no-op). 경고 페이지일
+     * 때만 복귀(임의 페이지 납치 금지, overload off 경로와 동일 가드), E-stop
+     * 활성이면 보류(레벨 해제 시 app_lcd_set_estop(false)가 복귀). */
     lcd_app_state_t *state = app_lcd_state();
 
     if (state->lcd_status != LCD_WARNING) {
@@ -170,7 +154,7 @@ void app_lcd_fault_cleared(void)
     }
 }
 
-/* Resolve the setup-page-1 id for the active sys_mode (SETUP_PARAM / _MOOHAN). */
+/* 모드별 SETUP1 페이지 */
 static uint8_t setup1_page_for_mode(uint8_t sys_mode)
 {
     if (sys_mode == SYS_HAND)  return LCD_SETUP_HAND;   /* 7 */
@@ -185,25 +169,27 @@ static uint8_t setup1_page_for_mode(uint8_t sys_mode)
  * means the release edge will never arrive (§4.4). */
 static uint8_t s_run_key_down;
 
-/* 런 페이지를 떠나는 페이지 전환(경고: show_error/E-stop)에서 호출 — 눌린 채
- * 페이지가 바뀌면 V30 런-키 컨트롤이 사라져 release data=0 이벤트가 영영 안
- * 오고, 토글이 "눌림"에 고착돼 press↔release가 반전됨(2026-07-18 에너지 모드
- * OVTIME 중 홀드 벤치 증상: 떼면 START). SYS_PIC_NOW 패널-리셋 처리와 동일
- * 패턴: RUN_RELEASE(IDLE이면 no-op + 자동정지가 무장한 swallow_start 정리 —
- * 안 하면 fault 후 첫 탭 1회 무시) + 토글 재앵커. */
+/* RUN 키 토글 재앵커 */
 void app_lcd_input_run_key_reanchor(void)
 {
+    /* 런 페이지를 떠나는 페이지 전환(경고: show_error/E-stop)에서 호출 — 눌린 채
+     * 페이지가 바뀌면 V30 런-키 컨트롤이 사라져 release data=0 이벤트가 영영 안
+     * 오고, 토글이 "눌림"에 고착돼 press↔release가 반전됨(2026-07-18 에너지 모드
+     * OVTIME 중 홀드 벤치 증상: 떼면 START). SYS_PIC_NOW 패널-리셋 처리와 동일
+     * 패턴: RUN_RELEASE(IDLE이면 no-op + 자동정지가 무장한 swallow_start 정리 —
+     * 안 하면 fault 후 첫 탭 1회 무시) + 토글 재앵커. */
     app_lcd_hook_us_command(US_CMD_RUN_RELEASE);
     s_run_key_down = 0u;
 }
 
-/* KEY_MULTI (0x1080): 1=RESET / 2=SEEK / 3=RUN(press) / 4=RUN(release); the V30
- * DGUS asset additionally returns 0=RUN on both edges (toggle-mapped — §4.4).
- * Raise the ultrasonic command hook only (Stage D owns the us/sig/energy FSM).
- * RUN press also writes the DAC. RESET in an OVLD/OUTERR error clears those bits,
- * blanks the icons, and restores the run page (samd20 main.c:3633-3706). */
+/* KEY_MULTI 키 처리 */
 static void handle_key_multi(uint16_t data16)
 {
+    /* KEY_MULTI (0x1080): 1=RESET / 2=SEEK / 3=RUN(press) / 4=RUN(release); the V30
+     * DGUS asset additionally returns 0=RUN on both edges (toggle-mapped — §4.4).
+     * Raise the ultrasonic command hook only (Stage D owns the us/sig/energy FSM).
+     * RUN press also writes the DAC. RESET in an OVLD/OUTERR error clears those bits,
+     * blanks the icons, and restores the run page (samd20 main.c:3633-3706). */
     lcd_app_state_t *state = app_lcd_state();
     app_config_t    *cfg   = app_lcd_cfg();
 
@@ -260,10 +246,11 @@ static void handle_key_multi(uint16_t data16)
     }
 }
 
-/* KEY_ERROR_RESET (0x1408): ==1 raises RESET; an OVTIME fault is cleared and the
- * run page restored (samd20 main.c:3707-3732). */
+/* 에러 RESET 키 처리 */
 static void handle_key_error_reset(uint16_t data16)
 {
+    /* KEY_ERROR_RESET (0x1408): ==1 raises RESET; an OVTIME fault is cleared and the
+     * run page restored (samd20 main.c:3707-3732). */
     lcd_app_state_t *state = app_lcd_state();
 
     if (data16 != 1) {
@@ -282,24 +269,25 @@ static void handle_key_error_reset(uint16_t data16)
     }
 }
 
-/* SETUP_MODEL / SETUP_PARAM_MOOHAN long-press FSM.
- *
- * samd20 (main.c) assumed the panel reports data==0 on touch-down and data==2
- * on touch-up, timing the release to detect a >= KEY_HOLD_MS hold. HW-verify
- * (2026-05-27) found this panel's 0x1084 button instead emits data==0 on BOTH
- * down AND up (one event each, no auto-repeat) and NEVER data==2 — so the
- * verbatim port could never complete a long-press (the release event was
- * misread as a fresh press). See docs/superpowers/analysis/2026-05-27-lcd-
- * setup-model-longpress.md.
- *
- * Fix: pair consecutive same-VP data==0 events. The first arms the press
- * (records key_press_ms + key_press_vp); the second is the release and fires
- * if held >= KEY_HOLD_MS. data==2 is still honoured as an explicit release for
- * any button/panel that does send it (backward compatible). key_press_vp is
- * keyed by VP so the two long-press buttons (0x1084 / 0x1094) don't interfere.
- * Returns true only on a qualifying (long) release. */
+/* 롱프레스 판정 */
 static bool long_press_released(uint16_t vp, uint16_t data16)
 {
+    /* SETUP_MODEL / SETUP_PARAM_MOOHAN long-press FSM.
+     *
+     * samd20 (main.c) assumed the panel reports data==0 on touch-down and data==2
+     * on touch-up, timing the release to detect a >= KEY_HOLD_MS hold. HW-verify
+     * (2026-05-27) found this panel's 0x1084 button instead emits data==0 on BOTH
+     * down AND up (one event each, no auto-repeat) and NEVER data==2 — so the
+     * verbatim port could never complete a long-press (the release event was
+     * misread as a fresh press). See docs/superpowers/analysis/2026-05-27-lcd-
+     * setup-model-longpress.md.
+     *
+     * Fix: pair consecutive same-VP data==0 events. The first arms the press
+     * (records key_press_ms + key_press_vp); the second is the release and fires
+     * if held >= KEY_HOLD_MS. data==2 is still honoured as an explicit release for
+     * any button/panel that does send it (backward compatible). key_press_vp is
+     * keyed by VP so the two long-press buttons (0x1084 / 0x1094) don't interfere.
+     * Returns true only on a qualifying (long) release. */
     lcd_app_state_t *state = app_lcd_state();
 
     if (data16 == 0) {
@@ -323,10 +311,11 @@ static bool long_press_released(uint16_t vp, uint16_t data16)
     return false;
 }
 
-/* SETUP_MODEL (0x1084) release action: enter the model-setup page and echo the
- * model/cal VPs (samd20 main.c:3734-3753). */
+/* 모델 설정 페이지 진입 */
 static void enter_model_setup(void)
 {
+    /* SETUP_MODEL (0x1084) release action: enter the model-setup page and echo the
+     * model/cal VPs (samd20 main.c:3734-3753). */
     lcd_app_state_t *state = app_lcd_state();
     app_config_t    *cfg   = app_lcd_cfg();
 
@@ -339,11 +328,12 @@ static void enter_model_setup(void)
     dgus_write_u16(VAR_FREQ_CAL_VAL, (uint16_t)cfg->freq_cal_val);
 }
 
-/* STD_SETUP_PARAM (0x1020) page-nav cases 1..5 (samd20 main.c:3885-3963).
- * Updates state->lcd_status and switches page. NB case 1 uses set_page only
- * (no render rebuild); cases 2/3/4 use change_lcd_page. */
+/* SETUP 페이지 내비 */
 static void handle_std_setup_param(uint16_t data16)
 {
+    /* STD_SETUP_PARAM (0x1020) page-nav cases 1..5 (samd20 main.c:3885-3963).
+     * Updates state->lcd_status and switches page. NB case 1 uses set_page only
+     * (no render rebuild); cases 2/3/4 use change_lcd_page. */
     lcd_app_state_t *state = app_lcd_state();
     app_config_t    *cfg   = app_lcd_cfg();
 
@@ -398,408 +388,16 @@ static void handle_std_setup_param(uint16_t data16)
     }
 }
 
-/*--------------------------------------------------------------
- * Comm-config shadow edits (samd20 main.c:4026-4038)
- * Shadow-only: write temp_* + echo the fixed-width text field.
- *--------------------------------------------------------------*/
-
-/* COMM_ADDR (0x1071): temp_address shadow + " NNN"/"NONE" echo. */
-static void handle_comm_addr(uint16_t data16)
-{
-    lcd_app_state_t *state = app_lcd_state();
-    uint8_t addr_buf[COMM_ADDR_TXT_LEN];
-
-    state->temp_address = (uint8_t)data16;
-    conv_addr2str(state->temp_address, addr_buf);
-    dgus_write_bytes(COMM_ADDR_TXT, addr_buf, COMM_ADDR_TXT_LEN);
-}
-
-/* COMM_SPEED (0x1072): temp_speed_idx shadow + table-text echo (bounds-guarded). */
-static void handle_comm_speed(uint16_t data16)
-{
-    lcd_app_state_t *state = app_lcd_state();
-    uint8_t idx = (uint8_t)data16;
-
-    if (idx > COMM_SPEED_IDX_MAX) {
-        return;                                         /* out of comm_speed_txt range */
-    }
-    state->temp_speed_idx = idx;
-    dgus_write_bytes(COMM_SPEED_TXT, comm_speed_txt[idx], COMM_SPEED_TXT_LEN);
-}
-
-/* COMM_PARITY (0x1073): temp_parity_idx shadow + table-text echo (bounds-guarded). */
-static void handle_comm_parity(uint16_t data16)
-{
-    lcd_app_state_t *state = app_lcd_state();
-    uint8_t idx = (uint8_t)data16;
-
-    if (idx > COMM_PARITY_IDX_MAX) {
-        return;                                         /* out of comm_parity_txt range */
-    }
-    state->temp_parity_idx = idx;
-    dgus_write_bytes(COMM_PARITY_TXT, comm_parity_txt[idx], COMM_PARITY_TXT_LEN);
-}
-
-/* LV_COMM_MODE (0x140b): serial / ethernet-static / toggle-DHCP↔static
- * (samd20 main.c:4039-4079). Updates temp_comm_mode shadow + DISP_COMM_MODE /
- * DISP_EN_DHCP echoes + swaps between serial (_MHC/_STDC) and ethernet
- * (_MHE/_STDE) pages. */
-static void handle_comm_mode(uint16_t data16)
-{
-    lcd_app_state_t *state = app_lcd_state();
-
-    if (data16 == 0) {                                  /* serial */
-        state->temp_comm_mode = COMM_SERIAL;
-        dgus_write_u16(DISP_COMM_MODE, state->temp_comm_mode);
-        if (state->lcd_status == LCD_SETUP_MHE) {
-            state->lcd_status = LCD_SETUP_MHC;
-        } else if (state->lcd_status == LCD_SETUP_STDE) {
-            state->lcd_status = LCD_SETUP_STDC;
-        }
-        app_lcd_change_page(state->lcd_status);
-    } else {                                            /* ethernet */
-        if (data16 == 1) {                              /* enter ethernet (static) */
-            dgus_write_u16(DISP_COMM_MODE, 1);          /* ethernet icon */
-            state->temp_comm_mode = COMM_ETH_STATIC;
-        } else {                                        /* toggle DHCP ↔ static */
-            if (state->temp_comm_mode == COMM_ETH_STATIC) {
-                state->temp_comm_mode = COMM_ETH_DHCP;
-                dgus_write_u16(DISP_EN_DHCP, 1);
-            } else if (state->temp_comm_mode == COMM_ETH_DHCP) {
-                state->temp_comm_mode = COMM_ETH_STATIC;
-                dgus_write_u16(DISP_EN_DHCP, 0);
-            }
-        }
-        if (state->lcd_status == LCD_SETUP_MHC) {
-            state->lcd_status = LCD_SETUP_MHE;
-        } else if (state->lcd_status == LCD_SETUP_STDC) {
-            state->lcd_status = LCD_SETUP_STDE;
-        }
-        app_lcd_change_page(state->lcd_status);
-    }
-}
-
-/*--------------------------------------------------------------
- * Ethernet IP/NM/GW digit-entry FSM (samd20 process_ip_char,
- * ref/samd20/main.c:2850-2925; de-globalized onto app_lcd_state()).
- * Mojibake comments in the source ignored; logic ported verbatim.
- *--------------------------------------------------------------*/
-
-/* key: raw digit 0..9, or 'D' dot, 'B' backspace, 'E' enter. */
-static void process_ip_char(uint8_t key)
-{
-    lcd_app_state_t *state = app_lcd_state();
-
-    if (key <= 9u) {                                    /* raw digit (samd20: c>=0 && c<=9) */
-        state->ether_current_number = (uint16_t)(state->ether_current_number * 10u + key);
-        if (state->ether_current_number > 255u) {
-            state->ether_current_number = 255u;         /* clamp to valid octet */
-        }
-        if (state->ether_buffer_pos < 15u) {
-            state->ether_input_buffer[state->ether_buffer_pos++] = (uint8_t)(key + '0');
-            state->ether_input_buffer[state->ether_buffer_pos] = '\0';
-        }
-        state->ether_has_input = 1u;
-    } else if (key == ETHER_KEY_DOT) {                  /* '.' → next octet */
-        if (state->ether_has_input && state->ether_current_octet < 3u) {
-            state->ether_temp_ip[state->ether_current_octet] =
-                (uint8_t)state->ether_current_number;
-            state->ether_current_octet++;
-            state->ether_current_number = 0u;
-            state->ether_has_input = 0u;
-            if (state->ether_buffer_pos < 15u) {
-                state->ether_input_buffer[state->ether_buffer_pos++] = '.';
-                state->ether_input_buffer[state->ether_buffer_pos] = '\0';
-            }
-        }
-    } else if (key == ETHER_KEY_BKSP) {                 /* backspace */
-        if (state->ether_buffer_pos > 0u) {
-            if (state->ether_input_buffer[state->ether_buffer_pos - 1u] == '.') {
-                if (state->ether_current_octet > 0u) {
-                    state->ether_current_octet--;
-                    state->ether_current_number =
-                        state->ether_temp_ip[state->ether_current_octet];
-                    state->ether_has_input = 1u;
-                }
-            } else {
-                state->ether_current_number /= 10u;
-                state->ether_has_input = (state->ether_current_number > 0u) ? 1u : 0u;
-            }
-            state->ether_buffer_pos--;
-            state->ether_input_buffer[state->ether_buffer_pos] = '\0';
-        }
-    } else if (key == ETHER_KEY_ENTER) {                /* enter → confirm */
-        if (state->ether_has_input) {
-            state->ether_temp_ip[state->ether_current_octet] =
-                (uint8_t)state->ether_current_number;
-        }
-        state->ether_ip_input_complete = 1u;
-    }
-    /* any other key ignored (samd20) */
-}
-
-/* Seed the ether FSM for a freshly selected field from its shadow octets. */
-static void ether_select_field(uint8_t field, const uint8_t shadow[4])
-{
-    lcd_app_state_t *state = app_lcd_state();
-    uint8_t i;
-
-    state->ether_what_input = field;
-    state->ether_buffer_pos =
-        ip_to_string(shadow, (char *)state->ether_input_buffer);
-    for (i = 0; i < 4u; i++) {
-        state->ether_temp_ip[i] = shadow[i];
-    }
-    state->ether_current_octet = 3u;
-    /* samd20:4109 verbatim — seeds from the IP shadow's last octet UNCONDITIONALLY,
-     * even when selecting NM/GW (likely a samd20 copy-paste bug; reproduced per
-     * the verbatim-fidelity mandate). */
-    state->ether_current_number = state->temp_ether_ip[3];
-    state->ether_has_input = 1u;
-}
-
-/* LV_ETHER_KEY (0x140f): field select 'I'/'M'/'G' or digit/'D'/'B'/'E' edit
- * (samd20 main.c:4080-4135). On enter-complete commit ether_temp_ip → the
- * selected temp_ether_* shadow; echo the live edit buffer to COMM_*_TXT. */
-static void handle_ether_key(uint16_t data16)
-{
-    lcd_app_state_t *state = app_lcd_state();
-    uint8_t key = (uint8_t)data16;
-    uint8_t disp_buf[COMM_IP_TXT_LEN];
-    uint8_t i;
-
-    if (key == ETHER_KEY_IP || key == ETHER_KEY_NM || key == ETHER_KEY_GW) {
-        /* Field select: re-echo all three current shadows, then arm the chosen one. */
-        ip_to_string(state->temp_ether_ip, (char *)state->ether_input_buffer);
-        lcd_data_pdd(disp_buf, state->ether_input_buffer, COMM_IP_TXT_LEN);
-        dgus_write_bytes(COMM_IP_TXT, disp_buf, COMM_IP_TXT_LEN);
-        ip_to_string(state->temp_ether_nm, (char *)state->ether_input_buffer);
-        lcd_data_pdd(disp_buf, state->ether_input_buffer, COMM_IP_TXT_LEN);
-        dgus_write_bytes(COMM_NM_TXT, disp_buf, COMM_IP_TXT_LEN);
-        ip_to_string(state->temp_ether_gw, (char *)state->ether_input_buffer);
-        lcd_data_pdd(disp_buf, state->ether_input_buffer, COMM_IP_TXT_LEN);
-        dgus_write_bytes(COMM_GW_TXT, disp_buf, COMM_IP_TXT_LEN);
-
-        if (key == ETHER_KEY_IP) {
-            ether_select_field(LCD_ETHER_INPUT_IP, state->temp_ether_ip);
-        } else if (key == ETHER_KEY_NM) {
-            ether_select_field(LCD_ETHER_INPUT_NM, state->temp_ether_nm);
-        } else {
-            ether_select_field(LCD_ETHER_INPUT_GW, state->temp_ether_gw);
-        }
-    } else {
-        process_ip_char(key);
-        if (state->ether_ip_input_complete) {
-            uint8_t *dst = (state->ether_what_input == LCD_ETHER_INPUT_IP) ? state->temp_ether_ip
-                         : (state->ether_what_input == LCD_ETHER_INPUT_NM) ? state->temp_ether_nm
-                         :                                                    state->temp_ether_gw;
-            for (i = 0; i < 4u; i++) {
-                dst[i] = state->ether_temp_ip[i];
-            }
-            state->ether_ip_input_complete = 0u;
-        }
-        lcd_data_pdd(disp_buf, state->ether_input_buffer, COMM_IP_TXT_LEN);
-        dgus_write_bytes((uint16_t)(COMM_IP_TXT + COMM_TXT_STRIDE * state->ether_what_input),
-                         disp_buf, COMM_IP_TXT_LEN);
-    }
-}
-
-/*--------------------------------------------------------------
- * DATA_SAVE (0x1050) — bulk commit / rollback (spec §8).
- *--------------------------------------------------------------*/
-
-/* Commit the addr/speed/parity comm shadows → live cfg if any changed, and on
- * change fire the comm-reconfigure hook (samd20 close_modbus/init_modbus). */
-static void commit_comm_serial_shadows(void)
-{
-    lcd_app_state_t *state = app_lcd_state();
-    app_config_t    *cfg   = app_lcd_cfg();
-
-    if (state->temp_address  != cfg->comm_address ||
-        state->temp_speed_idx  != cfg->comm_speed_idx ||
-        state->temp_parity_idx != cfg->comm_parity_idx) {
-        cfg->comm_address    = state->temp_address;
-        cfg->comm_speed_idx  = state->temp_speed_idx;
-        cfg->comm_parity_idx = state->temp_parity_idx;
-        app_lcd_hook_comm_reconfigure(cfg->comm_speed_idx,
-                                      cfg->comm_parity_idx,
-                                      cfg->comm_address);
-    }
-}
-
-/* Commit comm_mode + ether shadows → live cfg, firing the ether hook on
- * ether OR comm_mode change (samd20 main.c:3327-3403 re-ran
- * close_tcps+network_init on save — M7 restores that liveness). HAND does
- * NOT do this; STD reaches here via the STD-persist deviation (fix-B 0xFF
- * guard below covers its unseeded-shadow case). */
-static void commit_comm_mode_and_ether(void)
-{
-    lcd_app_state_t *state = app_lcd_state();
-    app_config_t    *cfg   = app_lcd_cfg();
-    bool ether_changed = false;
-    bool mode_changed  = false;
-    uint8_t i;
-
-#ifdef LCD_TRACE_RX
-    mon_printf("[lcd] commit cm temp=%u cfg=%u\r\n",
-               (unsigned)state->temp_comm_mode, (unsigned)cfg->comm_mode);
-#endif
-
-    /* Guard (fix B): 0xFF = comm/ether shadows were never seeded from cfg this
-     * setup session (no comm-page visit). The shadows hold the sentinel/zero
-     * (boot) state, so committing would write comm_mode=0xFF + 0.0.0.0 ether
-     * over live cfg and persist garbage to FRAM. Skip = cfg unchanged.
-     * samd20 never hit this because STD save did not commit comm; the
-     * STD-persist deviation (data_save_commit STD branch) opened a live path:
-     * SAVE from a non-comm STD page (STD1/2/3, which set 0xFF on entry). */
-    if (state->temp_comm_mode == 0xFFu) {
-        return;
-    }
-
-    if (state->temp_comm_mode != cfg->comm_mode) {
-        cfg->comm_mode = state->temp_comm_mode;
-        mode_changed   = true;
-    }
-    for (i = 0; i < 4u; i++) {
-        if (state->temp_ether_ip[i] != cfg->ether_ip[i] ||
-            state->temp_ether_nm[i] != cfg->ether_nm[i] ||
-            state->temp_ether_gw[i] != cfg->ether_gw[i]) {
-            ether_changed = true;
-            break;
-        }
-    }
-    if (ether_changed) {
-        for (i = 0; i < 4u; i++) {
-            cfg->ether_ip[i] = state->temp_ether_ip[i];
-            cfg->ether_nm[i] = state->temp_ether_nm[i];
-            cfg->ether_gw[i] = state->temp_ether_gw[i];
-        }
-    }
-    if (ether_changed || mode_changed) {
-        app_lcd_hook_ether_apply(cfg->comm_mode, cfg->ether_ip, cfg->ether_nm, cfg->ether_gw);
-    }
-}
-
-/* counter-reset shadow → work_cnt=0 + echo (samd20 main.c:3450-3454). */
-static void commit_cnt_reset(void)
-{
-    lcd_app_state_t *state = app_lcd_state();
-    app_config_t    *cfg   = app_lcd_cfg();
-
-    if (state->temp_cnt_reset == 1u) {
-        cfg->work_cnt = 0u;
-        dgus_write_u32(LV_WORK_CNT, 0u);
-        state->temp_cnt_reset = 0u;
-    }
-}
-
-/* DATA_SAVE == 1: commit live cfg → FRAM by current page group (spec §8.2). */
-static void data_save_commit(void)
-{
-    lcd_app_state_t *state = app_lcd_state();
-    app_config_t    *cfg   = app_lcd_cfg();
-
-    if (state->lcd_status == LCD_MODEL_SETUP) {
-        /* MODEL_SETUP: model/cal already live; pick run page + sys_mode by model. */
-        state->sys_mode   = cfg->model_type;
-        state->lcd_status = run_page_for_mode(state->sys_mode);
-    } else if (state->lcd_status == LCD_SETUP_MULTI ||
-               (state->lcd_status == LCD_SETUP_MH2 && cfg->model_type == 1u) ||
-               state->lcd_status == LCD_SETUP_MHC ||
-               state->lcd_status == LCD_SETUP_MHE) {
-        /* MULTI path: out power DAC + comm/ether commit + hooks (samd20 3327-3403).
-         * NB MHC/MHE always resolve here (else-if order) — HAND's MHC/MHE is dead. */
-        app_lcd_hook_set_pot(cfg->output_power);
-        commit_comm_mode_and_ether();
-        commit_comm_serial_shadows();
-        state->lcd_status = LCD_RUN_MULTI;
-    } else if (state->lcd_status == LCD_SETUP_HAND ||
-               (state->lcd_status == LCD_SETUP_MH2 && cfg->model_type == 0u)) {
-        /* HAND path: out power DAC + addr/speed/parity only (samd20 3406-3454).
-         * NO comm_mode / ether commit (samd20 confines those to MULTI). */
-        app_lcd_hook_set_pot(cfg->output_power);
-        commit_comm_serial_shadows();
-        state->lcd_status = LCD_RUN_MULTI;          /* F3: HAND→MULTI per samd20, verbatim */
-    } else if (state->lcd_status == LCD_SETUP_STD1 ||
-               state->lcd_status == LCD_SETUP_STD2D ||
-               state->lcd_status == LCD_SETUP_STD2T ||
-               state->lcd_status == LCD_SETUP_STD3 ||
-               state->lcd_status == LCD_SETUP_STDC ||
-               state->lcd_status == LCD_SETUP_STDE) {
-        /* STD path: out power DAC + cnt_reset + horndown + addr/speed/parity.
-         * samd20 (3455-3510) confined comm_mode/ether commit to MULTI, so STD
-         * saves dropped ether/comm_mode (quirk). Intentional deviation
-         * (2026-05-27, user): commit comm_mode/ether here too so STD persists
-         * them like MULTI. */
-        app_lcd_hook_set_pot(cfg->output_power);
-        commit_cnt_reset();
-        app_lcd_hook_horn(state->temp_horndown == 1u);   /* samd20 SOL_DN / SYS_HORN path */
-        commit_comm_mode_and_ether();                    /* deviation: STD now persists ether/comm_mode */
-        commit_comm_serial_shadows();
-        state->lcd_status = LCD_RUN_STD;
-    }
-
-    /* FRAM has no write-cycle cost: commit the whole live map once (spec §8.3),
-     * replacing samd20's scattered per-field save_*_fram calls. */
-    app_config_save_all(cfg);
-
-    app_lcd_change_page(state->lcd_status);
-}
-
-/* DATA_SAVE == 0: rollback. Full FRAM re-read reverts the process params that
- * were live-mutated on touch; then re-arm the comm-shadow sentinel so the next
- * comm-page entry reloads shadows from live (samd20 main.c:3511-3630). */
-static void data_save_cancel(void)
-{
-    lcd_app_state_t *state = app_lcd_state();
-    app_config_t    *cfg   = app_lcd_cfg();
-
-    bool was_model_setup = (state->lcd_status == LCD_MODEL_SETUP);
-
-    app_config_load(cfg);                           /* full FRAM rollback of process params */
-    state->temp_comm_mode = 0xFFu;                  /* re-arm shadow-load sentinel */
-    /* F4: full reload is a no-op for comm/ether (live never pre-save-mutated);
-     * matches samd20 effective behavior. */
-
-    if (was_model_setup) {
-        /* samd20 MODEL_SETUP cancel: restore sys_mode + re-echo model string
-         * (model_freq/type already reloaded by app_config_load). */
-        state->sys_mode = cfg->model_type;
-        app_lcd_send_model_str(cfg->model_freq, cfg->model_type);
-    }
-
-    /* Choose the return run page per current page group (samd20 sets lcd_status
-     * inside each branch only; pages outside the known groups are left as-is —
-     * matches samd20, which never mutates lcd_status for unrecognized pages).
-     * MODEL_SETUP cancel → MULTI verbatim (CANCEL/SAVE asymmetry: cancel does
-     * NOT pick by model_type). */
-    if (was_model_setup ||
-        state->lcd_status == LCD_SETUP_MULTI ||
-        state->lcd_status == LCD_SETUP_HAND ||
-        state->lcd_status == LCD_SETUP_MH2 ||
-        state->lcd_status == LCD_SETUP_MHC ||
-        state->lcd_status == LCD_SETUP_MHE) {
-        state->lcd_status = LCD_RUN_MULTI;          /* F3: HAND/MODEL/MULTI cancel → MULTI */
-    } else if (state->lcd_status == LCD_SETUP_STD1 ||
-               state->lcd_status == LCD_SETUP_STD2D ||
-               state->lcd_status == LCD_SETUP_STD2T ||
-               state->lcd_status == LCD_SETUP_STD3 ||
-               state->lcd_status == LCD_SETUP_STDC ||
-               state->lcd_status == LCD_SETUP_STDE) {
-        state->temp_horndown = 0u;                  /* samd20 clears temp_horndown only in STD cancel */
-        state->lcd_status = LCD_RUN_STD;
-    }
-
-    app_lcd_change_page(state->lcd_status);
-}
-
-/* M4: 클램프 + 패널 에코 (클램프 발동 시에만 재전송 — LV_MO_TIME 관례). */
+/* comm/ether shadow 편집 + DATA_SAVE commit/rollback → app_lcd_comm.c (분할). */
+/* max 클램프+에코 */
 static uint16_t clamp_echo_max(uint16_t vp, uint16_t v, uint16_t max)
 {
+    /* M4: 클램프 + 패널 에코 (클램프 발동 시에만 재전송 — LV_MO_TIME 관례). */
     uint16_t c = cfg_clamp_max(v, max);
     if (c != v) { dgus_write_u16(vp, c); }
     return c;
 }
+/* power 클램프+에코 */
 static uint16_t clamp_echo_power(uint16_t vp, uint16_t v)
 {
     uint16_t c = cfg_clamp_power(v);
@@ -811,6 +409,7 @@ static uint16_t clamp_echo_power(uint16_t vp, uint16_t v)
  * Public entry — VP → action dispatch
  *--------------------------------------------------------------*/
 
+/* 터치 키 디스패치 */
 void app_lcd_input_dispatch(const dgus_frame_t *f)
 {
     /* §3: act only on RD (0x83) touch/key reports; ignore WR (0x82) echoes. */

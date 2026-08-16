@@ -96,17 +96,14 @@ make -C fw/test test                                # 5 스위트 PASS 기대 (r
 
 ### 2.2 다음 작업 후보
 
-**2026-08-15 현재 우선순위**: ① HMI Task 8 → ② ponytail-cleanup 머지 → ③ 전류 실측 → ④ 원격 게이트 **T-5(DGUS 자산 대기)** → ⑤ 6b·B-SEAM(보류).
+**2026-08-16 현재 우선순위**: ① remote-gate 재베이스 → **T-5(DGUS 자산 대기)** → ② HMI Task 8 → ③ 전류 실측 → ④ **IWDG 슬라이스**(HW 불요) → ⑤ 6b·B-SEAM(보류).
 
-> 브랜치 스택: `main` ← `refactor/ponytail-cleanup`(+12, HW 게이트) ← `feat/remote-enable-gate`(+8, T-5 대기). 첫 HW 세션 선두에서 ponytail 3항목 → main 머지 → 원격 게이트 브랜치 재베이스가 계획된 순서.
+> 브랜치 스택: `main`(**ponytail 머지 완료 2026-08-16**) ← `feat/remote-enable-gate`(T-5 대기, 재베이스 필요).
+
+- ~~**★ `refactor/ponytail-cleanup` HW 재검증 → 머지**~~ — ✅ **완료 2026-08-16**. 벤치 전항목 PASS: FC03 미러 30개 `g_cfg` 일치 / FC06 클램프 120→100·30→50 / **직접런 ceiling 실측 [514,578] ms**(기대 560 ms 부합) / OVTIME 무회귀 / LCD 3항목 육안(comm·ether+DATA_SAVE, IP 백스페이스 1자, 모델명). `--no-ff` 머지, 충돌은 docs 2개뿐(코드 0), 머지 결과가 검증된 보드 펌웨어와 byte-identical. **개시 발견: 보드에 이미 이 브랜치 빌드가 올라가 있었다**(문서의 "보드=main `61524c1`"은 오류 — 플래시 덤프 대조로 확정). 상세 = 루트 `HANDOFF.md` §①.
 
 - **★ `refactor/ponytail-cleanup` HW 재검증 → 머지** (main 대비 +12커밋, base `8eaac71`, tip `753778d`, **origin 푸시됨·미머지**). 내용 = 07-19 리팩토링 4스테이지(죽은코드 삭제 / `app_lcd_input.c` 1038→622 분할 + 신규 `app_lcd_comm.c` / `app_reg_tick` 118→57 헬퍼 추출 / 전 269함수 주석 통일 — 앞 2·4스테이지는 바이너리 동일 입증) + 07-25 4커밋(`define.h` 브랜드/버전 분리 5종 · **MAKETECH** `SMT-{H|A|S}{freq}D` · **ether IP 편집 커서 fix** `e8e84fb` · `fw.sh`). 게이트 = 벤치 3항목:
-  1. LCD SETUP comm/ether 편집 + DATA_SAVE 저장/복귀 (분할로 코드가 이동한 경로)
-  2. 직접런 560ms ceiling + OVTIME 무회귀 (`app_reg_tick` 헬퍼 추출 경로)
-  3. Modbus FC03/FC06 스모크
-  \+ 07-25분 육안 2건: SETUP 모델명 문자열 / IP 편집이 백스페이스 1회로 지워지는지.
-  PASS 시 `git merge --no-ff` (태그 불요). ⚠ 보드 **미플래시**(현 `61524c1`) — 검증하려면 이 브랜치로 빌드·플래시 필요. ⚠ 브랜치 전환 시 `app_lcd_comm.c` 생감 → `cmake -B build` 재구성 필수(`./fw.sh`가 자동 처리).
-- **원격 제어 활성화 게이트** — 2026-08-15 **T-1~T-4 CODE-COMPLETE**(브랜치 `feat/remote-enable-gate`, base=ponytail, origin 푸시됨, tip `b0c22df`). 남은 것 = **T-5(LCD 조작/표시) = DGUS 자산 대기** → T-6 리뷰 → T-7 벤치 VR-1~13 → T-8 머지(태그 `hw-revA_fw-stage-remote-gate`).
+- **원격 제어 활성화 게이트** — 2026-08-15 **T-1~T-4 CODE-COMPLETE**(브랜치 `feat/remote-enable-gate`, origin 푸시됨, tip `b0c22df` — **base였던 ponytail이 main에 머지됐으므로 재베이스 필요**). 남은 것 = **재베이스 → T-5(LCD 조작/표시) = DGUS 자산 대기** → T-6 리뷰 → T-7 벤치 VR-1~13 → T-8 머지(태그 `hw-revA_fw-stage-remote-gate`).
   - 산출물: spec `specs/2026-08-15-remote-enable-gate-design.md` + plan `plans/2026-08-15-remote-enable-gate-t1-t4.md` + 코드 4커밋(순수 FSM `app_remote_en_fsm` **host 15번째 스위트** / 레지스터 `0x2A~0x2D` 계약 / `app_modbus.c` 글루 / `apply_writes` 선두 게이트) + `/code-review high` 3건 반영 2커밋.
   - **⚠ 기본 빌드 플래시 금지** — T-5가 없어 게이트를 켤 수단이 없으므로 원격 명령이 RTU·TCP 양쪽에서 전부 막히고 **mbpoll 벤치 흐름과 `gds_us_hmi` 계약이 죽는다**. 벤치는 반드시 `cmake -S fw -B build -G Ninja -DREMOTE_EN_GATE_BYPASS=ON`(기본 OFF=게이트 유효, ON이면 CMake+부팅 mon 경고). **T-5 없이 main 머지 금지.**
   - **사용자 작업 = DGUS 자산 3종**: 게이트 버튼 `0x1086`(**down/up 양 이벤트 필수**), 상태 아이콘 `0x1155`, 잔여 초 `0x1211`. 반입 후 `LCD_TRACE_RX` 실물 트레이스 선행(추론 구현 금지).

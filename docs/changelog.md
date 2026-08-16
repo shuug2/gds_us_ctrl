@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+### 2026-07-25 — 모델 브랜드/버전을 define.h로 + MAKETECH 신설 + ether IP 커서 fix + fw.sh
+
+브랜치 `refactor/ponytail-cleanup` 위에 스택. 보드 = GDSONIC 빌드 플래시·검증됨.
+
+- **`7d9b7da` feat(model) define.h 신설**: samd20이 main.c:27-30(브랜드)과 define.h:31(VERSION_MSG)에 흩어 두었던 컴파일-타임 설정을 `fw/include/define.h` 하나로 통합. 2개 이상 브랜드 정의 시 `#error` 차단. `app_lcd_send_model_str`을 GDSONIC 단독 → 4브랜드 블록(samd20 main.c:2379-2586 포팅), `app_lcd_render.c`의 static VERSION_MSG 배열 제거 + `_Static_assert`로 20자 강제. VERSION_MSG = `V3.0.0_260725`. 검증 = 레거시 원문과 4브랜드×freq6×type3 **72조합 바이트 동일** + GDSONIC 디스어셈블 명령어 완전 동일 + 4종 크로스 빌드 0-warning.
+- **`e8e84fb` fix(lcd) ether IP 편집 커서**: `ip_to_string`은 DGUS 고정폭용으로 실제 길이가 아닌 16을 반환하는데(samd20 main.c:2927 동일) `ether_select_field`가 그 값을 커서로 써서, 백스페이스가 `16-strlen`번은 NUL만 먹었다(`192.168.1.199`=3회 헛방). 헛 백스페이스마다 `ether_current_number /= 10`이 돌아 진입 시드 옥텟도 깎였다. 커서만 `strlen`으로 교정 — **반환값 16은 유지**(render의 COMM_*_TXT 쓰기 길이라 줄이면 짧은 IP 전환 시 잔상). 의도적 legacy 이탈. HW PASS(백스페이스 1회에 즉시 삭제).
+- **MAKETECH 브랜드 추가**: samd20에 대응 블록 없는 신규. `"SMT-" + type문자 + freq 2자리 + 'D'` — hand `SMT-H15D` / multi `SMT-A15D` / std `SMT-S15D`. 레거시 4종과 달리 **type이 숫자 앞**. 패널 선택지는 15K/20K/35K이나 30/40/50K 코드는 GDSONIC처럼 실제 주파수를 그대로 찍는다(접을 근거가 legacy에 없음). 기대표 18조합 대조 PASS + 기존 4종 72조합 무회귀.
+- **`fw.sh` 신설 + CLAUDE.md 빌드/플래시 절 재작성**: `build|flash|reset|gdb|test|reconfig`. stale `$STM32_TOOLCHAIN` 자동 제거 + **GLOB 자동 재구성**(`CMakeLists.txt:91`이 configure 타임 고정이라 `.c` 증감 브랜치 전환 후 undefined reference로 터지던 건 — 2026-06-19 seek-reset 세션 실사고). 소스 목록을 `build/.src-glob` 스탬프와 비교해 달라졌을 때만 재구성.
+
+### 2026-07-19 — fw 전체 리팩토링 (브랜치 refactor/ponytail-cleanup, HW 재검증 게이트)
+
+- **`b02f5b1` 죽은 코드 삭제**: 미호출 게터 3(app_modbus_owns_usart6, dgus rx/tx 카운터 게터 — 백킹 static은 SWD 진단용 보존) + 데모 매크로 2. reg_ramp_level은 in-code keep 명시로 보존. 바이너리 동일.
+- **`e195564` app_lcd_input.c 분할**: comm/ether/DATA_SAVE → 신규 `app_lcd_comm.c`(1038→622+415), 심=`app_lcd_input_priv.h`. 순수 이동(cpp-review 바이트 단위 검증 APPROVE).
+- **`30d001c` app_reg_tick 추출**: `reg_check_safety_ceiling`/`reg_check_auto_terminate` static 헬퍼(118→57라인). 순수 이동, 30s ceiling 주석 verbatim.
+- **`65ceded`~`ac41cd6` 주석 통일**: 전 함수(269) 한국어 ≤20자 헤더 주석, 장문 헤더의 load-bearing 정보(legacy/spec/V30/W5500/안전 근거)는 본문 verbatim 이동 — 지표 무손실(samd20 255·main.c: 112·§ 79). **바이너리 동일 입증**.
+- 게이트: our-code 0-warning + host 14스위트 PASS 전 스테이지. **HW 재검증 필요(머지 전)**: ① LCD SETUP comm/ether 편집+DATA_SAVE 저장/복귀 ② 직접런 560ms ceiling+OVTIME 무회귀 ③ Modbus FC03/06 스모크.
+
 ### 2026-07-18~19 — 사용자 벤치 신규 8건(fix/기능) 전건 HW PASS + USOUT=PCB 확정
 
 풀배선 벤치 인터랙티브 세션. 사용자가 발견한 표시/부팅/알람/모드 이슈를 벤치-수정 관례(main 직접 커밋 + cpp-review + 당일 HW 재검증)로 처리. 보드 = `61524c1` 플래시·검증됨. **무변경 결정**: EMA α=1/2 유지·숫자 피크홀드·cal_val=16.

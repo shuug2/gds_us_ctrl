@@ -14,18 +14,20 @@ static volatile uint16_t s_err_count;
 
 static uint8_t s_unstick_events;
 
-/* ~10 µs @96 MHz busy-wait — i2c1_init()은 sys_tick 기동 전(main.c:24)이라
- * tick 지연 불가. I2C slave는 저속 클럭 무제한 허용이라 정밀도 비요구. */
+/* busy-wait 지연 */
 static void unstick_delay(void)
 {
+    /* ~10 µs @96 MHz busy-wait — i2c1_init()은 sys_tick 기동 전(main.c:24)이라
+     * tick 지연 불가. I2C slave는 저속 클럭 무제한 허용이라 정밀도 비요구. */
     for (volatile uint32_t i = 0u; i < 240u; i++) { }
 }
 
-/* SDA(PB7) stuck-low 복구: SCL(PB6) GPIO-OD 9클럭 + STOP (감사 H2).
- * HAL_I2C_Init 전, GPIO clock enable 후에만 호출. 실패해도 진행 —
- * 이후 트랜잭션 실패는 s_err_count로 드러남. */
+/* I2C 버스 stuck 복구 */
 static void i2c1_bus_unstick(void)
 {
+    /* SDA(PB7) stuck-low 복구: SCL(PB6) GPIO-OD 9클럭 + STOP (감사 H2).
+     * HAL_I2C_Init 전, GPIO clock enable 후에만 호출. 실패해도 진행 —
+     * 이후 트랜잭션 실패는 s_err_count로 드러남. */
     GPIO_InitTypeDef g = {0};
 
     /* SDA=input으로 버스 상태 관찰, SCL=OD output(idle high) */
@@ -73,6 +75,7 @@ static void i2c1_bus_unstick(void)
     s_unstick_events = clocks;
 }
 
+/* I2C1 초기화 */
 void i2c1_init(void)
 {
     /* 1. clocks */
@@ -109,6 +112,7 @@ void i2c1_init(void)
     s_err_count = 0;
 }
 
+/* I2C 메모리 읽기 */
 HAL_StatusTypeDef i2c1_mem_read(uint8_t dev7, uint8_t mem_addr, uint8_t *buf, uint16_t n)
 {
     HAL_StatusTypeDef st = HAL_I2C_Mem_Read(&hi2c1, (uint16_t)(dev7 << 1), mem_addr,
@@ -119,6 +123,7 @@ HAL_StatusTypeDef i2c1_mem_read(uint8_t dev7, uint8_t mem_addr, uint8_t *buf, ui
     return st;
 }
 
+/* I2C 메모리 쓰기 */
 HAL_StatusTypeDef i2c1_mem_write(uint8_t dev7, uint8_t mem_addr, const uint8_t *buf, uint16_t n)
 {
     HAL_StatusTypeDef st = HAL_I2C_Mem_Write(&hi2c1, (uint16_t)(dev7 << 1), mem_addr,
@@ -129,6 +134,8 @@ HAL_StatusTypeDef i2c1_mem_write(uint8_t dev7, uint8_t mem_addr, const uint8_t *
     return st;
 }
 
+/* 에러 카운트 조회 */
 uint16_t i2c1_err_count(void) { return s_err_count; }
 
+/* unstick 이벤트 조회 */
 uint8_t i2c1_unstick_events(void) { return s_unstick_events; }

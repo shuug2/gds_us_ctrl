@@ -10,13 +10,33 @@
 
 이 아래 §Goal부터는 **2026-07-19 세션 기록 그대로**다. 그 뒤로 아래 3건이 추가됐고, 진입 시 반드시 함께 볼 것.
 
-> **브랜치 스택**: `main` ← `refactor/ponytail-cleanup`(+12, HW 게이트) ← `feat/remote-enable-gate`(+8, T-5 대기). 3개 전부 origin 동기. 첫 HW 세션 선두에서 ponytail 3항목 → main 머지 → 원격 게이트 재베이스가 계획된 순서.
+> **브랜치 스택 (2026-08-16 갱신)**: `main`(**ponytail 머지 완료**) ← `feat/remote-enable-gate`(T-5 대기, 재베이스 필요).
 
-**① 미머지 브랜치 `refactor/ponytail-cleanup`** (main 대비 +12커밋, base `8eaac71`, **origin 푸시됨** tip `753778d`)
+**① `refactor/ponytail-cleanup` — ✅ 벤치 전항목 PASS + main 머지 완료 (2026-08-16)**
+
+벤치 실측(보드가 이미 이 브랜치 빌드로 플래시돼 있었음 — 덤프 대조 byte-identical, 재플래시 불요):
+
+| 게이트 | 결과 |
+|---|---|
+| Modbus FC03 미러 | ✅ 30개 레지스터 전부 SWD `g_cfg`와 일치 |
+| Modbus FC06 클램프 | ✅ OUT_POWER 120→100 / 30→50 / 56 복원 |
+| 직접런 ceiling | ✅ 실측 자동정지 **[514, 578] ms** — 기대 560 ms(`limit_on_time` 56×10 ms) 부합, `1`×8→`0` 패턴이 과거 실측(537–617 ms)과 동일 |
+| OVTIME 무회귀 | ✅ 런 중·정지 후 fault 비트 0 (STATUS=1 → 0, OVTIME `0x08` 미발생) |
+| LCD SETUP comm/ether + DATA_SAVE | ✅ 사용자 육안 |
+| IP 백스페이스 1자 / 모델명 문자열 | ✅ 사용자 육안 |
+
+> 머지 결과 빌드가 벤치 검증된 보드 펌웨어와 **byte-identical**임을 확인 — 검증 결과가 main에 그대로 유효하다.
+> 부수 확인: 명령 레지스터 `0x19~0x1C` 정지 후 전부 0(consume-and-clear 정상), `work_cnt` 0 유지(직접런은 미증가 = 설계대로).
+
+<details><summary>머지 전 기록 (참고)</summary>
+
+(main 대비 +12커밋, base `8eaac71`, tip `753778d`)
 - 2026-07-19 리팩토링 4스테이지: 죽은 코드 삭제(`b02f5b1`, 바이너리 동일) / `app_lcd_input.c` 1038→622 분할 + 신규 `app_lcd_comm.c`(`e195564`) / `app_reg_tick` 118→57 헬퍼 추출(`30d001c`) / 전 269함수 한국어 ≤20자 주석 통일(바이너리 동일).
 - 2026-07-25 4커밋: 모델 브랜드+버전을 `fw/include/define.h`로 분리 — 5종 컴파일-타임 선택(`7d9b7da`) / **MAKETECH** 신설 `SMT-{H|A|S}{freq}D`(`ebfd7d5`) / **ether IP 편집 커서 fix**(`e8e84fb`, `ip_to_string` 반환 16=필드폭이지 글자수 아님 → 헛 백스페이스) / `fw.sh` 빌드·플래시 스크립트(`753778d`).
 - 게이트: 전 스테이지 0-warning + host 14스위트 PASS + cpp-review APPROVE. **머지 = 벤치 HW 재검증 3항목** ⓐ LCD SETUP comm/ether 편집 + DATA_SAVE 저장/복귀(분할 이동 경로) ⓑ 직접런 560ms ceiling + OVTIME 무회귀 ⓒ Modbus FC03/06 스모크. 07-25분 추가 육안 = 모델명 문자열 + IP 편집 백스페이스 1회 삭제. PASS 시 `git merge --no-ff`(태그 불요).
-- ⚠ **보드는 이 브랜치 코드로 미플래시** (여전히 `61524c1`). ⚠ 브랜치 전환 시 `app_lcd_comm.c` 생감 → **`cmake -B build` 재구성 필수**(`fw.sh`가 자동 처리).
+- ⚠ ~~보드는 이 브랜치 코드로 미플래시(여전히 `61524c1`)~~ — **이 기술은 오류였다**: 2026-08-16 플래시 덤프 대조로 보드가 이미 이 브랜치 빌드였음이 확인됐다(07-25 세션에서 플래시된 것). 재플래시 없이 검증 가능했다.
+
+</details>
 
 **② 원격 제어 활성화 게이트 — T-1~T-4 CODE-COMPLETE**(브랜치 `feat/remote-enable-gate`, base=ponytail, **origin 푸시됨** tip `b0c22df`)
 - 진입 정본 = **그 브랜치의 `HANDOFF.md`**. 설계 = `docs/superpowers/specs/2026-08-15-remote-enable-gate-design.md`, 실행 계획 = `plans/2026-08-15-remote-enable-gate-t1-t4.md`, 정책 결정 = `specs/2026-08-02-remote-enable-gate-decision.md`(`1364e5e`), 원격기 정본 = `~/dev/work/gds_us_remote`.
@@ -51,7 +71,8 @@
 ## Not Yet Done
 
 - [ ] **★ HMI SP1 Task 8 실보드 E2E** — `~/dev/work/gds_us_hmi` 세션 + 그쪽 HANDOFF.md. RS-485 어댑터 연결 + 보드를 LCD에서 SERIAL/addr=1/9600/EVEN 복원 필요(잔재 확인 필요). 이 repo `docs/superpowers/research/2026-07-05-rs485-first-write.md` §6 지참.
-- [ ] **★ `refactor/ponytail-cleanup` HW 재검증 3항목 → `--no-ff` 머지** (2026-08-15 갱신 §① — 상세는 문서 상단).
+- [x] ~~`refactor/ponytail-cleanup` HW 재검증 → 머지~~ — ✅ **완료 2026-08-16** (벤치 전항목 PASS, `--no-ff` 머지, 상단 §①).
+- [ ] **★ `feat/remote-enable-gate` 재베이스** — 새 main 위로. 코드 충돌 없음 예상(base였던 ponytail이 그대로 main에 들어감). 그 뒤 T-5(DGUS 자산) 대기.
 - [ ] **원격 제어 활성화 게이트 T-5** — DGUS 자산 3종(사용자) → LCD 글루 → T-6 리뷰 → T-7 벤치 → T-8 머지. T-1~T-4는 브랜치에 완료 (2026-08-15 갱신 §②).
 - [ ] (이월 3회째) **전류 표시 0.60A 실측** + **energy-exit 실전류** — 전류계 준비된 FW 벤치 세션. (EMA 체감은 2026-07-18 종결: α=1/2 유지 확정).
 - [x] ~~태그 push~~ — ✅ 완료(2026-08-16 실측, 태그 21개 동기).

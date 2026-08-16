@@ -9,6 +9,7 @@
 #include "i2c_pot.h"
 #include "i2c1.h"
 
+/* POT DAC 쓰기 */
 void i2c_pot_set_dac(uint8_t dac)
 {
     if (dac > 127u) { dac = 127u; }   /* defensive upper clamp (set_amp carries raw DAC) */

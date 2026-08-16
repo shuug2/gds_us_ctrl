@@ -8,12 +8,14 @@
 #include <string.h>
 #include "app_modbus_core.h"
 
+/* mb 컨텍스트 초기화 */
 void mb_core_init(mb_core_t *mb, uint8_t device_addr)
 {
     memset(mb, 0, sizeof(*mb));
     mb->device_addr = device_addr;
 }
 
+/* Modbus CRC16 계산 */
 uint16_t mb_crc16(const uint8_t *buf, uint8_t len)
 {
     uint16_t crc = 0xFFFFu;
@@ -32,12 +34,13 @@ uint16_t mb_crc16(const uint8_t *buf, uint8_t len)
     return (uint16_t)(((crc & 0x00FFu) << 8) | ((crc & 0xFF00u) >> 8));
 }
 
-/* FC 03/04 — samd20 read_reg/read_input_reg folded into one (the two bodies
- * are identical except the echoed FC; samd20's >255 split produces the same
- * hi/lo bytes unconditionally — byte-identical simplification). */
+/* FC03/04 읽기 응답 */
 static uint8_t mb_read_regs(const mb_core_t *mb, const uint8_t *frame,
                             uint8_t fc, uint8_t resp[MB_RESP_MAX])
 {
+    /* FC 03/04 — samd20 read_reg/read_input_reg folded into one (the two bodies
+     * are identical except the echoed FC; samd20's >255 split produces the same
+     * hi/lo bytes unconditionally — byte-identical simplification). */
     /* contract: caller (mb_core_decode) guarantees frame[0..5] are valid */
     uint16_t addr = (uint16_t)(((uint16_t)frame[2] << 8) | frame[3]);
     uint16_t num  = (uint16_t)(((uint16_t)frame[4] << 8) | frame[5]);
@@ -63,11 +66,12 @@ static uint8_t mb_read_regs(const mb_core_t *mb, const uint8_t *frame,
     return j;
 }
 
-/* FC 06 — samd20 write_reg: store raw + echo the request. The app layer
- * interprets the value (clamp/persist/command) in its apply pass. */
+/* FC06 쓰기 응답 */
 static uint8_t mb_write_reg(mb_core_t *mb, const uint8_t *frame,
                             uint8_t resp[MB_RESP_MAX])
 {
+    /* FC 06 — samd20 write_reg: store raw + echo the request. The app layer
+     * interprets the value (clamp/persist/command) in its apply pass. */
     /* contract: caller (mb_core_decode) guarantees frame[0..5] are valid */
     uint16_t addr = (uint16_t)(((uint16_t)frame[2] << 8) | frame[3]);
     uint16_t val  = (uint16_t)(((uint16_t)frame[4] << 8) | frame[5]);
@@ -91,12 +95,13 @@ static uint8_t mb_write_reg(mb_core_t *mb, const uint8_t *frame,
     return 8u;
 }
 
-/* FC 01/02 — samd20 read_coil/read_input_coil folded (identical bodies, own FC
- * echo). Port fix: samd20 wrote NO bits into the last byte when count%8==0
- * (its remainder loop ran zero times) — full bytes now always fill. */
+/* FC01/02 코일 읽기 */
 static uint8_t mb_read_coils(const mb_core_t *mb, const uint8_t *frame,
                              uint8_t fc, uint8_t resp[MB_RESP_MAX])
 {
+    /* FC 01/02 — samd20 read_coil/read_input_coil folded (identical bodies, own FC
+     * echo). Port fix: samd20 wrote NO bits into the last byte when count%8==0
+     * (its remainder loop ran zero times) — full bytes now always fill. */
     /* contract: caller (mb_core_decode) guarantees frame[0..5] are valid */
     uint16_t addr = (uint16_t)(((uint16_t)frame[2] << 8) | frame[3]);
     uint16_t num  = (uint16_t)(((uint16_t)frame[4] << 8) | frame[5]);
@@ -132,11 +137,12 @@ static uint8_t mb_read_coils(const mb_core_t *mb, const uint8_t *frame,
     return (uint8_t)(k + 2u);
 }
 
-/* FC 05 — samd20 write_coil semantics (any nonzero -> 0xFF). Port fix: echo
- * fc 0x05 / 8 bytes (samd20 answered 0x02 / 9 bytes — copy-paste bug). */
+/* FC05 코일 쓰기 */
 static uint8_t mb_write_coil(mb_core_t *mb, const uint8_t *frame,
                              uint8_t resp[MB_RESP_MAX])
 {
+    /* FC 05 — samd20 write_coil semantics (any nonzero -> 0xFF). Port fix: echo
+     * fc 0x05 / 8 bytes (samd20 answered 0x02 / 9 bytes — copy-paste bug). */
     /* contract: caller (mb_core_decode) guarantees frame[0..5] are valid */
     uint16_t addr = (uint16_t)(((uint16_t)frame[2] << 8) | frame[3]);
     uint16_t val  = (uint16_t)(((uint16_t)frame[4] << 8) | frame[5]);
@@ -158,6 +164,7 @@ static uint8_t mb_write_coil(mb_core_t *mb, const uint8_t *frame,
     return 8u;
 }
 
+/* 요청 디코드/응답 생성 */
 uint8_t mb_core_decode(mb_core_t *mb, const uint8_t *frame, uint8_t len,
                        uint8_t mode, uint8_t resp[MB_RESP_MAX], uint8_t *fc_out)
 {

@@ -19,6 +19,7 @@ static uint32_t s_prev_ms;
 static uint8_t  s_mode;
 static uint8_t  s_sol_last;
 
+/* horn 글루 초기화 */
 void app_horn_init(void)
 {
     horn_fsm_init();
@@ -27,6 +28,7 @@ void app_horn_init(void)
     s_sol_last = 0u;
 }
 
+/* horn 모드 진입/이탈 */
 void app_horn_set_mode(bool on)
 {
     uint8_t m = on ? 1u : 0u;
@@ -45,11 +47,13 @@ void app_horn_set_mode(bool on)
     s_mode = m;
 }
 
+/* horn 모드 활성 여부 */
 uint8_t app_horn_mode_active(void)
 {
     return s_mode;
 }
 
+/* horn 10ms tick 처리 */
 void app_horn_tick(void)
 {
     uint32_t now = sys_tick_get_ms();

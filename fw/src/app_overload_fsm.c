@@ -4,12 +4,14 @@
 static uint8_t s_count;    /* HIGH 연속 카운트 (cap N) */
 static uint8_t s_active;   /* 디바운스된 활성 레벨 */
 
+/* 과부하 FSM 초기화 */
 void overload_fsm_init(void)
 {
     s_count  = 0u;
     s_active = 0u;
 }
 
+/* 과부하 디바운스 1틱 */
 uint8_t overload_fsm_step(uint8_t raw)
 {
     uint8_t prev = s_active;

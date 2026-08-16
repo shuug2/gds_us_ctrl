@@ -23,6 +23,7 @@ static uint8_t  s_start_pending;   /* one-shot latch (slice4: 트리거 FSM star
 static uint8_t  s_sol_last;        /* SOL_DN level edge tracking */
 static uint8_t  s_sens_dn_bak;     /* SENSOR ON/OFF 표시용 레벨 bak (legacy re_dn_bak) */
 
+/* weld 글루 상태 초기화 */
 void app_weld_init(void)
 {
     weld_fsm_init();
@@ -33,19 +34,21 @@ void app_weld_init(void)
     s_sens_dn_bak   = io_read_sens_dn();   /* io_init 선행(main.c) — 현재 레벨 기준 */
 }
 
+/* 사이클 시작 요청 래치 */
 void app_weld_request_start(void)
 {
     s_start_pending = 1u;          /* consumed next tick; READY-only in core */
 }
 
-/* E-stop 진입 엣지 전용 즉시 abort (app_input 글루가 호출) — run-page 게이트와
- * 무관. legacy는 EMSW 핸들러가 입력 스캔에서 직접 SOL/M_START를 끊고 해제 시
- * RUN_READY를 강제(main.c:1409-1425)한 구조의 등가. E-stop 진입이 LCD_WARNING
- * 페이지 전환(app_lcd_set_estop)을 동반하면 아래 tick이 SETUP 게이트로 동결돼
- * abort 미처리→해제 후 유령 재개가 되므로, 여기서 페이지 무관으로 정리한다.
- * abort 경로는 in.abort+현재 상태만 읽음(app_weld_fsm.c:119-137) — zeroed in 안전. */
+/* E-stop 즉시 abort */
 void app_weld_abort_now(void)
 {
+    /* E-stop 진입 엣지 전용 즉시 abort (app_input 글루가 호출) — run-page 게이트와
+     * 무관. legacy는 EMSW 핸들러가 입력 스캔에서 직접 SOL/M_START를 끊고 해제 시
+     * RUN_READY를 강제(main.c:1409-1425)한 구조의 등가. E-stop 진입이 LCD_WARNING
+     * 페이지 전환(app_lcd_set_estop)을 동반하면 아래 tick이 SETUP 게이트로 동결돼
+     * abort 미처리→해제 후 유령 재개가 되므로, 여기서 페이지 무관으로 정리한다.
+     * abort 경로는 in.abort+현재 상태만 읽음(app_weld_fsm.c:119-137) — zeroed in 안전. */
     weld_in_t  in = {0};
     weld_out_t out;
 
@@ -62,12 +65,14 @@ void app_weld_abort_now(void)
     /* cycle_done/weld_start/amp_change는 abort 경로에서 미발행. */
 }
 
+/* SOL_DN 출력 hook */
 void app_weld_hook_sol_dn(bool on)
 {
     io_sol_dn(on);                 /* PB5 active-LOW (SOL_ON=LOW) */
     mon_printf("[weld] SOL_DN %s\r\n", on ? "ON" : "OFF");
 }
 
+/* 진폭 DAC 출력 hook */
 void app_weld_hook_set_amp(uint8_t dac)
 {
     /* comp_time-corrected RAW DAC (0..127) straight to I2C_POT (samd20
@@ -77,6 +82,7 @@ void app_weld_hook_set_amp(uint8_t dac)
     mon_printf("[weld] set_amp dac=%u\r\n", (unsigned)dac);
 }
 
+/* OVTIME fault 상승 */
 void app_weld_hook_fault(void)
 {
     /* 에너지 backstop 초과(에너지 미달+시간 만료) = legacy RUN_WELD OVTIME
@@ -87,6 +93,7 @@ void app_weld_hook_fault(void)
     mon_printf("[weld] fault: energy timeout (backstop abort) -> ERR_OVTIME\r\n");
 }
 
+/* weld 글루 10ms tick */
 void app_weld_tick(void)
 {
     uint32_t now = sys_tick_get_ms();
