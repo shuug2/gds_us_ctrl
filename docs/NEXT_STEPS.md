@@ -118,7 +118,27 @@ make -C fw/test test                                # 5 스위트 PASS 기대 (r
 - 진입 절차 = **§3** (brainstorming → spec → writing-plans → subagent-driven → finishing).
 - ⚠ 머지/푸시 정책: origin(SSH) — 머지 후 `git push origin main` + 태그 푸시(§6). **2026-08-16 실측: 브랜치 3개(main/`refactor/ponytail-cleanup`/`feat/remote-enable-gate`)·태그 21개 전부 origin 동기 — 미푸시 없음.**
 
-### 2.3-a 보드 현 상태 (2026-07-19 마감 — 최신)
+### 2.3-0 보드 현 상태 (2026-08-16 벤치 마감 — 최신, 실측)
+
+세션 종료 시점 SWD/Modbus 실측값. 아래 2.3-a(07-19판)보다 우선.
+
+| 항목 | 값 |
+|---|---|
+| 펌웨어 | **ponytail 빌드 = 현 main과 동일** (플래시 덤프 byte-identical 확인, 재플래시 불요) |
+| **comm_mode** | **1 = ETH_STATIC** ⚠ — **RS-485(RTU)는 응답하지 않는다.** `mbpoll -m tcp -a 1 ... 192.168.1.199` 사용, 또는 LCD에서 SERIAL 복원 |
+| ether | IP **192.168.1.199** / NM 255.255.255.0 / GW 192.168.1.1 (ping 0% loss 확인) |
+| comm (serial 파라미터) | addr=1 / 9600 / EVEN — SERIAL 복원 시 그대로 유효 |
+| model_type | **1 = multi** (ceiling 시험용 hand 전환 후 사용자가 복원) |
+| model_freq | 3 (35 kHz) / run_mode 1(trigger) / f_safty 0 |
+| output_power 56 · on_time 56 · out_time 8 | energy_ctrl off · multi_ctrl off |
+| cal_val **16** / freq_cal_val **40** | 둘 다 **사용자 의도 트림 — 원복 금지**. freq_cal_val이 0이 아닌 것은 버그가 아니다(2026-08-16 사용자 확인) |
+| STATUS | 0 (무런·무fault), work_cnt 0 |
+
+⚠ **HMI Task 8은 RTU가 필요**하므로 진입 시 LCD에서 `comm_mode`를 SERIAL로 되돌릴 것.
+⚠ **세션 첫 단계 = 플래시 덤프 대조**(`openocd ... dump_image` → 버전 문자열/바이너리 비교). 문서의 "보드에 무엇이 올라갔나"를 믿지 말 것 — 2026-07-05·08-16 두 번 어긋났다.
+⚠ 이 환경에서 foreground `sleep`이 차단됨 — mbpoll 시퀀스는 단계별 호출 또는 python 드라이버로.
+
+### 2.3-a 보드 현 상태 (2026-07-19 마감 — 구판, 참고용)
 
 - **main `61524c1` 플래시·검증됨** (2026-07-18~19: 신규 8건 fix/기능). 벤치 PASS = 데드밴드 0.15A·부팅 유령 SEEK 소멸·부팅 beep·fault 부저 알람·토글 반전 fix·SYS_HORN·STD weld OVTIME 알람.
 - **USOUT(PB4)=PCB 이슈**(펌웨어 무관·무수정): 코드/극성/핀 정상 확인 완료 — 재조사 불필요.
