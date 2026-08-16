@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include "app_remote_en_fsm.h"
+#include "app_modbus_core.h"
 
 static int failures = 0;
 #define CHECK_EQ(expr, expected) do {                                       \
@@ -268,8 +269,24 @@ static void test_reenable_refresh_rearm_latch(void)
     CHECK_EQ(out.state, REN_ENABLED);
 }
 
+/* wire 계약: FSM enum과 core.h 매크로 값 일치 (두 헤더 중복 정의 고정).
+ * 순수 FSM 헤더는 modbus core에 결합되면 안 되고 core.h는 wire 계약 문서라
+ * 중복이 의도적이다 — 어긋나면 0x2B가 거짓말을 하게 되므로 여기서 못박는다. */
+static void test_state_codes_match_core(void)
+{
+    CHECK_EQ(REN_DISABLED,    MB_REMOTE_EN_DISABLED);
+    CHECK_EQ(REN_ENABLED,     MB_REMOTE_EN_ENABLED);
+    CHECK_EQ(REN_DIS_TIMEOUT, MB_REMOTE_EN_DIS_TIMEOUT);
+    CHECK_EQ(REN_DIS_LINK,    MB_REMOTE_EN_DIS_LINK);
+    CHECK_EQ(REN_DIS_ESTOP,   MB_REMOTE_EN_DIS_ESTOP);
+    CHECK_EQ(REN_DIS_LCD,     MB_REMOTE_EN_DIS_LCD);
+    /* probe 매직은 0이 아니어야 한다 — 링크 전이 0-리셋과 구분 불가해진다 */
+    CHECK_EQ(MB_REG_REMOTE_CAP_MAGIC != 0u, 1u);
+}
+
 int main(void)
 {
+    test_state_codes_match_core();
     test_boot_disabled();
     test_enable_enters_enabled();
     test_enable_refused_while_estop_level();

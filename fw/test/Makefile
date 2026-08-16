@@ -42,7 +42,7 @@ test: $(BIN_REG) $(BIN_MB) $(BIN_TCP) $(BIN_WELD) $(BIN_SR) $(BIN_POT) $(BIN_CFG
 $(BIN_HORN): test_app_horn_fsm.c ../src/app_horn_fsm.c ../include/app_horn_fsm.h
 	$(CC) $(CFLAGS) $(INC) -o $@ test_app_horn_fsm.c ../src/app_horn_fsm.c
 
-$(BIN_REN): test_app_remote_en_fsm.c ../src/app_remote_en_fsm.c ../include/app_remote_en_fsm.h
+$(BIN_REN): test_app_remote_en_fsm.c ../src/app_remote_en_fsm.c ../include/app_remote_en_fsm.h ../include/app_modbus_core.h
 	$(CC) $(CFLAGS) $(INC) -o $@ test_app_remote_en_fsm.c ../src/app_remote_en_fsm.c
 
 $(BIN_REG): test_app_reg_calc.c ../src/app_reg_calc.c ../include/app_reg_calc.h
