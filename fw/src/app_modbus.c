@@ -89,8 +89,18 @@ static void remote_en_step(void)
 /* LCD 게이트 조작 (T-5 dispatch가 호출) */
 void app_remote_en_set(bool on)
 {
-    /* E-stop 중 거부는 FSM 책임 — LCD 쪽에 중복 검사를 두지 않는다. */
-    if (on) { s_ren_lcd_enable = 1u; } else { s_ren_lcd_disable = 1u; }
+    /* E-stop 중 거부는 FSM 책임 — LCD 쪽에 중복 검사를 두지 않는다.
+     * 반대쪽 래치를 지워 두 플래그가 동시에 서지 않게 한다: 한 superloop iter에
+     * 두 조작이 드레인되면(DGUS 터치 버스트) FSM은 enable을 마지막에 무조건
+     * 평가하므로 순서와 무관하게 ENABLED가 되어 의도적 해제가 삼켜진다.
+     * 여기서 상호배타를 보장해야 "마지막 조작이 이긴다"가 실제로 성립한다. */
+    if (on) {
+        s_ren_lcd_enable  = 1u;
+        s_ren_lcd_disable = 0u;
+    } else {
+        s_ren_lcd_disable = 1u;
+        s_ren_lcd_enable  = 0u;
+    }
 }
 
 /* 게이트 상태 조회 */
@@ -211,8 +221,11 @@ void app_modbus_apply_writes(void)
         g_mb.holding[MB_REG_START] = 0u;
         if (g_mb.holding[MB_REG_STOP] == 1u) {
             app_reg_command(US_CMD_RUN_RELEASE, (uint8_t)US_COMM);
-            g_mb.holding[MB_REG_STOP] = 0u;
         }
+        /* STOP도 값 불문 소거 — 디스패치는 ==1일 때만이지만, 소거를 그 안에 두면
+         * STOP=2 같은 비-1 write가 영영 잔류해(미러 대상 아님, 아래 체인도 ==1만
+         * 매치) FC03 읽기가 유령 pending STOP을 계속 보고한다. */
+        g_mb.holding[MB_REG_STOP] = 0u;
         return;
     }
 

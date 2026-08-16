@@ -135,11 +135,18 @@ ENABLED --lcd_enable (재조작)-----------------> ENABLED (창 갱신 + silence
 if (!remote_enabled) {
     /* 명령 3종: 디스패치 없이 소거 (아래 불변식) */
     holding[RESET] = 0; holding[SEEK] = 0; holding[START] = 0;
-    /* STOP은 무조건 허용 (안전 방향) */
-    if (holding[STOP] == 1) { app_reg_command(US_CMD_RUN_RELEASE, US_COMM); holding[STOP] = 0; }
+    /* STOP은 무조건 허용 (안전 방향). 디스패치는 ==1일 때만, 소거는 값 불문 */
+    if (holding[STOP] == 1) { app_reg_command(US_CMD_RUN_RELEASE, US_COMM); }
+    holding[STOP] = 0;
     return;                 /* cfg 체인 전체 skip */
 }
 ```
+
+> **소거는 STOP에도 적용된다** (2026-08-15 리뷰 반영). 소거를 `== 1` 검사 안에 두면
+> `STOP = 2` 같은 비-1 write가 영구 잔류한다 — `0x1C`는 미러 대상이 아니고 게이트
+> 개방 경로의 else-if도 `== 1`만 매치하므로, 이후 모든 FC03 읽기가 유령 pending
+> STOP을 보고한다. 유령 디스패치는 없지만(양 경로 모두 `== 1` 검사) 관측값이 거짓말을
+> 한다. 명령 4종 전부 "디스패치는 조건부, 소거는 무조건"이 규칙이다.
 
 > **⚠ 불변식 — 소거는 생략 불가.** 명령 레지스터는 미러 대상이 아니므로(`mirror_live()`가 `0x19~0x1C`를 건드리지 않음, `app_modbus.c:66-121`) 무시만 하면 `1`이 홀딩에 잔류한다. 그러면 나중에 게이트가 열린 뒤 **아무 FC06이나 도착하는 순간 else-if 체인(`:133-157`)이 stale START를 디스패치**한다. host + 벤치 양쪽 검증 항목으로 고정한다(§10 T-9, §11 VR-3).
 
