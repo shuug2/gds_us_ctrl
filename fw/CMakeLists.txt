@@ -33,6 +33,17 @@ add_compile_definitions(
     HSE_VALUE=16000000U    # 보드 16MHz X-tal (vendor conf 기본 25MHz 오버라이드 — vendor 무편집)
 )
 
+# 원격 활성화 게이트 우회 — T-5(LCD 활성화 조작)가 없는 동안의 벤치 전용 탈출구.
+# 게이트를 켤 수단이 아직 없어 기본 빌드는 모든 Modbus 명령/cfg 쓰기를 막는다
+# (= mbpoll 벤치 흐름이 죽는다). 벤치 세션은 -DREMOTE_EN_GATE_BYPASS=ON 으로 빌드.
+# ⚠ 기본은 OFF(게이트 유효) — 플래그를 깜빡하면 "제한적"으로 실패하지, 안전 기능이
+# 조용히 사라지지 않는다. T-5 머지 시 이 옵션과 코드의 #ifdef를 함께 제거할 것.
+option(REMOTE_EN_GATE_BYPASS "벤치용: 원격 활성화 게이트 우회 (T-5 전까지 한시)" OFF)
+if(REMOTE_EN_GATE_BYPASS)
+    add_compile_definitions(REMOTE_EN_GATE_BYPASS)
+    message(WARNING "REMOTE_EN_GATE_BYPASS=ON — 원격 활성화 게이트가 무력화된 벤치 빌드입니다. 출하 빌드에 사용 금지.")
+endif()
+
 # vendor HAL static library — Phase 1 sources only
 set(VENDOR ${CMAKE_CURRENT_SOURCE_DIR}/vendor)
 

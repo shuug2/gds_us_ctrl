@@ -214,7 +214,13 @@ void app_modbus_apply_writes(void)
      * mirror_live()가 holding을 cfg 값으로 되돌리므로 원격기 read-back이
      * 불일치를 본다 (예외 응답 없음 = samd20 계약 동형).
      *
-     * RTU/TCP가 이 함수를 공유하므로 여기 1곳이 양 전송로 전부다. */
+     * RTU/TCP가 이 함수를 공유하므로 여기 1곳이 양 전송로 전부다.
+     *
+     * ⚠ REMOTE_EN_GATE_BYPASS는 T-5(LCD 활성화 조작)가 없는 동안의 한시적
+     * 벤치 탈출구다. 게이트를 켤 수단이 아직 없어 기본 빌드는 모든 원격 명령을
+     * 막고, 그러면 이 repo의 HW 검증이 의존하는 mbpoll 흐름이 죽는다.
+     * T-5 머지 시 이 #ifdef와 CMake 옵션을 함께 제거할 것. */
+#ifndef REMOTE_EN_GATE_BYPASS
     if (s_ren.state != (uint8_t)REN_ENABLED) {
         g_mb.holding[MB_REG_RESET] = 0u;
         g_mb.holding[MB_REG_SEEK]  = 0u;
@@ -228,6 +234,7 @@ void app_modbus_apply_writes(void)
         g_mb.holding[MB_REG_STOP] = 0u;
         return;
     }
+#endif
 
     if (g_mb.holding[MB_REG_RESET] == 1u) {
         /* Routed for the consume-and-clear shape; effect = no-op this slice
@@ -419,6 +426,11 @@ static void apply_config(void)
 void app_modbus_init(void)
 {
     memset(&g_applied, 0, sizeof(g_applied));
+#ifdef REMOTE_EN_GATE_BYPASS
+    /* 우회 빌드임을 부팅 로그에 남긴다 — 플래그가 출하 빌드에 실수로 남는 것이
+     * 이 탈출구의 유일한 새 위험이므로, 조용히 지나가게 두지 않는다. */
+    mon_printf("[mb] *** REMOTE ENABLE GATE BYPASSED — 벤치 전용 빌드 ***\r\n");
+#endif
     /* 게이트는 apply_config()의 첫 mirror_live()보다 먼저 초기화 — 부팅 첫 미러가
      * 쓰레기 대신 DISABLED/0을 싣도록. */
     remote_en_fsm_init();
