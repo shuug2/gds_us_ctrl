@@ -217,11 +217,19 @@ void app_reg_command(us_cmd_t cmd, uint8_t src)
          * `docs/superpowers/specs/2026-08-16-source-matched-stop.md`).
          * 정지는 방향이 안전 측이므로 **주체와 무관하게** 운전을 내린다.
          *
-         * 이 대칭의 대가 두 가지 — 벤치에서 확인할 것:
-         *  ① 패널 RUN 버튼 release 가 COMM 운전을 정지시킨다
-         *  ② RUN 페이지 이탈(`app_lcd_input_run_key_reanchor`: 에러/E-stop
-         *     전환)도 RUN_RELEASE 라 COMM 운전을 정지시킨다
-         * 둘 다 "정지시킨다"이므로 안전 측이지만 조작자에겐 새 동작이다.
+         * 이 대칭의 대가 — 2026-08-17 실보드 벤치로 확정(V-3~V-5), 사용자가
+         * 받아들여 대칭 유지:
+         *  ① 패널 RUN 버튼 release 가 COMM 운전을 정지시킨다 — **실측 확인**
+         *     (탭 2회 재현, 무접촉 통제군 15/20s 무정지로 대조).
+         *  ② `app_lcd_input_run_key_reanchor` 경로는 **조작자의 수동 페이지
+         *     이동에서는 안 불린다**(실측: 이동해도 운전 지속). 호출처는
+         *     app_lcd_set_estop(true) / app_lcd_disp.c show_error / SYS_PIC_NOW
+         *     패널 리셋 3곳뿐이고, E-stop 은 app_input.c 가, OVLD 는
+         *     app_overload.c 가 원래도 us_run_status 를 src 로 읽어 소스 무관
+         *     정지 중이다 → **신규 동작은 OVTIME·OUTERR 표시 전환과 패널
+         *     리셋뿐**. 셋 다 고장·UI 상실 상황이라 정지가 옳다.
+         *  ③ 래치값은 소스 무관으로 갱신된다 — COMM 기동 + TOUCH 정지에서도
+         *     last_* 가 방금 끝난 운전 값을 담는다(실측).
          *
          * 부수 효과(의도됨): 아래 `else if` 가 이제 **us_run_status == IDLE**
          * 일 때만 도달한다 — 그 분기 주석이 원래 말하던 "arriving while IDLE"
