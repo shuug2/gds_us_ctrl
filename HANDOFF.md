@@ -10,7 +10,7 @@
 
 이 아래 §Goal부터는 **2026-07-19 세션 기록 그대로**다. 그 뒤로 아래 3건이 추가됐고, 진입 시 반드시 함께 볼 것.
 
-> **브랜치 스택 (2026-08-16 갱신)**: `main`(**ponytail 머지 완료**) ← `feat/remote-enable-gate`(T-5 대기, 재베이스 필요).
+> **브랜치 스택 (2026-08-16 갱신)**: `main`(**ponytail 머지 완료**) ← `feat/remote-enable-gate`(**재베이스 완료**, T-5 = DGUS 자산 대기). 양쪽 origin 동기.
 
 **① `refactor/ponytail-cleanup` — ✅ 벤치 전항목 PASS + main 머지 완료 (2026-08-16)**
 
@@ -72,8 +72,8 @@
 
 - [ ] **★ HMI SP1 Task 8 실보드 E2E** — `~/dev/work/gds_us_hmi` 세션 + 그쪽 HANDOFF.md. RS-485 어댑터 연결 + 보드를 LCD에서 SERIAL/addr=1/9600/EVEN 복원 필요(잔재 확인 필요). 이 repo `docs/superpowers/research/2026-07-05-rs485-first-write.md` §6 지참.
 - [x] ~~`refactor/ponytail-cleanup` HW 재검증 → 머지~~ — ✅ **완료 2026-08-16** (벤치 전항목 PASS, `--no-ff` 머지, 상단 §①).
-- [ ] **★ `feat/remote-enable-gate` 재베이스** — 새 main 위로. 코드 충돌 없음 예상(base였던 ponytail이 그대로 main에 들어감). 그 뒤 T-5(DGUS 자산) 대기.
-- [ ] **원격 제어 활성화 게이트 T-5** — DGUS 자산 3종(사용자) → LCD 글루 → T-6 리뷰 → T-7 벤치 → T-8 머지. T-1~T-4는 브랜치에 완료 (2026-08-15 갱신 §②).
+- [x] ~~`feat/remote-enable-gate` 재베이스~~ — ✅ **완료 2026-08-16** (새 main 위, 코드 충돌 0·docs 1건만, 0-warning + host 15스위트 PASS, force-with-lease 푸시).
+- [ ] **★ 원격 제어 활성화 게이트 T-5** — DGUS 자산 3종(사용자) → LCD 글루 → T-6 리뷰 → T-7 벤치 → T-8 머지. T-1~T-4는 브랜치에 완료 (상단 §②).
 - [ ] (이월 3회째) **전류 표시 0.60A 실측** + **energy-exit 실전류** — 전류계 준비된 FW 벤치 세션. (EMA 체감은 2026-07-18 종결: α=1/2 유지 확정).
 - [x] ~~태그 push~~ — ✅ 완료(2026-08-16 실측, 태그 21개 동기).
 - [ ] 6b 잔여 / B-SEAM — ⏸ 사용자 보류 유지.

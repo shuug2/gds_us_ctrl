@@ -96,9 +96,9 @@ make -C fw/test test                                # 5 스위트 PASS 기대 (r
 
 ### 2.2 다음 작업 후보
 
-**2026-08-16 현재 우선순위**: ① remote-gate 재베이스 → **T-5(DGUS 자산 대기)** → ② HMI Task 8 → ③ 전류 실측 → ④ **IWDG 슬라이스**(HW 불요) → ⑤ 6b·B-SEAM(보류).
+**2026-08-16 현재 우선순위**: ① remote-gate **T-5(DGUS 자산 대기)** → ② HMI Task 8 → ③ 전류 실측 → ④ **IWDG 슬라이스**(HW 불요) → ⑤ 6b·B-SEAM(보류).
 
-> 브랜치 스택: `main`(**ponytail 머지 완료 2026-08-16**) ← `feat/remote-enable-gate`(T-5 대기, 재베이스 필요).
+> 브랜치 스택: `main`(**ponytail 머지 완료 2026-08-16**) ← `feat/remote-enable-gate`(**재베이스 완료**, T-5 대기). 양쪽 origin 동기.
 
 - ~~**★ `refactor/ponytail-cleanup` HW 재검증 → 머지**~~ — ✅ **완료 2026-08-16**. 벤치 전항목 PASS: FC03 미러 30개 `g_cfg` 일치 / FC06 클램프 120→100·30→50 / **직접런 ceiling 실측 [514,578] ms**(기대 560 ms 부합) / OVTIME 무회귀 / LCD 3항목 육안(comm·ether+DATA_SAVE, IP 백스페이스 1자, 모델명). `--no-ff` 머지, 충돌은 docs 2개뿐(코드 0), 머지 결과가 검증된 보드 펌웨어와 byte-identical. **개시 발견: 보드에 이미 이 브랜치 빌드가 올라가 있었다**(문서의 "보드=main `61524c1`"은 오류 — 플래시 덤프 대조로 확정). 상세 = 루트 `HANDOFF.md` §①.
 
