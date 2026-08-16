@@ -35,3 +35,10 @@ void app_modbus_apply_writes(void);
  * Consumed by app_lcd_disp_step to drive DISP_REMOTE. */
 void app_modbus_note_remote(void);
 bool app_modbus_remote_active(void);
+
+/* 원격 제어 활성화 게이트 (spec 2026-08-15 §5~§6). 상태는 비영속 파일 static.
+ * set()은 LCD 전용 조작 — 롱프레스 릴리스=on, 짧은 탭=off (게이트 버튼 dispatch).
+ * E-stop 중 on 거부는 FSM 책임이라 호출자가 중복 검사할 필요 없다. */
+void     app_remote_en_set(bool on);
+uint8_t  app_remote_en_state(void);   /* MB_REMOTE_EN_* (0~5), 해제 사유 포함 */
+uint16_t app_remote_en_left_s(void);  /* 잔여 활성 초; 비활성 0 */
