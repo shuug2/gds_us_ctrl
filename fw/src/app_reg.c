@@ -208,10 +208,26 @@ void app_reg_command(us_cmd_t cmd, uint8_t src)
         }
         break;
     case US_CMD_RUN_RELEASE:
-        /* Source-matched stop only (samd20 main.c:3699/4180 touch, 4405 comm):
-         * a COMM STOP cannot kill a touch run and vice versa. Latch the
-         * power/amp peaks for the stopped-display mirror. */
-        if (g_reg.us_run_status == src) {
+        /* ⚠️ **의도적 samd20 이탈 (2026-08-17, 사용자 결정 B).**
+         * 원본은 source-matched stop 이었다 — "a COMM STOP cannot kill a touch
+         * run and vice versa" (samd20 main.c:3699/4180 touch, 4405 comm).
+         * 그 결과 **원격(Modbus=COMM) STOP 이 패널(TOUCH) 운전을 못 세웠고**,
+         * FC06 에코·레지스터 소거까지 정상이라 원격기는 성공한 전송과 구분할
+         * 수 없었다(gds_us_remote 실측 2026-08-16,
+         * `docs/superpowers/specs/2026-08-16-source-matched-stop.md`).
+         * 정지는 방향이 안전 측이므로 **주체와 무관하게** 운전을 내린다.
+         *
+         * 이 대칭의 대가 두 가지 — 벤치에서 확인할 것:
+         *  ① 패널 RUN 버튼 release 가 COMM 운전을 정지시킨다
+         *  ② RUN 페이지 이탈(`app_lcd_input_run_key_reanchor`: 에러/E-stop
+         *     전환)도 RUN_RELEASE 라 COMM 운전을 정지시킨다
+         * 둘 다 "정지시킨다"이므로 안전 측이지만 조작자에겐 새 동작이다.
+         *
+         * 부수 효과(의도됨): 아래 `else if` 가 이제 **us_run_status == IDLE**
+         * 일 때만 도달한다 — 그 분기 주석이 원래 말하던 "arriving while IDLE"
+         * 조건과 정확히 일치한다. 구판에서는 COMM 운전 중 TOUCH release 가
+         * 이 분기로 새어 swallow_start 를 지웠다. */
+        if (g_reg.us_run_status != (uint8_t)US_IDLE) {
             g_reg.last_power    = g_reg.max_power;
             g_reg.last_amp      = g_reg.max_amp;
             g_reg.last_energy   = g_measure.curr_energy;   /* stopped-display 미러 (slice2) */
