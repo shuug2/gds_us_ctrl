@@ -188,6 +188,34 @@ void app_modbus_apply_writes(void)
     uint16_t v;
     bool save = false;
 
+    /* 원격 활성화 게이트 (spec §5.3). 닫혀 있으면 명령 3종은 디스패치 없이
+     * 소거하고, STOP만 통과시킨 뒤 return으로 cfg 체인 전체를 건너뛴다.
+     *
+     * ⚠ 소거는 생략 불가 — 명령 레지스터 0x19~0x1C는 미러 대상이 아니라서
+     * (mirror_live 위쪽 전수) 무시만 하면 1이 홀딩에 잔류하고, 게이트가 열린
+     * 뒤 아무 FC06이나 도착하는 순간 아래 체인이 그 stale START를 디스패치한다.
+     * 값 불문 무조건 0 — 1 이외 값도 잔류물을 남기지 않는다.
+     *
+     * STOP을 아래 기존 분기에 맡기지 않고 여기 복제하는 이유: cfg 쓰기 거부의
+     * 유일한 장치가 이 return이라, STOP을 fall-through 시키려면 return을
+     * 포기해야 하고 그러면 "게이트 닫힘 + cfg 반영"이라는 모순이 생긴다.
+     *
+     * cfg 거부에 별도 조치가 없는 것은 의도 — 체인을 건너뛰면 다음 tick의
+     * mirror_live()가 holding을 cfg 값으로 되돌리므로 원격기 read-back이
+     * 불일치를 본다 (예외 응답 없음 = samd20 계약 동형).
+     *
+     * RTU/TCP가 이 함수를 공유하므로 여기 1곳이 양 전송로 전부다. */
+    if (s_ren.state != (uint8_t)REN_ENABLED) {
+        g_mb.holding[MB_REG_RESET] = 0u;
+        g_mb.holding[MB_REG_SEEK]  = 0u;
+        g_mb.holding[MB_REG_START] = 0u;
+        if (g_mb.holding[MB_REG_STOP] == 1u) {
+            app_reg_command(US_CMD_RUN_RELEASE, (uint8_t)US_COMM);
+            g_mb.holding[MB_REG_STOP] = 0u;
+        }
+        return;
+    }
+
     if (g_mb.holding[MB_REG_RESET] == 1u) {
         /* Routed for the consume-and-clear shape; effect = no-op this slice
          * (RESET->SEEK chain + error machine deferred, spec §3.3). */
