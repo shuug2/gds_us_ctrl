@@ -222,11 +222,29 @@ void app_modbus_apply_writes(void)
      * T-5 머지 시 이 #ifdef와 CMake 옵션을 함께 제거할 것. */
 #ifndef REMOTE_EN_GATE_BYPASS
     if (s_ren.state != (uint8_t)REN_ENABLED) {
+        /* 벤치 관측용(VR-3): 무엇이 막혔는지 mon에 남긴다. 소거 전에 잡아야 한다.
+         * 무음 거부는 "STATUS 무변화"라는 간접 증거만 남겨서, 게이트가 막은 것인지
+         * 애초에 요청이 안 온 것인지 컨트롤러 쪽에서 구분할 수 없다.
+         * ⚠ mon은 RTU 점유 시 꺼지므로(app_modbus.c apply_config의
+         * mon_set_enabled) 이 줄은 ETH 모드에서만 보인다 — VR-3은 TCP로 칠 것. */
+        uint8_t blocked = 0u;
+        if      (g_mb.holding[MB_REG_RESET] != 0u) { blocked = MB_REG_RESET; }
+        else if (g_mb.holding[MB_REG_SEEK]  != 0u) { blocked = MB_REG_SEEK;  }
+        else if (g_mb.holding[MB_REG_START] != 0u) { blocked = MB_REG_START; }
+
         g_mb.holding[MB_REG_RESET] = 0u;
         g_mb.holding[MB_REG_SEEK]  = 0u;
         g_mb.holding[MB_REG_START] = 0u;
-        if (g_mb.holding[MB_REG_STOP] == 1u) {
+        uint8_t stop_passed = (g_mb.holding[MB_REG_STOP] == 1u) ? 1u : 0u;
+        if (stop_passed != 0u) {
             app_reg_command(US_CMD_RUN_RELEASE, (uint8_t)US_COMM);
+        }
+        /* 명령이 걸린 경우에만 찍는다 — cfg 전용 쓰기까지 찍으면 원격기의 주기
+         * 파라미터 쓰기(수 초 간격)가 로그를 덮어버린다. cfg 거부는 read-back
+         * 미러 복원으로 이미 관측 가능하다(위 주석). */
+        if ((blocked != 0u) || (stop_passed != 0u)) {
+            mon_printf("[mb] gate closed(state=%u): blocked=0x%02X stop_passed=%u\r\n",
+                       (unsigned)s_ren.state, (unsigned)blocked, (unsigned)stop_passed);
         }
         /* STOP도 값 불문 소거 — 디스패치는 ==1일 때만이지만, 소거를 그 안에 두면
          * STOP=2 같은 비-1 write가 영영 잔류해(미러 대상 아님, 아래 체인도 ==1만
