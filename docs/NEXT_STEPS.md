@@ -124,8 +124,8 @@ make -C fw/test test                                # 5 스위트 PASS 기대 (r
 
 | 항목 | 값 |
 |---|---|
-| 펌웨어 | ⚠ **`feat/remote-enable-gate` + `REMOTE_EN_GATE_BYPASS=ON`** (벤치 전용). **main 빌드가 아니다.** 부팅 mon에 `*** REMOTE ENABLE GATE BYPASSED ***` 출력. 게이트 코드는 실려 있으나 강제는 꺼져 있어 원격 명령이 통과한다 — **출하 금지 빌드** |
-| 복귀 방법 | main 빌드: `git checkout main && ./fw.sh flash` / 게이트 강제: 브랜치에서 `cmake -S fw -B fw/build -G Ninja -DREMOTE_EN_GATE_BYPASS=OFF` 후 플래시 |
+| 펌웨어 | ✅ **main 빌드** (세션 말미 사용자가 복귀, 2026-08-17 플래시 덤프 대조 **byte-identical** 확인). 게이트 코드 미탑재 = `0x2A~0x2C` 미러 없음 |
+| 게이트 빌드가 필요할 때 | 브랜치 체크아웃 후 — 벤치용(강제 OFF): `cmake -S fw -B fw/build -G Ninja -DREMOTE_EN_GATE_BYPASS=ON` / VR 판정용(강제 ON): `-DREMOTE_EN_GATE_BYPASS=OFF`. ⚠ 강제 ON 빌드는 T-5가 없어 **원격 명령이 전부 막힌다**(STOP·읽기만 통과) |
 | **comm_mode** | **1 = ETH_STATIC** ⚠ — **RS-485는 Modbus에 응답하지 않는다.** `mbpoll -m tcp -a 1 ... 192.168.1.199` 사용. **대신 RS-485로 mon 청취 가능**(§아래) |
 | ether | IP **192.168.1.199** / NM 255.255.255.0 / GW 192.168.1.1 (ping 0% loss 확인) |
 | comm (serial 파라미터) | addr=1 / **38400** / EVEN (`speed_idx=4`) — SERIAL 복원 시 상대 장비도 38400/EVEN으로 |
