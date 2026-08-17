@@ -38,7 +38,15 @@
 
 </details>
 
-**② 원격 제어 활성화 게이트 — T-1~T-4 CODE-COMPLETE**(브랜치 `feat/remote-enable-gate`, base=ponytail, **origin 푸시됨** tip `b0c22df`)
+**② 원격 제어 활성화 게이트 — T-1~T-4 CODE-COMPLETE + VR-2/VR-3 실보드 PASS**(브랜치 `feat/remote-enable-gate`, base=main, **origin 푸시됨** tip `bc2067c`)
+
+> **2026-08-17 실측 PASS**: 게이트 강제 빌드로 START/RESET/SEEK 전부 차단 확인(STATUS 무변화 + 레지스터 소거 + **`[sr]` OSC 구동 0건**), cfg 쓰기 거부(read-back 미러 복원), STOP 상시 통과, `0x2A=0x5201` 매직. 관측 로그:
+> ```
+> [mb] gate closed(state=0): blocked=0x1B stop_passed=0   ← START
+> [mb] gate closed(state=0): blocked=0x00 stop_passed=1   ← STOP 통과
+> ```
+> 이 로그는 이번에 신설(`4db425d`) — 무음 거부는 "STATUS 무변화"라는 간접 증거만 남아 "막았다"와 "요청이 안 왔다"를 구분할 수 없었다.
+> **남은 VR**: VR-10(probe 구/신 왕복)은 지금도 가능. VR-4~VR-9 + VR-3 stale-latch 후반부는 **T-5 이후**(게이트를 켤 수단 필요).
 - 진입 정본 = **그 브랜치의 `HANDOFF.md`**. 설계 = `docs/superpowers/specs/2026-08-15-remote-enable-gate-design.md`, 실행 계획 = `plans/2026-08-15-remote-enable-gate-t1-t4.md`, 정책 결정 = `specs/2026-08-02-remote-enable-gate-decision.md`(`1364e5e`), 원격기 정본 = `~/dev/work/gds_us_remote`.
 - **왜 필요한가**: 구 펌웨어에는 원격 제어 권한 게이트가 전혀 없다 — Modbus 도달 가능한 누구나 `START(0x1B)` 쓰기 가능, 물리 인터록도 없고 30s 절대 상한이 유일 backstop. `mb_write_reg`가 미사용 영역 write도 "성공" 에코하므로 원격기가 활성화 오판까지 할 수 있다(capability probe가 이를 막음).
 - **완료(T-1~T-4)**: 순수 FSM `app_remote_en_fsm`(**host 15번째 스위트**) / 레지스터 `0x2A~0x2D` 계약 / `app_modbus.c` 글루(매 tick step·미러 3종·접근자 3종) / `apply_writes` 선두 게이트(명령 소거 불변식·STOP 상시 통과·cfg 체인 skip). `/code-review high` 3건 반영. FLASH 49.73%→49.77%.

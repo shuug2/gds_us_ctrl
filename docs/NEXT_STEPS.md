@@ -118,23 +118,37 @@ make -C fw/test test                                # 5 스위트 PASS 기대 (r
 - 진입 절차 = **§3** (brainstorming → spec → writing-plans → subagent-driven → finishing).
 - ⚠ 머지/푸시 정책: origin(SSH) — 머지 후 `git push origin main` + 태그 푸시(§6). **2026-08-16 실측: 브랜치 3개(main/`refactor/ponytail-cleanup`/`feat/remote-enable-gate`)·태그 21개 전부 origin 동기 — 미푸시 없음.**
 
-### 2.3-0 보드 현 상태 (2026-08-16 벤치 마감 — 최신, 실측)
+### 2.3-0 보드 현 상태 (2026-08-17 벤치 마감 — 최신, 실측)
 
 세션 종료 시점 SWD/Modbus 실측값. 아래 2.3-a(07-19판)보다 우선.
 
 | 항목 | 값 |
 |---|---|
-| 펌웨어 | **ponytail 빌드 = 현 main과 동일** (플래시 덤프 byte-identical 확인, 재플래시 불요) |
-| **comm_mode** | **1 = ETH_STATIC** ⚠ — **RS-485(RTU)는 응답하지 않는다.** `mbpoll -m tcp -a 1 ... 192.168.1.199` 사용, 또는 LCD에서 SERIAL 복원 |
+| 펌웨어 | ⚠ **`feat/remote-enable-gate` + `REMOTE_EN_GATE_BYPASS=ON`** (벤치 전용). **main 빌드가 아니다.** 부팅 mon에 `*** REMOTE ENABLE GATE BYPASSED ***` 출력. 게이트 코드는 실려 있으나 강제는 꺼져 있어 원격 명령이 통과한다 — **출하 금지 빌드** |
+| 복귀 방법 | main 빌드: `git checkout main && ./fw.sh flash` / 게이트 강제: 브랜치에서 `cmake -S fw -B fw/build -G Ninja -DREMOTE_EN_GATE_BYPASS=OFF` 후 플래시 |
+| **comm_mode** | **1 = ETH_STATIC** ⚠ — **RS-485는 Modbus에 응답하지 않는다.** `mbpoll -m tcp -a 1 ... 192.168.1.199` 사용. **대신 RS-485로 mon 청취 가능**(§아래) |
 | ether | IP **192.168.1.199** / NM 255.255.255.0 / GW 192.168.1.1 (ping 0% loss 확인) |
-| comm (serial 파라미터) | addr=1 / 9600 / EVEN — SERIAL 복원 시 그대로 유효 |
+| comm (serial 파라미터) | addr=1 / **38400** / EVEN (`speed_idx=4`) — SERIAL 복원 시 상대 장비도 38400/EVEN으로 |
 | model_type | **1 = multi** (ceiling 시험용 hand 전환 후 사용자가 복원) |
 | model_freq | 3 (35 kHz) / run_mode 1(trigger) / f_safty 0 |
 | output_power 56 · on_time 56 · out_time 8 | energy_ctrl off · multi_ctrl off |
 | cal_val **16** / freq_cal_val **40** | 둘 다 **사용자 의도 트림 — 원복 금지**. freq_cal_val이 0이 아닌 것은 버그가 아니다(2026-08-16 사용자 확인) |
 | STATUS | 0 (무런·무fault), work_cnt 0 |
 
-⚠ **HMI Task 8은 RTU가 필요**하므로 진입 시 LCD에서 `comm_mode`를 SERIAL로 되돌릴 것.
+⚠ **serial 파라미터가 38400으로 바뀌었다**(구 9600 아님). HMI Task 8은 RTU가 필요하므로 진입 시 LCD에서 `comm_mode`를 SERIAL로 되돌리고, 상대 장비도 **38400/EVEN**으로 맞출 것.
+
+**⚡ RS-485로 mon을 볼 수 있다 (2026-08-17 발견 — 기존 "DE 미제어로 불가" 기록은 원인 오진)**
+
+트랜시버는 **auto-DE**다(`drivers/usart6_mb.c:179` — 자기 TX가 RX로 되돌아와 echo guard까지 있음). 진짜 제약은 소프트웨어: `apply_config`가 RTU 점유 시 `mon_set_enabled(false)`(`app_modbus.c:308`), 해제 시 `true` + `usart6_init()` 115200 8N1 복원(`:294`).
+**→ `comm_mode`가 ETH_* 이면 RS-485 어댑터로 mon 청취 가능.** "Modbus는 TCP, 모니터는 485" 구성이 성립하며, 2026-08-17 VR-3이 그 구성으로 진행됐다.
+
+```sh
+{ stty 115200 cs8 -parenb -cstopb raw -echo; exec cat; } < /dev/cu.usbserial-AB0MLYXA > /tmp/mon.log &
+LC_ALL=C tr -d '\000' < /tmp/mon.log | tail -20
+pkill -x cat
+```
+⚠ `cat /dev/...` 인자 형식은 포트를 9600으로 리셋한다 — 리다이렉트 형식 필수. ⚠ mon 청취 중 같은 어댑터로 mbpoll을 쓰면 버스 마스터가 둘이 된다.
+⚠ **Modbus TCP는 소켓 1개**(W5500 sock0) — 원격기가 붙어 있으면 mbpoll이 못 들어가고, 연결을 끊어도 stale ESTABLISHED가 **KA 자가치유 ~20초** 뒤에야 풀린다(실측).
 ⚠ **세션 첫 단계 = 플래시 덤프 대조**(`openocd ... dump_image` → 버전 문자열/바이너리 비교). 문서의 "보드에 무엇이 올라갔나"를 믿지 말 것 — 2026-07-05·08-16 두 번 어긋났다.
 ⚠ 이 환경에서 foreground `sleep`이 차단됨 — mbpoll 시퀀스는 단계별 호출 또는 python 드라이버로.
 
