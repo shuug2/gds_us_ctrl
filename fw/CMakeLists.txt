@@ -39,6 +39,18 @@ add_compile_definitions(
 set(MODEL "STD" CACHE STRING "제품 모델 — STD | REMOTE")
 add_compile_definitions(MODEL_${MODEL})
 
+# 원격 활성화 게이트 우회 — 벤치 전용 탈출구. MODEL=REMOTE 빌드에서만 의미가 있다
+# (STD 빌드에는 게이트 코드 자체가 안 들어간다).
+# 인터록 스위치(PC8)가 달린 PCB가 나오기 전까지는 REMOTE 빌드로 게이트를 켤 물리적
+# 수단이 없어 모든 Modbus 명령/cfg 쓰기가 막힌다 = mbpoll 벤치 흐름이 죽는다.
+# ⚠ 기본은 OFF(게이트 유효) — 플래그를 깜빡하면 "제한적"으로 실패하지, 안전 기능이
+# 조용히 사라지지 않는다. PC8 실장 보드가 검증되면 이 옵션과 코드의 #ifdef를 함께 제거.
+option(REMOTE_EN_GATE_BYPASS "벤치용: 원격 활성화 게이트 우회 (PC8 실장 전까지 한시)" OFF)
+if(REMOTE_EN_GATE_BYPASS)
+    add_compile_definitions(REMOTE_EN_GATE_BYPASS)
+    message(WARNING "REMOTE_EN_GATE_BYPASS=ON — 원격 활성화 게이트가 무력화된 벤치 빌드입니다. 출하 빌드에 사용 금지.")
+endif()
+
 # vendor HAL static library — Phase 1 sources only
 set(VENDOR ${CMAKE_CURRENT_SOURCE_DIR}/vendor)
 

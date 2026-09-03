@@ -43,6 +43,27 @@
 #define MB_REG_STOP         0x1Cu   /* command: consume-and-clear */
 #define MB_REG_STATUS       0x1Du
 
+/* 원격 제어 활성화 게이트 (2026-08-15 spec §4) — samd20 대응물 없는 신규.
+ * 0x1E~0x29는 F-A(comm/eth 확장) 예약으로 비워 둔다. MB_REG_COUNT(50) 불변. */
+#define MB_REG_REMOTE_CAP       0x2Au  /* R: capability probe — 미러가 매 tick 매직 복원 */
+#define MB_REG_REMOTE_EN        0x2Bu  /* R: 게이트 상태 0~5 (사유는 다음 활성화까지 래치) */
+#define MB_REG_REMOTE_EN_LEFT   0x2Cu  /* R: 잔여 활성 초, 비활성 0 */
+/* 0x2D reserved — 2단계 승인(원격 요청→LCD 승인) 승격 경로 (spec §2.2). 미러 ✗ */
+
+/* probe 매직. 원격기는 이 주소에 매직도 0도 아닌 값 P를 쓰고 read-back 한다:
+ * P가 남아 있으면 구 펌웨어(게이트 없음), 매직으로 복원돼 있으면 신 펌웨어.
+ * ⚠ P는 0이면 안 된다 — 링크 전이의 mb_core_init 0-리셋과 구분되지 않는다. */
+#define MB_REG_REMOTE_CAP_MAGIC 0x5201u
+
+/* 0x2B wire 값 — app_remote_en_fsm.h의 REN_*와 값 일치.
+ * test_app_remote_en_fsm의 cross-check가 이 일치를 고정한다. */
+#define MB_REMOTE_EN_DISABLED     0u
+#define MB_REMOTE_EN_ENABLED      1u
+#define MB_REMOTE_EN_DIS_TIMEOUT  2u
+#define MB_REMOTE_EN_DIS_LINK     3u
+#define MB_REMOTE_EN_DIS_ESTOP    4u
+#define MB_REMOTE_EN_DIS_LCD      5u
+
 /* STATUS bits (samd20 modbus.h). OVLD set by app_overload (슬라이스 C);
  * ESTOP/OVTIME/OUTERR stay 0 (estop/weld machinery deferred — spec §3.1). */
 #define MB_STATUS_US      0x01u

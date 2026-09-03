@@ -17,9 +17,10 @@
 #include "app_lcd.h"      /* app_lcd_cfg/app_lcd_measure/hooks/us enum */
 #include "app_reg.h"
 #include "app_overload.h"   /* app_overload_active (STATUS OVLD 비트) */
-#include "app_input.h"      /* app_estop_active (STATUS ESTOP 비트) */
+#include "app_input.h"      /* app_estop_active (STATUS ESTOP 비트 + 게이트 해제) */
 #include "app_weld.h"       /* app_weld_sensor_active (STATUS SENSOR 비트, B-3) */
 #include "app_horn.h"       /* app_horn_mode_active (STATUS HORN 비트, B-4) */
+#include "app_remote_en_fsm.h"   /* 원격 활성화 게이트 (spec 2026-08-15) */
 #include "app_config.h"
 #include "dgus_lcd.h"     /* DISP_*_EN echo (samd20 send_lcd_data_var) */
 #include "sys_tick.h"     /* REMOTE icon 1 s hold timestamp */
@@ -42,6 +43,14 @@ static uint8_t g_tcp_active;   /* rising-edge baseline guard for ETH mode */
 static uint32_t s_remote_ms;    /* last decoded request (REMOTE icon hold base) */
 static uint8_t  s_remote_seen;  /* 0 until the first request — boot/wrap guard */
 
+/* 원격 활성화 게이트 상태 (spec §5.4: 비영속 — holding[]은 링크 전이의
+ * mb_core_init이 0으로 지우고 FRAM은 요구사항 위반이라, 파일 static만 가능).
+ * s_ren = 마지막 step 출력 캐시(미러 + apply 게이트가 소비),
+ * s_ren_lcd_* = LCD 이벤트 1-shot 래치(다음 tick step이 소비하고 지움). */
+static remote_en_out_t s_ren;
+static uint8_t s_ren_lcd_enable;
+static uint8_t s_ren_lcd_disable;
+
 /* REMOTE 시각 스탬프 */
 void app_modbus_note_remote(void)
 {
@@ -56,6 +65,56 @@ bool app_modbus_remote_active(void)
     /* REMOTE icon 게이트: 마지막 요청 후 1 s 유지 (samd20 main.c:5189-5192). */
     return (s_remote_seen != 0u) &&
            ((uint32_t)(sys_tick_get_ms() - s_remote_ms) < MB_REMOTE_HOLD_MS);
+}
+
+/* 게이트 FSM 1 tick */
+static void remote_en_step(void)
+{
+    remote_en_in_t in;
+
+    in.now_ms      = sys_tick_get_ms();
+    in.lcd_enable  = s_ren_lcd_enable;
+    in.lcd_disable = s_ren_lcd_disable;
+    /* 침묵 입력 = REMOTE 아이콘과 같은 스탬프. note_remote가 유효 디코드 전부에
+     * 찍히므로 읽기 요청도 링크 생존 신호다. 활성화 이전 값일 수 있으나 FSM의
+     * 무장 규칙이 걸러낸다 (spec §5.2). MB_REMOTE_HOLD_MS와는 무관. */
+    in.last_req_ms = s_remote_ms;
+    in.req_valid   = s_remote_seen;
+    in.estop       = app_estop_active();
+
+    remote_en_fsm_step(&in, &s_ren);
+
+    s_ren_lcd_enable  = 0u;   /* 1-shot 소비 */
+    s_ren_lcd_disable = 0u;
+}
+
+/* LCD 게이트 조작 (T-5 dispatch가 호출) */
+void app_remote_en_set(bool on)
+{
+    /* E-stop 중 거부는 FSM 책임 — LCD 쪽에 중복 검사를 두지 않는다.
+     * 반대쪽 래치를 지워 두 플래그가 동시에 서지 않게 한다: 한 superloop iter에
+     * 두 조작이 드레인되면(DGUS 터치 버스트) FSM은 enable을 마지막에 무조건
+     * 평가하므로 순서와 무관하게 ENABLED가 되어 의도적 해제가 삼켜진다.
+     * 여기서 상호배타를 보장해야 "마지막 조작이 이긴다"가 실제로 성립한다. */
+    if (on) {
+        s_ren_lcd_enable  = 1u;
+        s_ren_lcd_disable = 0u;
+    } else {
+        s_ren_lcd_disable = 1u;
+        s_ren_lcd_enable  = 0u;
+    }
+}
+
+/* 게이트 상태 조회 */
+uint8_t app_remote_en_state(void)
+{
+    return s_ren.state;
+}
+
+/* 게이트 잔여 초 조회 */
+uint16_t app_remote_en_left_s(void)
+{
+    return s_ren.left_s;
 }
 
 /* mb 코어 ctx 반환 */
@@ -120,6 +179,15 @@ static void mirror_live(void)
         .horn    = app_horn_mode_active(),
     };
     g_mb.holding[MB_REG_STATUS]      = mb_status_bits(&sin);
+
+    /* 원격 게이트 미러 (spec §4/§5.1). CAP는 매직 무조건 복원 = capability
+     * probe의 신-펌웨어 판별점("read-only는 미러가 덮음" — MODEL_FREQ/TYPE 위와
+     * 동형). 0x2D는 예약이라 미러하지 않는다. 조건 없이 함수 말미에 두어야
+     * 세 호출처(apply_config RTU 획득 / tick RTU / tick TCP)가 전부 커버되고,
+     * 링크 전이의 mb_core_init 0-리셋도 같은 tick에 즉시 복원된다 (§5.4). */
+    g_mb.holding[MB_REG_REMOTE_CAP]     = MB_REG_REMOTE_CAP_MAGIC;
+    g_mb.holding[MB_REG_REMOTE_EN]      = s_ren.state;
+    g_mb.holding[MB_REG_REMOTE_EN_LEFT] = s_ren.left_s;
 }
 
 /* FC06 write 적용 */
@@ -131,6 +199,62 @@ void app_modbus_apply_writes(void)
     app_config_t *cfg = app_lcd_cfg();
     uint16_t v;
     bool save = false;
+
+    /* 원격 활성화 게이트 (spec §5.3). 닫혀 있으면 명령 3종은 디스패치 없이
+     * 소거하고, STOP만 통과시킨 뒤 return으로 cfg 체인 전체를 건너뛴다.
+     *
+     * ⚠ 소거는 생략 불가 — 명령 레지스터 0x19~0x1C는 미러 대상이 아니라서
+     * (mirror_live 위쪽 전수) 무시만 하면 1이 홀딩에 잔류하고, 게이트가 열린
+     * 뒤 아무 FC06이나 도착하는 순간 아래 체인이 그 stale START를 디스패치한다.
+     * 값 불문 무조건 0 — 1 이외 값도 잔류물을 남기지 않는다.
+     *
+     * STOP을 아래 기존 분기에 맡기지 않고 여기 복제하는 이유: cfg 쓰기 거부의
+     * 유일한 장치가 이 return이라, STOP을 fall-through 시키려면 return을
+     * 포기해야 하고 그러면 "게이트 닫힘 + cfg 반영"이라는 모순이 생긴다.
+     *
+     * cfg 거부에 별도 조치가 없는 것은 의도 — 체인을 건너뛰면 다음 tick의
+     * mirror_live()가 holding을 cfg 값으로 되돌리므로 원격기 read-back이
+     * 불일치를 본다 (예외 응답 없음 = samd20 계약 동형).
+     *
+     * RTU/TCP가 이 함수를 공유하므로 여기 1곳이 양 전송로 전부다.
+     *
+     * ⚠ REMOTE_EN_GATE_BYPASS는 T-5(LCD 활성화 조작)가 없는 동안의 한시적
+     * 벤치 탈출구다. 게이트를 켤 수단이 아직 없어 기본 빌드는 모든 원격 명령을
+     * 막고, 그러면 이 repo의 HW 검증이 의존하는 mbpoll 흐름이 죽는다.
+     * T-5 머지 시 이 #ifdef와 CMake 옵션을 함께 제거할 것. */
+#ifndef REMOTE_EN_GATE_BYPASS
+    if (s_ren.state != (uint8_t)REN_ENABLED) {
+        /* 벤치 관측용(VR-3): 무엇이 막혔는지 mon에 남긴다. 소거 전에 잡아야 한다.
+         * 무음 거부는 "STATUS 무변화"라는 간접 증거만 남겨서, 게이트가 막은 것인지
+         * 애초에 요청이 안 온 것인지 컨트롤러 쪽에서 구분할 수 없다.
+         * ⚠ mon은 RTU 점유 시 꺼지므로(app_modbus.c apply_config의
+         * mon_set_enabled) 이 줄은 ETH 모드에서만 보인다 — VR-3은 TCP로 칠 것. */
+        uint8_t blocked = 0u;
+        if      (g_mb.holding[MB_REG_RESET] != 0u) { blocked = MB_REG_RESET; }
+        else if (g_mb.holding[MB_REG_SEEK]  != 0u) { blocked = MB_REG_SEEK;  }
+        else if (g_mb.holding[MB_REG_START] != 0u) { blocked = MB_REG_START; }
+
+        g_mb.holding[MB_REG_RESET] = 0u;
+        g_mb.holding[MB_REG_SEEK]  = 0u;
+        g_mb.holding[MB_REG_START] = 0u;
+        uint8_t stop_passed = (g_mb.holding[MB_REG_STOP] == 1u) ? 1u : 0u;
+        if (stop_passed != 0u) {
+            app_reg_command(US_CMD_RUN_RELEASE, (uint8_t)US_COMM);
+        }
+        /* 명령이 걸린 경우에만 찍는다 — cfg 전용 쓰기까지 찍으면 원격기의 주기
+         * 파라미터 쓰기(수 초 간격)가 로그를 덮어버린다. cfg 거부는 read-back
+         * 미러 복원으로 이미 관측 가능하다(위 주석). */
+        if ((blocked != 0u) || (stop_passed != 0u)) {
+            mon_printf("[mb] gate closed(state=%u): blocked=0x%02X stop_passed=%u\r\n",
+                       (unsigned)s_ren.state, (unsigned)blocked, (unsigned)stop_passed);
+        }
+        /* STOP도 값 불문 소거 — 디스패치는 ==1일 때만이지만, 소거를 그 안에 두면
+         * STOP=2 같은 비-1 write가 영영 잔류해(미러 대상 아님, 아래 체인도 ==1만
+         * 매치) FC03 읽기가 유령 pending STOP을 계속 보고한다. */
+        g_mb.holding[MB_REG_STOP] = 0u;
+        return;
+    }
+#endif
 
     if (g_mb.holding[MB_REG_RESET] == 1u) {
         /* Routed for the consume-and-clear shape; effect = no-op this slice
@@ -322,6 +446,18 @@ static void apply_config(void)
 void app_modbus_init(void)
 {
     memset(&g_applied, 0, sizeof(g_applied));
+#ifdef REMOTE_EN_GATE_BYPASS
+    /* 우회 빌드임을 부팅 로그에 남긴다 — 플래그가 출하 빌드에 실수로 남는 것이
+     * 이 탈출구의 유일한 새 위험이므로, 조용히 지나가게 두지 않는다. */
+    mon_printf("[mb] *** REMOTE ENABLE GATE BYPASSED — 벤치 전용 빌드 ***\r\n");
+#endif
+    /* 게이트는 apply_config()의 첫 mirror_live()보다 먼저 초기화 — 부팅 첫 미러가
+     * 쓰레기 대신 DISABLED/0을 싣도록. */
+    remote_en_fsm_init();
+    s_ren.state       = (uint8_t)REN_DISABLED;
+    s_ren.left_s      = 0u;
+    s_ren_lcd_enable  = 0u;
+    s_ren_lcd_disable = 0u;
     mb_core_init(&g_mb, 0u);
     apply_config();
 }
@@ -342,6 +478,9 @@ static void tcp_leave(void)
 /* modbus 매 tick 처리 */
 void app_modbus_tick(void)
 {
+    /* 게이트는 분기 밖 첫 문장 — RTU 점유/TCP/미점유 어디로 빠지든 시간이 흐르고
+     * 만료돼야 한다 (spec §6). 이후 같은 tick의 mirror_live()가 최신 상태를 싣는다. */
+    remote_en_step();
     apply_config();
     const app_config_t *cfg = app_lcd_cfg();
 
