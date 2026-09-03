@@ -33,6 +33,12 @@ add_compile_definitions(
     HSE_VALUE=16000000U    # 보드 16MHz X-tal (vendor conf 기본 25MHz 오버라이드 — vendor 무편집)
 )
 
+# 제품 모델(기능 티어) — H/W는 동일(hw-revA), F/W 기능셋으로만 갈린다.
+# 값 검증은 define.h의 #error가 한다 (오타 -DMODEL=REMOET → 컴파일 실패).
+#   cmake -B build-remote -DMODEL=REMOTE -G Ninja   또는   MODEL=remote ./fw.sh
+set(MODEL "STD" CACHE STRING "제품 모델 — STD | REMOTE")
+add_compile_definitions(MODEL_${MODEL})
+
 # vendor HAL static library — Phase 1 sources only
 set(VENDOR ${CMAKE_CURRENT_SOURCE_DIR}/vendor)
 
