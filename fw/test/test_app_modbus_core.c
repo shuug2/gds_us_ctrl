@@ -254,6 +254,49 @@ static void test_read_coils(void) {
     CHECK_EQ(mb_core_decode(&mb, req, 8, MB_MODE_RTU, resp, &fc), 0);
 }
 
+/* STATUS(0x1D) 비트 합성 — B-3 센서 / B-4 horn 관측 추가.
+ * 원격기·gds_us_hmi 가 읽는 계약이라 순수 합성기를 host 로 고정한다.
+ * 요구사항: docs/superpowers/specs/2026-08-30-remote-parity-requirements.md B-3/B-4 */
+static void test_status_bits(void) {
+    mb_status_in_t in;
+
+    /* 아무것도 아니면 0 */
+    memset(&in, 0, sizeof in);
+    CHECK_EQ(mb_status_bits(&in), 0x0000);
+
+    /* 비트 하나씩 — 각 입력이 자기 비트만 세운다 */
+    memset(&in, 0, sizeof in); in.running = 1;
+    CHECK_EQ(mb_status_bits(&in), MB_STATUS_US);
+    memset(&in, 0, sizeof in); in.estop = 1;
+    CHECK_EQ(mb_status_bits(&in), MB_STATUS_ESTOP);
+    memset(&in, 0, sizeof in); in.ovld = 1;
+    CHECK_EQ(mb_status_bits(&in), MB_STATUS_OVLD);
+    memset(&in, 0, sizeof in); in.ovtime = 1;
+    CHECK_EQ(mb_status_bits(&in), MB_STATUS_OVTIME);
+    memset(&in, 0, sizeof in); in.sensor = 1;
+    CHECK_EQ(mb_status_bits(&in), MB_STATUS_SENSOR);
+    memset(&in, 0, sizeof in); in.horn = 1;
+    CHECK_EQ(mb_status_bits(&in), MB_STATUS_HORN);
+
+    /* 신규 2비트가 기존 5비트와 겹치지 않는다 (주소 여유 계산의 전제) */
+    CHECK_EQ(MB_STATUS_SENSOR & (MB_STATUS_US | MB_STATUS_ESTOP | MB_STATUS_OVLD
+                                 | MB_STATUS_OVTIME | MB_STATUS_OUTERR), 0);
+    CHECK_EQ(MB_STATUS_HORN   & (MB_STATUS_US | MB_STATUS_ESTOP | MB_STATUS_OVLD
+                                 | MB_STATUS_OVTIME | MB_STATUS_OUTERR), 0);
+    CHECK_EQ(MB_STATUS_SENSOR & MB_STATUS_HORN, 0);
+
+    /* 조합 — horn 모드에서 원격 START 가 막힌 채 센서가 눌린 상태.
+     * 원격기가 "왜 안 먹는지" 를 읽어내야 하는 바로 그 조합이다. */
+    memset(&in, 0, sizeof in);
+    in.running = 1; in.estop = 1; in.sensor = 1; in.horn = 1;
+    CHECK_EQ(mb_status_bits(&in),
+             MB_STATUS_US | MB_STATUS_ESTOP | MB_STATUS_SENSOR | MB_STATUS_HORN);
+
+    /* 0/1 이 아닌 truthy 입력도 정확히 1비트로 정규화된다 (C-2 와 같은 사고 방지) */
+    memset(&in, 0, sizeof in); in.horn = 5; in.sensor = 200;
+    CHECK_EQ(mb_status_bits(&in), MB_STATUS_SENSOR | MB_STATUS_HORN);
+}
+
 int main(void) {
     test_crc16();
     test_core_init();
@@ -263,6 +306,7 @@ int main(void) {
     test_write_reg();
     test_write_coil();
     test_read_coils();
+    test_status_bits();
     if (failures) { printf("%d check(s) FAILED\n", failures); return 1; }
     printf("all checks PASSED\n");
     return 0;

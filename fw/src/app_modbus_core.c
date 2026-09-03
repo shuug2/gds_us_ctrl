@@ -217,3 +217,17 @@ uint8_t mb_core_decode(mb_core_t *mb, const uint8_t *frame, uint8_t len,
     }
     return n;
 }
+
+/* STATUS(0x1D) 비트 합성 — 계약 소유 모듈에 두어 host 로 고정한다.
+ * 글루(app_modbus.c mirror_live)가 라이브 값을 모아 넣기만 한다. */
+uint16_t mb_status_bits(const mb_status_in_t *in)
+{
+    uint16_t s = 0u;
+    if (in->running) { s |= MB_STATUS_US; }
+    if (in->estop)   { s |= MB_STATUS_ESTOP; }
+    if (in->ovld)    { s |= MB_STATUS_OVLD; }
+    if (in->ovtime)  { s |= MB_STATUS_OVTIME; }
+    if (in->sensor)  { s |= MB_STATUS_SENSOR; }
+    if (in->horn)    { s |= MB_STATUS_HORN; }
+    return s;
+}

@@ -13,6 +13,12 @@ void app_weld_request_start(void);   /* one-shot cycle trigger (slice 4 caller) 
 void app_weld_abort_now(void);       /* E-stop 진입 엣지 즉시 abort — run-page 게이트
                                         무관 (app_input 호출; legacy main.c:1409-1425) */
 
+/* SENSE_DN 라이브 상태 (1 = 감지 중). Modbus STATUS 의 SENSOR 비트가 소비한다
+ * (요구사항 B-3). app_weld_tick 안의 LCD 표시 미러는 horn/SETUP 게이트 뒤라
+ * 그 구간에서 동결되지만, 이 접근자는 게이트와 무관하게 즉시 읽는다 —
+ * 원격 관측은 화면이 어느 페이지에 있든 같은 답을 줘야 한다. */
+uint8_t app_weld_sensor_active(void);
+
 /* SOL_DN solenoid hook (slice 1: mon log; slice 4: PB5 GPIO). */
 void app_weld_hook_sol_dn(bool on);
 

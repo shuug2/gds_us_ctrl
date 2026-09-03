@@ -18,6 +18,8 @@
 #include "app_reg.h"
 #include "app_overload.h"   /* app_overload_active (STATUS OVLD 비트) */
 #include "app_input.h"      /* app_estop_active (STATUS ESTOP 비트) */
+#include "app_weld.h"       /* app_weld_sensor_active (STATUS SENSOR 비트, B-3) */
+#include "app_horn.h"       /* app_horn_mode_active (STATUS HORN 비트, B-4) */
 #include "app_config.h"
 #include "dgus_lcd.h"     /* DISP_*_EN echo (samd20 send_lcd_data_var) */
 #include "sys_tick.h"     /* REMOTE icon 1 s hold timestamp */
@@ -106,18 +108,18 @@ static void mirror_live(void)
     /* STATUS bit0 = run active (spec §3.1: us_run_status != US_IDLE).
      * OVTIME = app_reg가 publish한 energy 모드 직접런 과대시간 fault
      * (2026-06-28-ovtime spec). OVLD = app_overload_active() 라이브 반영
-     * (슬라이스 C). ESTOP = app_estop_active() (슬라이스 D). OUTERR는 6b. */
-    uint16_t status = running ? MB_STATUS_US : 0u;
-    if (m->error_status & ERR_OVTIME) {
-        status |= MB_STATUS_OVTIME;
-    }
-    if (app_overload_active() != 0u) {
-        status |= MB_STATUS_OVLD;
-    }
-    if (app_estop_active() != 0u) {
-        status |= MB_STATUS_ESTOP;
-    }
-    g_mb.holding[MB_REG_STATUS]      = status;
+     * (슬라이스 C). ESTOP = app_estop_active() (슬라이스 D). OUTERR는 6b.
+     * SENSOR/HORN = 원격 관측용 신규 비트 (요구사항 B-3/B-4). 비트 배치는
+     * mb_status_bits()가 소유 — host 스위트가 겹침·극성까지 고정한다. */
+    const mb_status_in_t sin = {
+        .running = running,
+        .estop   = app_estop_active(),
+        .ovld    = app_overload_active(),
+        .ovtime  = (m->error_status & ERR_OVTIME) ? 1u : 0u,
+        .sensor  = app_weld_sensor_active(),
+        .horn    = app_horn_mode_active(),
+    };
+    g_mb.holding[MB_REG_STATUS]      = mb_status_bits(&sin);
 }
 
 /* FC06 write 적용 */

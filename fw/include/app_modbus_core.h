@@ -50,6 +50,25 @@
 #define MB_STATUS_OVLD    0x04u
 #define MB_STATUS_OVTIME  0x08u
 #define MB_STATUS_OUTERR  0x10u
+/* 원격 관측용 신규 비트 (2026-08-30 요구사항 B-3/B-4). samd20 에 대응물 없음 —
+ * 주소를 안 먹으려고 STATUS 여유 비트로 돌린 것이다. 소비자 = 원격기 · gds_us_hmi. */
+#define MB_STATUS_SENSOR  0x20u   /* B-3: SENSE_DN 감지 중 (STD TRIGGER RUN 의 "SENSOR ON") */
+#define MB_STATUS_HORN    0x40u   /* B-4: horn-down 모드 — 서 있으면 모든 소스의 START 가 차단된다.
+                                   * 이 비트가 없으면 원격기는 거부를 성공한 전송과 구분할 수 없다. */
+
+/* STATUS 합성 입력. 극성 변환(SENSE_DN active-LOW 등)은 글루가 끝내고 넣는다 —
+ * 이 모듈은 "무엇이 참인가"만 받고 비트 배치만 책임진다. */
+typedef struct {
+    uint8_t running;   /* us_run_status != US_IDLE */
+    uint8_t estop;
+    uint8_t ovld;
+    uint8_t ovtime;
+    uint8_t sensor;    /* 1 = 감지 중 */
+    uint8_t horn;      /* 1 = horn-down 모드 */
+} mb_status_in_t;
+
+/* 0 이 아닌 입력은 정확히 해당 비트 1개로 정규화된다. */
+uint16_t mb_status_bits(const mb_status_in_t *in);
 
 /* decode mode (samd20 decode_comm(mode)): RTU checks slave addr + CRC,
  * TCP (slice 2, MBAP-stripped PDU) skips both. */
