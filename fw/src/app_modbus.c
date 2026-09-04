@@ -187,8 +187,12 @@ static void mirror_live(void)
     g_mb.holding[MB_REG_DISP_FREQ]   = disp_on ? m->curr_freq : m->last_freq;
     g_mb.holding[MB_REG_DISP_ENERGY] = disp_on ? (uint16_t)m->curr_energy
                                                : (uint16_t)m->last_energy;
-    g_mb.holding[MB_REG_MODEL_FREQ]  = cfg->model_freq;    /* read-only: mirror */
-    g_mb.holding[MB_REG_MODEL_TYPE]  = cfg->model_type;    /* overwrites writes */
+    /* B-5: 이제 R/W 다. 미러는 그대로 두는 것이 맞다 — 다른 cfg 필드와 동형으로
+     * "쓰기는 apply 체인이 받고, 미러가 결과를 되비춘다". 미러를 없앨 필요가
+     * 없었다: 예전에 쓰기가 안 먹은 진짜 원인은 미러가 아니라 **apply 체인에
+     * 분기가 없어서** 값이 무시된 것이었다. */
+    g_mb.holding[MB_REG_MODEL_FREQ]  = cfg->model_freq;
+    g_mb.holding[MB_REG_MODEL_TYPE]  = cfg->model_type;
     g_mb.holding[MB_REG_RUN_MODE]    = cfg->run_mode;
     g_mb.holding[MB_REG_EN_ENERGY]   = cfg->energy_ctrl ? 1u : 0u;
     g_mb.holding[MB_REG_EN_MULTI]    = cfg->multi_ctrl  ? 1u : 0u;
@@ -485,6 +489,34 @@ void app_modbus_apply_writes(mb_link_t link)
         /* 정규화 결과가 같으면(예: 이미 1인데 5 를 씀) 아무것도 하지 않는다.
          * 다음 미러가 holding 을 1 로 되돌리므로 read-back 은 정규화를 보고,
          * 불필요한 전체맵 FRAM 쓰기를 피한다. */
+    } else if (g_mb.holding[MB_REG_MODEL_FREQ] != cfg->model_freq) {
+        /* B-5 모델 주파수. LCD 편집 경로(app_lcd_input.c:447-450)와 **정확히
+         * 동형**: cfg 설정 + 모델명 문자열 갱신이 전부다. sys_mode·런페이지·
+         * 출력바 임계(ref_lv_*)는 여기서 재파생하지 않는다 — LCD 도 그렇고,
+         * 다음 app_lcd_init_mode()(부팅 / SYS_PIC_NOW)에서 갱신된다.
+         * 범위 클램프 없음: LCD 에 없는 규칙을 원격에만 발명하지 않는다(사용자
+         * 결정). 범위 밖 값은 안전하게 퇴화한다 — send_model_str 은 switch+
+         * default(배열 인덱싱 ✗), run_page/ref_lv_* 도 else 분기를 갖는다. */
+        cfg->model_freq = (uint8_t)g_mb.holding[MB_REG_MODEL_FREQ];
+        app_lcd_send_model_str(cfg->model_freq, cfg->model_type);
+        save = true;
+    } else if (g_mb.holding[MB_REG_MODEL_TYPE] != cfg->model_type) {
+        /* B-5 모델 타입. 위와 동형이나 🔴 **부작용이 하나 더 있다**:
+         * PC11 의 의미가 model_type 으로 뒤바뀐다(app_input_fsm.c:46-60).
+         *   <=1 (hand/multi) -> PC11 = B_SEEK (active-LOW)
+         *   ==2 (std)        -> PC11 = EMSW  (active-HIGH 레벨추종)
+         * 따라서 이 쓰기 하나가
+         *   0/1 -> 2 : PC11 이 HIGH 면 즉시 E-stop 진입 + SOL 강제 OFF
+         *   2 -> 0/1 : E-stop 활성 중이면 s_estop_active 가 0 으로 클리어
+         * 를 일으킨다. **가드를 두지 않는 것은 사용자 결정**이다(2026-09-04):
+         * LCD 편집 경로에도 같은 가드가 없어(app_lcd_input.c:452 무조건 대입)
+         * 기계 앞의 조작자는 이미 같은 일을 할 수 있고, 원격에만 새 규칙을
+         * 만들지 않는다는 이 저장소 원칙과 일관된다.
+         * ⚠ 남는 차이: 원격 조작자는 기계 앞에 없을 수 있다. 거부가 필요해지면
+         * app_estop_active() || us_on_status 로 막는 것이 그 자리다. */
+        cfg->model_type = (uint8_t)g_mb.holding[MB_REG_MODEL_TYPE];
+        app_lcd_send_model_str(cfg->model_freq, cfg->model_type);
+        save = true;
     } else if (g_mb.holding[MB_REG_CAL_VAL] != (uint16_t)cfg->cal_val) {
         /* 클램프된 쓰기는 다음 미러가 되돌리므로 이 체인을 재발화시키지 않는다
          * (기존 클램프 분기들과 같은 형태). 원격기는 read-back 으로 클램프를 본다. */
