@@ -45,6 +45,8 @@
 | 0x1E | COMM_ADDR | 31 | 0x2C | (결번, 항상 0) | 45 |
 | 0x1F | COMM_SPEED | 32 | 0x2E | **CAL_VAL** | 47 |
 | 0x20 | COMM_PARITY | 33 | 0x2F | FREQ_CAL_VAL | 48 |
+| 0x30 | **HORN_CMD** | **49** |
+| 0x31 | **CFG_CAP** | **50** |
 | 0x21 | COMM_MODE (R) | 34 | | | |
 
 ### 0.4 STATUS(0x1D) 비트
@@ -121,6 +123,11 @@ S (스모크·무회귀)  →  M (모델 축)  →  B34 (STATUS 비트)  →  MO
 | B34-4 | HORN 비영속 | horn ON 상태에서 전원 재인가 | bit6 = 0 (재부팅 시 소실 — 설계대로) |
 | B34-5 | 기존 5비트 무회귀 | S-3 재실행하며 `-r 30` 관측 | bit0 만 토글, 상위 비트 오염 없음 |
 | B34-6 | SENSOR 비트 | — | ⚠ **§6 로 이연** (센서 배선 없음) |
+| B34-7 | **horn 원격 ON** (B-4 조작) | `-r 49 1` 쓰기 | read-back=1 + **STATUS bit6=1** + LCD 화면이 horn 모드로 |
+| B34-8 | horn 원격 OFF | `-r 49 0` | read-back=0 + bit6=0 |
+| B34-9 | 전이 시 솔 강제 OFF | horn ON→OFF 전이 관찰 | mon `[weld] SOL_DN OFF` 또는 솔 육안 — 전이마다 무조건 OFF |
+| B34-10 | **비영속** | horn ON 상태로 재부팅 | `-r 49` = 0 (설계대로 소실 — 누락 아님) |
+| B34-11 | horn 중 START 차단 + 사유 관측 | bit6=1 상태에서 `-r 28 1` | `us`=0 유지 **+ bit6 로 사유 설명** ⭐ B-4 의 목적 |
 
 ### MOD — 모델 선택·주파수 원격 쓰기 (B-5)
 

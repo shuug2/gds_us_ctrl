@@ -225,6 +225,8 @@ static void mirror_live(void)
      * 실어야 한다: F-A 는 두 모델 모두에 있으므로, 안 실으면 소비 측이 F-A 를
      * 지원하는 STD 유닛을 구 펌웨어로 오판한다. */
     g_mb.holding[MB_REG_CFG_CAP]   = MB_REG_CFG_CAP_MAGIC;
+    /* B-4 조작 미러 — 실제 모드 상태를 되비춘다(0/1 정규화는 접근자가 보장). */
+    g_mb.holding[MB_REG_HORN_CMD]  = app_horn_mode_active();
     for (uint8_t i = 0u; i < (uint8_t)CFG_STG_COUNT; i++) {
         if (cfg_stage_dirty(&s_stg, i) == 0u) {
             g_mb.holding[k_stg_reg[i]] = stg_mirror_val(cfg, i);
@@ -489,6 +491,16 @@ void app_modbus_apply_writes(mb_link_t link)
         /* 정규화 결과가 같으면(예: 이미 1인데 5 를 씀) 아무것도 하지 않는다.
          * 다음 미러가 holding 을 1 로 되돌리므로 read-back 은 정규화를 보고,
          * 불필요한 전체맵 FRAM 쓰기를 피한다. */
+    } else if (g_mb.holding[MB_REG_HORN_CMD] != app_horn_mode_active()) {
+        /* B-4 조작. cfg 가 아니라 비영속 RAM 상태라 save 하지 않는다 —
+         * "재부팅 시 소실"은 설계이지 누락이 아니다(원격기에도 그렇게 알렸다).
+         * 모드를 켜는 것만으로는 아무것도 움직이지 않는다: 솔레노이드를 실제로
+         * 토글하는 것은 기계 앞 조작자의 양손 START 다. 그래서 요구사항이 이것을
+         * "일반 설정과 같은 급"으로 분류했다.
+         * ⚠ 전이 시 솔레노이드는 무조건 OFF 된다(app_horn_set_mode 안, legacy
+         * 3459/3468). horn 모드가 켜지면 모든 소스의 START 가 차단되며, 그
+         * 사실은 STATUS 의 HORN 비트로 원격에서 읽힌다. */
+        app_horn_set_mode(g_mb.holding[MB_REG_HORN_CMD] != 0u);
     } else if (g_mb.holding[MB_REG_MODEL_FREQ] != cfg->model_freq) {
         /* B-5 모델 주파수. LCD 편집 경로(app_lcd_input.c:447-450)와 **정확히
          * 동형**: cfg 설정 + 모델명 문자열 갱신이 전부다. sys_mode·런페이지·

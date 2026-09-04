@@ -81,6 +81,12 @@
  * 결정이 번복된 항목이다 — 목표가 "모든 기능 동일"이 되면서 포함으로 바뀌었다.
  * 🔴 인코딩은 **int16 2의 보수** (C-1). 명시하지 않으면 음수 cal 이 65000대
  *    양수로 읽히는 조용한 사고가 난다. 쓰기는 CFG_CAL_MIN..MAX 로 클램프(C-3). */
+/* B-4 조작: horn-down 모드 원격 on/off. 관측은 STATUS 의 MB_STATUS_HORN 비트다.
+ * cfg 필드가 아니라 **비영속 RAM 상태**(재부팅 시 소실)이지만, 미러/apply 형태는
+ * 다른 cfg 필드와 동형으로 둔다 — 쓰기는 체인이 받고 미러가 실제 상태를 되비춘다.
+ * ⚠ 모드 전이 시 솔레노이드가 무조건 OFF 된다(legacy 안전 조치). */
+#define MB_REG_HORN_CMD         0x30u  /* R/W — 1 = horn-down 모드 */
+
 /* --- F-A capability probe (0x31) ---
  * 🔴 REMOTE_CAP(0x2A)로 F-A 를 판별하면 안 된다: 게이트는 REMOTE 모델 전용이라
  * STD 는 0x2A 에 매직을 싣지 않는데, **F-A(0x1E~0x29)는 두 모델 모두에 있다.**
