@@ -43,8 +43,16 @@
 #define MB_REG_EN_ENERGY    0x14u
 #define MB_REG_EN_MULTI     0x15u
 #define MB_REG_EN_SAFTY     0x16u
-#define MB_REG_MODEL_FREQ   0x17u   /* read-only: mirror overwrites (samd20 faithful) */
-#define MB_REG_MODEL_TYPE   0x18u   /* read-only: mirror overwrites (samd20 faithful) */
+/* B-5(2026-08-30 요구사항) 이후 **R/W**. 구 주석 "read-only: mirror overwrites
+ * (samd20 faithful)" 는 `deb48bb` 가 apply 분기를 열면서 낡았다 — 벤치 MOD-2/3
+ * 실측 확인(2026-09-05). LCD 편집 경로(app_lcd_input.c:447-453)와 **동형**이라
+ * 범위 클램프가 없다: 범위 밖 값은 저장되고 표기만 퇴화한다.
+ * 🔴 MODEL_TYPE 은 PC11 의 의미를 바꿔 **살아있는 E-stop 을 해제할 수 있다.**
+ * 컨트롤러는 거부하지 않는다(2026-09-04 사용자 결정 — LCD 경로에도 같은 가드가
+ * 없어 원칙 일관성을 택했다). 막아야 한다면 자리는 app_modbus.c 의 MODEL_TYPE
+ * 분기이고 조건은 app_estop_active() 하나다. */
+#define MB_REG_MODEL_FREQ   0x17u   /* R/W — 0..5 = 15/20/30/35/40/50 kHz (범위 밖 = 15 표기로 퇴화) */
+#define MB_REG_MODEL_TYPE   0x18u   /* R/W — 0 hand / 1 multi / 2 std */
 #define MB_REG_RESET        0x19u   /* command: consume-and-clear */
 #define MB_REG_SEEK         0x1Au   /* command: consume-and-clear */
 #define MB_REG_START        0x1Bu   /* command: consume-and-clear */
