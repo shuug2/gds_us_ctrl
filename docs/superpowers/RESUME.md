@@ -1,6 +1,6 @@
 # RESUME — 다음 세션
 
-> **상태 (2026-09-04, 원격기 동등성 스택 CODE-COMPLETE — 보드 없이 진행)**: 사용자가 **"전부 구현하고 한 번에 시험"** 방식을 택해, 2026-08-30 요구사항(`docs/superpowers/specs/2026-08-30-remote-parity-requirements.md`)의 **A·B-1~B-5·C 전항목을 브랜치 `feat/remote-status-bits`(main 위 18커밋)에 구현**했다. **HW 벤치가 유일한 남은 게이트**이고, 실행에 **보드 + PC8 실장 PCB + 패널 배선**이 필요하다.
+> **상태 (2026-09-04, 원격기 동등성 스택 CODE-COMPLETE — 보드 없이 진행)**: 사용자가 **"전부 구현하고 한 번에 시험"** 방식을 택해, 2026-08-30 요구사항(`docs/superpowers/specs/2026-08-30-remote-parity-requirements.md`)의 **A·B-1~B-5·C 전항목을 브랜치 `feat/remote-status-bits`(main 위 20커밋(+이번 세션 3커밋))에 구현**했다. **HW 벤치가 유일한 남은 게이트**이고, 실행에 **보드 + PC8 실장 PCB + 패널 배선**이 필요하다.
 >
 > **★ 다음 세션 진입점 = `docs/superpowers/plans/2026-09-04-remote-parity-bench-checklist.md`** — 스테이지별로 흩어져 있던 검증 항목을 한 장으로 모은 통합 체크리스트다. 실행 순서(S→M→B34→MOD→CAL→NET→FA→A)와 그 근거, mbpoll `-r` 번호 대조표, 보드 잔재, **이번 벤치에서 할 수 없는 항목**(§6)까지 들어 있다. 벤치 당일 spec 5개를 뒤지지 않게 하는 것이 목적이다.
 >

@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+### 2026-09-04 — 원격기 기능 동등성 스택 (요구사항 2026-08-30 A·B-1~B-5·C) — HW 벤치 대기
+
+브랜치 `feat/remote-status-bits` (base = main `2f74611`, 23커밋). 벤치 = `plans/2026-09-04-remote-parity-bench-checklist.md`. **IWDG 워치독은 별도 브랜치** `feat/iwdg-watchdog`(main+4) — 같은 벤치 세션에서 통합 빌드로 시험.
+
+- **제품 모델 축 STD/REMOTE** (`2f74611` main): H/W 동일(hw-revA), F/W 기능셋으로만 갈린다. `MODEL=remote ./fw.sh` → `build-remote/`, 버전 `V3.0.0` / `V3.0.0R`. `#if` 는 글루 2곳뿐 — 순수 모듈은 항상 컴파일돼 host 스위트가 모델 무관.
+- **원격 활성화 게이트 = PC8 물리 인터록** (`98c60f1` T-1~T-4 편입 + `0e723de` 재설계): active-LOW + 풀업 = **fail-safe**(닫힘=허용 / 열림·단선=불허), **만료 없음**. 🔴 **`DIS_ESTOP` 만 래치, `DIS_LINK` 는 자동 복귀** — 둘 다 래치로 짰더니 TCP 소켓 1개 + stale 자가치유 20 s > 침묵 임계 10 s 로 **자기교착**(재접속마다 사람이 키를 껐다 켜야 함). LCD 터치 활성화(T-5)안은 폐기. 게이트는 **REMOTE 전용**(STD 에 넣으면 유선 HMI 설정 쓰기가 죽는다).
+- **STATUS 관측 비트 2개** (`4c92e0c`): SENSOR `0x20` · HORN `0x40`. B-4 의 목적 = 원격 START 가 안 먹을 때 **사유를 관측 가능하게**.
+- **F-A comm/eth staging + commit** `0x1E~0x29` (`86a292a`): `CFG_STAT` 코드값·30 s 타임아웃·교차 경로만 허용. `CFG_ETHER_APPLY_DELAY_MS` 는 폐기(근거였던 "TCP 는 blocking 보장 없음"이 DG-12 와 양립하지 않음). 🔴 **빈 커밋은 `CFG_STAT` 을 건드리지 않는다**(무조건 `COMMIT_OK` 를 실었더니 타임아웃 폐기가 성공으로 오보고 — 리뷰 지적).
+- **`0x31 CFG_CAP = 0xFA01`** (`a9ba247`): 모델 무관 무조건 미러. `REMOTE_CAP(0x2A)` 로 F-A 를 판별하면 **F-A 를 지원하는 STD 유닛을 미지원으로 오판**한다(모델 축 도입의 부작용). 소비 측은 쓰기 없이 읽기만으로 판별.
+- **B-2 calibration 노출** `0x2E`/`0x2F` + **C-1 int16 계약** + **C-3 클램프** ±1000 (`f206b3a`).
+- **C-2 EN_SAFTY `0x16` 0/1 정규화** (`c5c2f7e`) · **work_cnt 리셋 가드 32비트 비교** (`0ab2608`) — 둘 다 **samd20 이탈, 사용자 승인**.
+- **B-5 모델 선택·주파수 원격 쓰기** (`deb48bb`): **가드 없음 = LCD 경로와 동형**(사용자 결정). ⚠ `MODEL_TYPE` 은 PC11 의 의미를 바꿔 **살아있는 E-stop 을 해제할 수 있다** — 벤치 MOD-6 이 그 노출을 확인하는 항목. 차단 요청이 오면 자리는 `app_modbus.c` 의 해당 분기 주석에 표시돼 있다.
+- **B-4 조작 `0x30 HORN_CMD`** (`4c4b792`): 원격 horn 모드 on/off, 전이마다 솔 강제 OFF, 비영속.
+- **TCP 연결 자동 복구** (`3ce1ead`): 앱 유휴 타임아웃 12 s. 수정 전에는 W5500 KA 가 **무-데이터 연결을 커버하지 않아** ESTABLISHED 영구 고착 → 전원 재인가 전까지 접속 불가였다(벤치 NET-3). 코드리뷰 6건 동반.
+- **`ac7e691` fix(modbus) 원격 START 진폭 pot write 복원**: 가드 `app_lcd_measure()->us_run_status == US_COMM` 가 `g_measure` 게시 시점(`app_reg_tick` → `app_modbus_tick`) 때문에 **구조적으로 항상 FALSE** → 2026-06-28 I2C_POT 실구동 이후 원격 START 가 U4 wiper 를 한 번도 안 썼다. 가드 삭제 = LCD RUN-press 경로와 동형, samd20 `main.c:4401` **복원**. 벤치 S-P 신설(⚠ OUT_POWER 를 부팅값과 **다른 값**으로 써야 잡힌다).
+- **`7a20785` 감사 stale 주석 정정** 6파일 — 바이너리 동일 입증(md5 STD/REMOTE 전후 일치).
+- ⚠ **레지스터 여유 7칸** — FC03 응답 상한 57칸(현재 50칸). 그 이상은 소비 측 스냅샷 원자성이 깨진다.
+- 게이트: STD·REMOTE 0-warning / host 16 스위트 / FLASH 50.38 %.
+
 ### 2026-07-25 — 모델 브랜드/버전을 define.h로 + MAKETECH 신설 + ether IP 커서 fix + fw.sh
 
 브랜치 `refactor/ponytail-cleanup` 위에 스택. 보드 = GDSONIC 빌드 플래시·검증됨.

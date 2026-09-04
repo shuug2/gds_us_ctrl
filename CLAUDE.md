@@ -141,11 +141,12 @@ env -u STM32_TOOLCHAIN cmake --build build --target flash     # 플래시
 1. **★ HW 벤치** — 보드 + **PC8 실장 PCB**(회로 수정 진행 중) + 패널 배선 필요. PC8 없이도 **STD 빌드로 S·M·B34·MOD·CAL·NET·FA 는 가능**
 2. **HMI SP1 Task 8 실보드 E2E** — `~/dev/work/gds_us_hmi`(별도 repo)
 3. **컨트롤러 측 `MODEL_TYPE` 차단 여부** — `gds_us_remote` 사용자 판단 대기(한 줄, 자리는 코드 주석에 표시)
-4. **전류 0.60A 실측** / **6b·B-SEAM**(사용자 보류) / **IWDG**
+4. **전류 0.60A 실측** / **6b·B-SEAM**(사용자 보류)
+5. **IWDG 워치독 = 코드-완료** (`feat/iwdg-watchdog`, main+4, origin 동기; spec/plan `2026-09-04-iwdg-watchdog*`) — **T-3 HW 벤치 V-1~V-6 대기**. rsb 와 `merge-tree` 충돌 0 → 같은 벤치 세션에서 통합 빌드로 시험
 
 **세션 간 협업**: `gds_us_remote`(세션명 `esp32-firmware-verification`)와 **상의**, `gds_us_hmi` 에는 **통보**. ⚠ **계약 문서는 양쪽 규율상 벤치 PASS 후에만 갱신.**
 
-✅ push: **2026-09-04 — `feat/remote-status-bits` origin 동기, 태그 미푸시 없음.** ⚠ 단 `backup/pre-d5-*`·`feat/physical-io-slice-a/c` **5개는 로컬 전용**(의도적으로 보이나 미확인) — 과거 "전부 동기" 기록은 부정확했다.
+✅ push: **2026-09-04 실측 — 브랜치 전부 origin 동기, 태그 미푸시 0.** 로컬 전용이던 6개는 정리됨: `feat/symmetric-stop`(main 조상) 삭제 + `backup/pre-d5-*` 3 · `feat/physical-io-slice-a/c` 2 삭제(D5 reconcile 로 b'/d'/ch1' 이 이미 HW 검증·머지·태그 — 안정 레퍼런스는 `hw-revA_fw-stage-physio-b`/`-physio-d`/`-power-ch1`). 과거 "5개" 기록은 `feat/symmetric-stop` 을 빠뜨린 부정확한 수치였다.
 ⚠ model_type=multi(1) 잔재에서 Modbus 직접런 ceiling 미적용=정상(HAND 전용 설계, 30s 캡만 — 테스트 후 STOP 필수).
 
 상세 진입 = 루트 `HANDOFF.md` + `docs/NEXT_STEPS.md`, 세션별 상태 = `docs/superpowers/RESUME.md`(자동 로드), 변경 이력 = `docs/changelog.md`.

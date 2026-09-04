@@ -58,7 +58,7 @@
 - ~~**overload 보호**~~ — ✅ **실동작 E2E 사용자 벤치 PASS 2026-07-05 c** (체인 전체 정상, 코드 무변경 — physical-io 이월 3건[EMSW·OSC 구동·overload] 전부 소진). 잔여 LOW: handle_key_multi RESET의 OVLD/OUTERR 비트 휘발성(후속).
 - **[2026-07-05 c 신규 완료 참고]** seek/reset 중 측정값 라이브 표시(`e2003e1`, us_on_status 복원+벤치 4항목 PASS) / 표시 전류 전달함수 재정의(`54e5220`, 재앵커 ch1≈126 + 오프셋 제거: GAIN 59/126·OFFSET 0·DEADBAND 20 — ⚠ **최종 벤치 0.60A 표시 명시 확인 미기록 = 다음 벤치 첫 항목**; 중간 구간 2점 fit은 6b).
 
-- **IWDG 워치독 슬라이스** — ⚠ **로드맵 유실분, 2026-08-16 재편입**. `docs/requirements.md` FW3-6이 요구하고 2026-07-02 감사 D3가 "H4 + IWDG는 별도 슬라이스"로 분리했는데(§1.3 D3), 그 뒤 어느 로드맵 항목에도 다시 나타나지 않아 추적에서 빠져 있었다. **HW 불요 · 1세션 규모 · 다른 작업에 비의존** — 벤치 대기 사이에 넣기 좋다. 착수 시 슈퍼루프 kick 지점과 부팅 리셋-원인 판별(IWDG 리셋 vs POR) 설계 필요.
+- **IWDG 워치독 슬라이스** — ✅ **CODE-COMPLETE 2026-09-04** (브랜치 `feat/iwdg-watchdog`, main+4, origin 동기; spec/plan `2026-09-04-iwdg-watchdog*`). 공칭 5.0 s(÷256/RLR 624) · `while(1)` 단일 kick · DBGMCU freeze · 리셋 원인 배너(`rst=0xNN[ IWDG]`). **남은 것 = T-3 HW 벤치 V-1~V-6.** 아래는 착수 전 배경. ⚠ **로드맵 유실분, 2026-08-16 재편입**. `docs/requirements.md` FW3-6이 요구하고 2026-07-02 감사 D3가 "H4 + IWDG는 별도 슬라이스"로 분리했는데(§1.3 D3), 그 뒤 어느 로드맵 항목에도 다시 나타나지 않아 추적에서 빠져 있었다. **HW 불요 · 1세션 규모 · 다른 작업에 비의존** — 벤치 대기 사이에 넣기 좋다는 판단대로 2026-09-04 에 소진했다.
 
 **설계상 이연(slice 2)**: DHCP 핫플러그(링크 드롭 후 재획득 — 현재 LINKWAIT→UP 단방향), SERIAL boot-skip.
 
@@ -93,12 +93,12 @@ git tag -l 'hw-revA*'                  # 위 §1.1 태그들 확인
 # 빌드 + 호스트 테스트 sanity
 env -u STM32_TOOLCHAIN cmake -S fw -B fw/build -G Ninja
 env -u STM32_TOOLCHAIN cmake --build fw/build      # 0-warning 기대
-make -C fw/test test                                # 5 스위트 PASS 기대 (reg_calc/modbus_core/tcp_frame/weld_fsm/seek_reset_fsm)
+make -C fw/test test                                # rsb 16 / main 14 스위트 PASS 기대 (목록 = fw/test/Makefile 헤더)
 ```
 
 ### 2.2 다음 작업 후보
 
-**2026-08-16 현재 우선순위**: ① remote-gate **T-5(DGUS 자산 대기)** → ② HMI Task 8 → ③ 전류 실측 → ④ **IWDG 슬라이스**(HW 불요) → ⑤ 6b·B-SEAM(보류).
+**2026-09-04 현재 우선순위**: ① **★ 통합 HW 벤치** (rsb 체크리스트 S→M→B34→MOD→CAL→NET→FA→A + IWDG W 섹션 — throwaway `bench/` 브랜치에 양쪽 머지해 플래시 1회) → ② HMI Task 8 → ③ 전류 0.60A 실측 → ④ 6b·B-SEAM(보류). **HW 불요 큐는 IWDG 소진으로 비었다.**
 
 > 브랜치 스택: `main`(**ponytail 머지 완료 2026-08-16**) ← `feat/remote-enable-gate`(**재베이스 완료**, T-5 대기). 양쪽 origin 동기.
 

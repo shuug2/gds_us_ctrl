@@ -28,10 +28,11 @@
 6. **B-5 가드 없음**(사용자 결정) — `MODEL_TYPE` 은 PC11 의미를 바꿔 E-stop 을 해제할 수 있다
 7. **C-2·C-3 samd20 이탈**(사용자 승인) — EN_SAFTY 0/1 정규화, work_cnt 32비트 비교
 
-## 미해결 2건 (코드 아님)
+## 미해결 (코드 아님)
 
-- **컨트롤러 측 `MODEL_TYPE` 차단 여부** — `gds_us_remote` 사용자 판단 대기. "막아야 한다"면 한 줄이고 자리는 `app_modbus.c` 의 해당 분기 주석에 표시
-- **미푸시 로컬 브랜치 5개**(`backup/pre-d5-*`, `feat/physical-io-slice-a/c`) — 의도적 로컬로 보이나 CLAUDE.md 의 "전부 origin 동기" 기록과 어긋난다
+- **컨트롤러 측 `MODEL_TYPE` 차단 여부** — `gds_us_remote` 가 2026-09-04 세션 간 메시지로 **E-STOP 가드 한 줄을 정식 요청**(`app_estop_active()` 조건만, `0x30 HORN_CMD`·`0x17 MODEL_FREQ` 는 제외, `us_on_status` 는 이쪽 판단, 거부는 침묵으로 충분). 이는 2026-09-04 "가드 없음 = LCD 경로와 동형" 결정을 뒤집는 건이라 **사용자 재결정 대기**. 자리는 `app_modbus.c` 의 해당 분기 주석에 표시
+- ✅ ~~미푸시 로컬 브랜치~~ — **2026-09-04 정리 완료**. 실측 결과 5개가 아니라 6개였고(`feat/symmetric-stop` 누락), 전부 삭제. 백업 5개의 내용은 D5 reconcile 로 main 에 반영·HW 검증·태그됨. 이제 브랜치·태그 전부 origin 동기.
+- **IWDG 브랜치 별도 존재** — `feat/iwdg-watchdog`(main+4). 벤치 통합 방식 = throwaway `bench/` 브랜치에 rsb + iwdg 머지(충돌 0 확인) → 플래시 1회 → PASS 후 main 에 각각 `--no-ff` + 태그
 
 ## 세션 간 협업
 
