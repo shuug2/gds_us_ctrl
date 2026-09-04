@@ -1,196 +1,82 @@
-# Handoff: 원격기 기능 동등성 스택 CODE-COMPLETE — 남은 것은 HW 벤치 하나
+# Handoff: 통합 벤치 PASS — main 머지·태그 완료, 남은 것은 배선·PCB 게이트
 
-**Generated**: 2026-09-04 (보드 없이 진행한 구현 세션, Fable)
-**Branch**: `feat/remote-status-bits` — main(`2f74611`) 위 **20커밋, origin 동기**
-**Status**: 2026-08-30 요구사항 **A·B-1~B-5·C 전항목 구현 완료.** HW 벤치가 유일한 남은 게이트.
+**Generated**: 2026-09-05 (실보드 벤치 세션)
+**Branch**: `main` `2b9839e` — origin 동기, **미푸시 브랜치·태그 0**
+**Status**: 원격기 동등성 스택 + IWDG **둘 다 벤치 PASS → main 머지·태그 완료.**
 
-> **★ 다음 세션 진입점 = `docs/superpowers/plans/2026-09-04-remote-parity-bench-checklist.md`**
-> 스테이지별로 흩어져 있던 검증 항목을 한 장으로 모은 통합 체크리스트. 실행 순서(S→M→B34→MOD→CAL→NET→FA→A)와 그 근거, mbpoll `-r` 번호 대조표, 보드 잔재, **이번 벤치에서 할 수 없는 항목**(§6)까지 들어 있다.
-
-## 벤치 실행에 필요한 것
-
-| 필요 | 없으면 못 하는 항목 |
-|---|---|
-| 보드 | 전부 |
-| **PC8 인터록 실장 PCB** | A 섹션 전체(게이트). 회로 수정+PCB 재제작은 사용자 진행 중 |
-| 센서(SENSE_DN) 배선 | B34-6 |
-| 양손 SW_START1/2 · f_safty 배선 | weld 사이클 E2E · `work_cnt` 증가 |
-
-**PC8 미실장 보드에서 REMOTE 를 벤치하려면 `-DREMOTE_EN_GATE_BYPASS=ON`.** STD 빌드는 게이트가 없어 영향 없다 — **S·M·B34·MOD·CAL·NET·FA 는 STD 로 지금도 가능**하다.
-
-## 이 세션에서 확정된 것 (요약, 상세는 RESUME.md)
-
-1. **제품 모델 축 STD/REMOTE** — H/W 동일, F/W 기능셋으로만 분기. `MODEL=remote ./fw.sh`
-2. **게이트 = PC8 물리 인터록**, active-LOW+풀업 fail-safe, 만료 없음. **`DIS_ESTOP` 만 래치 / `DIS_LINK` 자동 복귀**
-3. **F-A comm/eth staging+commit** `0x1E~0x29`
-4. **`0x31 CFG_CAP`** — F-A capability, 모델 무관 미러
-5. **TCP 연결 자동 복구** — 앱 유휴 타임아웃 12s
-6. **B-5 가드 없음**(사용자 결정) — `MODEL_TYPE` 은 PC11 의미를 바꿔 E-stop 을 해제할 수 있다
-7. **C-2·C-3 samd20 이탈**(사용자 승인) — EN_SAFTY 0/1 정규화, work_cnt 32비트 비교
-
-## 미해결 (코드 아님)
-
-- **컨트롤러 측 `MODEL_TYPE` 차단 여부** — `gds_us_remote` 가 2026-09-04 세션 간 메시지로 **E-STOP 가드 한 줄을 정식 요청**(`app_estop_active()` 조건만, `0x30 HORN_CMD`·`0x17 MODEL_FREQ` 는 제외, `us_on_status` 는 이쪽 판단, 거부는 침묵으로 충분). 이는 2026-09-04 "가드 없음 = LCD 경로와 동형" 결정을 뒤집는 건이라 **사용자 재결정 대기**. 자리는 `app_modbus.c` 의 해당 분기 주석에 표시
-- ✅ ~~미푸시 로컬 브랜치~~ — **2026-09-04 정리 완료**. 실측 결과 5개가 아니라 6개였고(`feat/symmetric-stop` 누락), 전부 삭제. 백업 5개의 내용은 D5 reconcile 로 main 에 반영·HW 검증·태그됨. 이제 브랜치·태그 전부 origin 동기.
-- **IWDG 브랜치 별도 존재** — `feat/iwdg-watchdog`(main+4). 벤치 통합 방식 = throwaway `bench/` 브랜치에 rsb + iwdg 머지(충돌 0 확인) → 플래시 1회 → PASS 후 main 에 각각 `--no-ff` + 태그
-
-## 세션 간 협업
-
-`gds_us_remote`(세션명 `esp32-firmware-verification`)와 **상의**, `gds_us_hmi` 에는 **통보**(사용자 지시). ⚠ **계약 문서는 양쪽 규율상 벤치 PASS 후에만 갱신.**
+> **★ 다음 세션 진입 순서**
+> 1. `docs/superpowers/plans/2026-09-05-bench-results.md` **§4 (벤치 환경 함정)** — 보드를 건드리기 전에 반드시. 여기 안 읽으면 세션 초반을 통째로 날린다
+> 2. 같은 문서 §3 (미실행 항목과 사유) — "실패"로 오판 방지
+> 3. 아래 §열린 항목
 
 ---
 
-## ⟳ 2026-08-15 갱신 — 이 문서 작성 이후 발생한 것
+## 이번 세션 결과
 
-이 아래 §Goal부터는 **2026-07-19 세션 기록 그대로**다. 그 뒤로 아래 3건이 추가됐고, 진입 시 반드시 함께 볼 것.
+**실행 56항목 전건 PASS, 펌웨어 결함 0건.** 태그 `hw-revA_fw-stage-remote-parity` / `hw-revA_fw-stage-iwdg`.
 
-> **브랜치 스택 (2026-08-16 갱신)**: `main`(**ponytail 머지 완료**) ← `feat/remote-enable-gate`(**재베이스 완료**, T-5 = DGUS 자산 대기). 양쪽 origin 동기.
-
-**① `refactor/ponytail-cleanup` — ✅ 벤치 전항목 PASS + main 머지 완료 (2026-08-16)**
-
-벤치 실측(보드가 이미 이 브랜치 빌드로 플래시돼 있었음 — 덤프 대조 byte-identical, 재플래시 불요):
-
-| 게이트 | 결과 |
+| 실측 신규값 | |
 |---|---|
-| Modbus FC03 미러 | ✅ 30개 레지스터 전부 SWD `g_cfg`와 일치 |
-| Modbus FC06 클램프 | ✅ OUT_POWER 120→100 / 30→50 / 56 복원 |
-| 직접런 ceiling | ✅ 실측 자동정지 **[514, 578] ms** — 기대 560 ms(`limit_on_time` 56×10 ms) 부합, `1`×8→`0` 패턴이 과거 실측(537–617 ms)과 동일 |
-| OVTIME 무회귀 | ✅ 런 중·정지 후 fault 비트 0 (STATUS=1 → 0, OVTIME `0x08` 미발생) |
-| LCD SETUP comm/ether + DATA_SAVE | ✅ 사용자 육안 |
-| IP 백스페이스 1자 / 모델명 문자열 | ✅ 사용자 육안 |
+| IWDG timeout | **4.45 s** (무응답 8.45 − 부팅 4.00) |
+| f_LSI 역산 | **≈ 35.9 kHz** (데이터시트 17~47 k 내) |
+| 부팅 → Modbus 첫 응답 | **4.00 s** |
+| 리셋 원인 | NRST `0x04` / IWDG `0x24` (전원 `0x0E` 미관측) |
+| 직접런 ceiling | 555·558·552 ms (기대 560) |
 
-> 머지 결과 빌드가 벤치 검증된 보드 펌웨어와 **byte-identical**임을 확인 — 검증 결과가 main에 그대로 유효하다.
-> 부수 확인: 명령 레지스터 `0x19~0x1C` 정지 후 전부 0(consume-and-clear 정상), `work_cnt` 0 유지(직접런은 미증가 = 설계대로).
+**A 섹션은 가상 PC8 로 14항목 PASS** — `holding[0x2D]` 를 스위치 입력으로 바꾼 throwaway(원복 완료). 빌드는 `MODEL=REMOTE` **순정**이라 게이트 강제는 실제로 돌았다. **A-13(단선=불허)만 원리상 검증 불가.**
 
-<details><summary>머지 전 기록 (참고)</summary>
+**세션 중 나온 코드 변경 3건** (전부 main):
+- `ac7e691` 원격 START 진폭 pot write 복원 — 가드가 게시 시점 때문에 **구조적으로 항상 FALSE** 였다
+- `7a20785` 감사 stale 주석 6파일 (바이너리 동일)
+- `2b9839e` `0x17`/`0x18` 계약 주석 정정 — B-5 이후 R/W (바이너리 동일)
 
-(main 대비 +12커밋, base `8eaac71`, tip `753778d`)
-- 2026-07-19 리팩토링 4스테이지: 죽은 코드 삭제(`b02f5b1`, 바이너리 동일) / `app_lcd_input.c` 1038→622 분할 + 신규 `app_lcd_comm.c`(`e195564`) / `app_reg_tick` 118→57 헬퍼 추출(`30d001c`) / 전 269함수 한국어 ≤20자 주석 통일(바이너리 동일).
-- 2026-07-25 4커밋: 모델 브랜드+버전을 `fw/include/define.h`로 분리 — 5종 컴파일-타임 선택(`7d9b7da`) / **MAKETECH** 신설 `SMT-{H|A|S}{freq}D`(`ebfd7d5`) / **ether IP 편집 커서 fix**(`e8e84fb`, `ip_to_string` 반환 16=필드폭이지 글자수 아님 → 헛 백스페이스) / `fw.sh` 빌드·플래시 스크립트(`753778d`).
-- 게이트: 전 스테이지 0-warning + host 14스위트 PASS + cpp-review APPROVE. **머지 = 벤치 HW 재검증 3항목** ⓐ LCD SETUP comm/ether 편집 + DATA_SAVE 저장/복귀(분할 이동 경로) ⓑ 직접런 560ms ceiling + OVTIME 무회귀 ⓒ Modbus FC03/06 스모크. 07-25분 추가 육안 = 모델명 문자열 + IP 편집 백스페이스 1회 삭제. PASS 시 `git merge --no-ff`(태그 불요).
-- ⚠ ~~보드는 이 브랜치 코드로 미플래시(여전히 `61524c1`)~~ — **이 기술은 오류였다**: 2026-08-16 플래시 덤프 대조로 보드가 이미 이 브랜치 빌드였음이 확인됐다(07-25 세션에서 플래시된 것). 재플래시 없이 검증 가능했다.
+---
 
-</details>
+## 🔴 열린 항목
 
-**② 원격 제어 활성화 게이트 — T-1~T-4 CODE-COMPLETE + VR-2/VR-3 실보드 PASS**(브랜치 `feat/remote-enable-gate`, base=main, **origin 푸시됨** tip `bc2067c`)
+### 1. ★ RTU baud 9600 원복 — **소켓 대기 중**
+보드가 **38400/EVEN** 인데 소비자 두 곳(`gds_us_hmi` 벤치 · `gds_us_remote` 문서)이 **9600** 을 전제한다. 2026-08-17 세션의 **미기록 변경**으로 판단, 사용자가 **9600 원복 결정**(2026-09-05).
 
-> **2026-08-17 실측 PASS**: 게이트 강제 빌드로 START/RESET/SEEK 전부 차단 확인(STATUS 무변화 + 레지스터 소거 + **`[sr]` OSC 구동 0건**), cfg 쓰기 거부(read-back 미러 복원), STOP 상시 통과, `0x2A=0x5201` 매직. 관측 로그:
-> ```
-> [mb] gate closed(state=0): blocked=0x1B stop_passed=0   ← START
-> [mb] gate closed(state=0): blocked=0x00 stop_passed=1   ← STOP 통과
-> ```
-> 이 로그는 이번에 신설(`4db425d`) — 무음 거부는 "STATUS 무변화"라는 간접 증거만 남아 "막았다"와 "요청이 안 왔다"를 구분할 수 없었다.
-> **남은 VR**: VR-10(probe 구/신 왕복)은 지금도 가능. VR-4~VR-9 + VR-3 stale-latch 후반부는 **T-5 이후**(게이트를 켤 수단 필요).
-- 진입 정본 = **그 브랜치의 `HANDOFF.md`**. 설계 = `docs/superpowers/specs/2026-08-15-remote-enable-gate-design.md`, 실행 계획 = `plans/2026-08-15-remote-enable-gate-t1-t4.md`, 정책 결정 = `specs/2026-08-02-remote-enable-gate-decision.md`(`1364e5e`), 원격기 정본 = `~/dev/work/gds_us_remote`.
-- **왜 필요한가**: 구 펌웨어에는 원격 제어 권한 게이트가 전혀 없다 — Modbus 도달 가능한 누구나 `START(0x1B)` 쓰기 가능, 물리 인터록도 없고 30s 절대 상한이 유일 backstop. `mb_write_reg`가 미사용 영역 write도 "성공" 에코하므로 원격기가 활성화 오판까지 할 수 있다(capability probe가 이를 막음).
-- **완료(T-1~T-4)**: 순수 FSM `app_remote_en_fsm`(**host 15번째 스위트**) / 레지스터 `0x2A~0x2D` 계약 / `app_modbus.c` 글루(매 tick step·미러 3종·접근자 3종) / `apply_writes` 선두 게이트(명령 소거 불변식·STOP 상시 통과·cfg 체인 skip). `/code-review high` 3건 반영. FLASH 49.73%→49.77%.
-- **남은 것**: **T-5(LCD 조작/표시) = DGUS 자산 대기** → T-6 리뷰 → T-7 벤치 VR-1~13 → T-8 머지(태그 `hw-revA_fw-stage-remote-gate`). **F-A(comm/eth `0x1E~0x29`)는 별도 스테이지로 분리**(비의존·덩치 큼).
-- **사용자 작업 = DGUS 자산 3종**: 게이트 버튼 `0x1086`(**touch-down/up 양 이벤트 송신 필수** — 없으면 롱프레스 판정 불가), 상태 아이콘 `0x1155`, 잔여 초 `0x1211`. 반입 후 `LCD_TRACE_RX` 실물 트레이스 선행(추론 구현 금지 — `KEY_MULTI=0`·`0x120e` 전례).
-- ⚠ **기본 빌드 플래시 금지** — 게이트를 켤 수단이 아직 없어 원격 명령이 RTU·TCP 양쪽에서 전부 막히고, **mbpoll 벤치 흐름과 `gds_us_hmi` 계약이 죽는다**(보드에서 복구 불가). 벤치는 `cmake -S fw -B build -G Ninja -DREMOTE_EN_GATE_BYPASS=ON`. 기본 OFF=게이트 유효이며 ON이면 CMake 경고 + 부팅 mon 경고가 나온다. **T-5 없이 main 머지 금지.**
-- 확정 상수: 활성 창 **10분** / 링크 침묵 **10초**(VR-13 실측으로 확정), probe 매직 `0x5201` — **write-back 값은 비영값이어야 한다**(0이면 링크 전이 0-리셋과 구분 불가; 결정 기록의 예시 `0x0000`은 채택 안 함 → **원격기 spec 역반영 필요**).
-- 원격기 파일럿(STOP·읽기·파라미터만)은 이것에 블로킹되지 않음. **원격 START의 유일한 선행.**
+**막는 것**: 원격기 보드가 TCP 소켓(1개)을 50ms 폴링으로 점유 중. **원격기 이더넷 케이블만 잠깐 뽑으면 된다**(이쪽 사용자가 물리 제어 가능).
 
-**③ push 상태** — 이 문서 원본의 "코드·docs 미푸시"는 stale이었고, 뒤이어 태그 7개도 푸시됐다. **2026-08-16 실측 = 브랜치 3개·태그 21개 전부 origin 동기, 미푸시 없음.** (8-15 갱신본이 한동안 "태그 7개 미푸시"로 남아 있었으나 그 시점 이후 푸시 완료 — 재시도 불요.)
+**절차** (1~2분): TCP 접속 → `0x1F` staged `2`(=9600) → `0x28`=1 커밋 → `CFG_STAT`=2 확인. serial 그룹이라 **교차 커밋**(FA-5 검증 경로), TCP 링크는 생존한다.
+**완료 후**: `gds_us_remote` 에 통지(그쪽 계약 문서 line 64 `0x1F=4 → 38400` 이 낡는다).
 
-> **요약**: 사용자가 벤치에서 발견한 표시/부팅/알람/모드 이슈 8건을 fix/구현하고 전건 HW PASS. ⑴ 표시 데드밴드 20→14(최소 표시 0.15A=legacy 실효 게이트 복원) ⑵ 부팅 유령 SEEK 소멸(물리입력 bak zero-init) ⑶ 부팅 beep 신설+전원 직후로 이동 ⑷ fault 부저 알람 글루(OVTIME 등 무음이던 것) ⑸ 경고 페이지 전환 시 터치 RUN-키 토글 반전("떼면 시작") 해소 ⑹ SYS_HORN horn-down 모드 포팅(양손 키=솔 토글, 초음파/weld 배제) ⑺ STD 에너지 weld backstop→ERR_OVTIME(양손 weld OVTIME 알람 미발생) ⑻ USOUT(PB4) 미출력 = **코드 정상, PCB 원인 확정**(무수정). EMA α=1/2 유지·숫자 피크홀드·cal_val=16은 무변경 결정.
+### 2. A-13 (단선 = 불허 fail-safe) — **PC8 실장 PCB 대기**
+가상 PC8 이 대체하는 성질이 바로 A-13 이라 원리상 불가. 옵토(TLP181)가 극성을 뒤집으므로 **실선을 뽑아** 확인해야 한다. PCB 나오면 **A-1·A-5·A-13 만** 재실행하면 나머지는 이미 확인된 것으로 갈음 가능(입력 소스만 다르고 하류 경로 동일 코드).
 
-## Goal
+### 3. RS-485 어댑터 필요
+- **FA-6 / FA-7 / FA-12** 교차 커밋 RTU 방향
+- **mon(USART6) 캡처** → **S-P**(pot write 로그) · S-1 · NET-1 로그 · A-2/A-4 로그
+- RTU 링크 자체 무회귀 (이번 벤치에서 통째로 못 돌림)
 
-사용자 벤치 발견 이슈 즉시 fix/구현 + 당일 HW 재검증 (벤치-수정 관례: main 직접 커밋 + cpp-review + HW PASS 동승).
+### 4. LCD 육안 항목
+S-5 · M-1 · M-2 · MOD-1 · MOD-4 · MOD-7 · B34-2/3/4/9 — 자동화 불가.
 
-## Completed (전건 cpp-review APPROVE + our-code 0-warning + host 14스위트 PASS + HW PASS)
+### 5. 기타
+W-1 전원인가 `rst=0x0E` (물리 전원 재인가) · B34-6 SENSOR(배선) · weld 사이클/`work_cnt`(양손·센서·f_safty 배선) · 전류 0.60A 실측 · 6b·B-SEAM(사용자 보류)
 
-- [x] **`6af9882` feat(reg)**: 표시 `REG_CURR_DEADBAND` 20→14 = 최소 표시 0.15A (legacy main.c:420 `>51 −37` 실효 게이트 복원; 구 20=0.21A 플로어). 바 게이트(>10) 무변경. host 벡터 갱신.
-- [x] **`a46eaf3` fix(input)**: `input_fsm_init` bak 1→0(legacy BSS zero-init 충실) — 벤치 리그 EMSW NC 배선 평시 LOW인 PC11(multi=SEEK 역할)이 부팅 첫 tick에 내던 유령 SEEK 스윕 소멸. host `test_boot_active_inputs_no_ghost` 신설.
-- [x] **`2ea5c2d`+`2cee1cc` feat(buzzer)**: 부팅 완료 1회 beep 100ms — legacy 부재(신규 기능), 처음엔 FSM 큐(슈퍼루프 시작 후)였다가 `sys_tick_init` 직후 블로킹 직접 구동으로 이동(전원 직후 발음, OSC PB12 윈도 전에 끝남).
-- [x] **`6e30499` feat(alarm)**: `app_fault_alarm` 글루 신설 — `measure.error_status`(OVTIME 등) 활성 중 250ms/500ms 부저 점멸(legacy led_update SYS_ERROR 복원). 과부하/E-stop 개별 점멸과 disjoint(중복 없음).
-- [x] **`789f347` fix(lcd)**: `app_lcd_input_run_key_reanchor()` — 홀드 중 OVTIME→경고 페이지 전환이 V30 RUN 컨트롤을 지워 release data=0 소실→토글 '눌림' 고착→press↔release 반전("떼면 START"+재시작마다 run_start_ms 리셋으로 제한시간 누적 불능). show_error 끝+set_estop(true)에서 재앵커(RUN_RELEASE+토글0, swallow 정리 포함).
-- [x] **`519d908` feat(horn)**: SYS_HORN horn-down 포팅 — 순수 `app_horn_fsm`(host 8테스트) + 글루 `app_horn`. 양손 키 press=솔 토글, 초음파/weld는 게이트 2곳(`app_reg_start_allowed`+`app_weld_tick` 동결)이 배제. cpp 1차 BLOCK(공유 SOL 캐시 사각지대)→모드 전이 시 캐시 우회 무조건 OFF fix→APPROVE.
-- [x] **`61524c1` fix(weld)**: STD 양손 weld(US_CYCLE) 에너지 backstop이 weld_fault만 내고 ERR_OVTIME 미세팅(app_weld_fsm.c:217 "후속 SYS_ERROR" 이연분)이던 것 — `app_reg_raise_ovtime()` 신설→`app_weld_hook_fault()`가 호출→직접런 OVTIME과 통합(부저+경고+STATUS+RESET 복구).
-- [x] **USOUT(PB4) 미출력 = 코드 정상, PCB 원인** (무수정): 구동 조건(active 전이→io_usout)·극성(active-HIGH=legacy CTRL_ON=1)·핀 충돌 없음(SPI1=PA4/PC4/PC5, OSC=PB2/PB10/PB14)·핀 설정 전부 정상 확인 → 사용자 PCB 확정.
-- [x] 메모리 갱신: [[project-lcd-amp-display-peak-hold]] / [[project-lcd-output-bar-realtime]] / [[project-bench-test-env]](PC11 평시 LOW) / [[project-ovtime-energy-run]](버그 3건) / [[project-sys-horn-port]] / [[feedback-confirm-before-code-change]].
+---
 
-## Not Yet Done
+## 보드 상태 (세션 마감)
 
-- [ ] **★ HMI SP1 Task 8 실보드 E2E** — `~/dev/work/gds_us_hmi` 세션 + 그쪽 HANDOFF.md. RS-485 어댑터 연결 + 보드를 LCD에서 SERIAL/addr=1/9600/EVEN 복원 필요(잔재 확인 필요). 이 repo `docs/superpowers/research/2026-07-05-rs485-first-write.md` §6 지참.
-- [x] ~~`refactor/ponytail-cleanup` HW 재검증 → 머지~~ — ✅ **완료 2026-08-16** (벤치 전항목 PASS, `--no-ff` 머지, 상단 §①).
-- [x] ~~`feat/remote-enable-gate` 재베이스~~ — ✅ **완료 2026-08-16** (새 main 위, 코드 충돌 0·docs 1건만, 0-warning + host 15스위트 PASS, force-with-lease 푸시).
-- [ ] **★ 원격 제어 활성화 게이트 T-5** — DGUS 자산 3종(사용자) → LCD 글루 → T-6 리뷰 → T-7 벤치 → T-8 머지. T-1~T-4는 브랜치에 완료 (상단 §②).
-- [ ] (이월 3회째) **전류 표시 0.60A 실측** + **energy-exit 실전류** — 전류계 준비된 FW 벤치 세션. (EMA 체감은 2026-07-18 종결: α=1/2 유지 확정).
-- [x] ~~태그 push~~ — ✅ 완료(2026-08-16 실측, 태그 21개 동기).
-- [ ] 6b 잔여 / B-SEAM — ⏸ 사용자 보류 유지.
+**STD 빌드**(main `2b9839e` 상당), ETH_STATIC **192.168.1.199**, unit 1.
 
-## Failed Approaches (Don't Repeat These)
+`OUT_POWER 77` · `ON_TIME 750` · `ENERGY 3011` · `TIMEOVER 8` · `EN_SAFTY 0` · `MODEL_FREQ 3` · `MODEL_TYPE 2` · `COMM addr 1 / speed 4(38400) / parity 0(EVEN)` · `CAL_VAL 16` · `FREQ_CAL_VAL 40` · `HORN_CMD 0` · `CFG_STAT 0`
 
-- **EMA α로 "전류 표시 100ms 업데이트"를 해석** — 숫자 표시(VAR_AMP)는 EMA가 아니라 **피크홀드**(런 중 max_amp/정지 last_amp). α(app_reg.c:267)의 실시간 소비자는 바그래프+에너지 적분뿐. α=1/2 유지 결정(바 반응 우선). [[project-lcd-amp-display-peak-hold]].
-- **SYS_HORN 첫 구현 = 모듈별 write-on-change 캐시** — weld와 horn이 각자 `s_sol_last`로 SOL 구동 시, horn 진입이 weld가 내려놓은 SOL을 영영 못 끔(cpp CRITICAL). 공유 액추에이터는 소유권 전이 시 **캐시 우회 무조건 강제 write**(app_input E-stop 패턴).
-- **weld fault가 error_status를 안 세팅** — STD weld는 US_CYCLE이라 app_reg 직접런 OVTIME 분기(TOUCH/COMM/REMOTE)에서 구조적 제외. weld fault hook은 별도로 `app_reg_raise_ovtime()` 명시 배선 필요.
+⚠ **원격기가 남긴 잔재 = `RUN_MODE 1`(TRIGGER)**, 기준선은 `0`(DELAY). 원격기 다음 세션 첫 항목으로 원복 예정.
+⚠ **`MODEL_TYPE=2(std)` 라 `ON_TIME 750` 은 효력 없다** — on-time ceiling 은 `HAND(0)` 에서만(`app_reg.c:451`). std/multi 는 **30초 절대 ceiling 만** 남으므로 START 시험 후 **STOP 필수**.
 
-## Key Decisions
+---
 
-| Decision | Rationale |
-|----------|-----------|
-| 데드밴드 14(0.15A) 복원, 바 눈금 무변경 | legacy 실효 게이트 = 51−37 = 14. 눈금(ref_lv_*) 변경 금지 지시 유지 |
-| EMA α=1/2 유지 (78a1e43 무변경) | 바그래프 반응(100ms) 우선. 숫자는 피크홀드라 α 무관 |
-| cal_val=16 유지 | 사용자 의도 트림(전류계 대비 +0.16A) — 원복 안 함 |
-| 부팅 beep = 블로킹 직접 구동(FSM 큐 아님) | 전원 직후 최속 발음. OSC PB12 윈도(~600ms) 전에 끝나 무영향 |
-| SYS_HORN E-stop = 모드 유지+솔 OFF (legacy는 모드 소멸) | DGUS는 모드 소유가 LCD 체크박스 — 체크박스 상태 정합 유지 |
-| weld OVTIME = 직접런과 같은 ERR_OVTIME | legacy RUN_WELD OVTIME도 동일(main.c:5292). fault 표면 통합 |
+## 세션 간 협업 (오늘 진행분)
 
-## Current State
+- **`gds_us_remote`**(`gds-us-remote-eb`) — 계약 `F-03` 갱신 완료(`a0dd636` + 정정 `61265da`), 양방향 대조 통과. **서로 하나씩 잡았다**: 그쪽이 우리 헤더 `0x17`/`0x18` 낡은 주석을, 우리가 그쪽 *"staged 쓰기는 게이트 무관"* 오류를(게이트 닫히면 staging 스캔까지 건너뛴다 → `CFG_STAT` 불변 + 미러 복원). 후자는 그쪽 R2-07 설계를 바꿨다.
+- **`gds_us_hmi`**(`gds-us-hmi-66`) — 통보 완료. RTU 전용이라 TCP 항목은 무관, IWDG 만 해당(코드 변경 없이 흡수). 진폭 기준 재설정 **불요** 확인(그쪽 벤치에 FC06 쓰기 0건, LCD·패널 기동).
+- 다음 세션에 받을 것: 원격기 **IWDG 복귀 실측치**(예상 9~11초) · 모델 전환 결과 · COUNTER RESET / SAFE MODE.
 
-**Working**: main `61524c1` — 보드에 플래시됨. 빌드 0-warning, host **14스위트** PASS(신규 horn_fsm 8케이스), working tree clean(이 docs 커밋 제외).
+---
 
-**보드**: `61524c1` 코드, **풀배선 리그**. ⚠ **세션 말미 전원 OFF 관측**(USOUT 조사 중 SWD 전압 0.003V) — 재개 시 **전원/ST-LINK 먼저 확인**. ⚠ **잔재 설정 불확정**: 세션 중 STD/HAND 모드·EN_ENERGY·EN_MULTI·horn·TIMEOVER 등을 다수 토글 — 재개 시 LCD/SWD로 model_type·comm_mode·EN_* 실측 필요(운영/HMI 투입 전 복원). ETH_STATIC .199 유지 추정(미확인). RS-485 어댑터 미접속.
+## 도구
 
-**USOUT(PB4)**: 코드/핀/극성 정상 = **PCB 이슈**(무수정 종결).
-
-**Uncommitted Changes**: 없음(docs 커밋 후).
-
-## Files to Know
-
-| File | Why It Matters |
-|------|----------------|
-| `fw/src/app_reg_calc.c` | `REG_CURR_DEADBAND 14`(표시 게이트) / `reg_current_from_adc`(GAIN 59/126, OFFSET 0) |
-| `fw/src/app_fault_alarm.c` (신규) | 일반 fault(error_status) 부저 점멸 — OVTIME/향후 OUTERR |
-| `fw/src/app_horn.c`+`app_horn_fsm.c` (신규) | SYS_HORN horn-down; 공유 SOL 캐시 우회 무조건 write 패턴 |
-| `fw/src/app_reg.c:132-160` | `app_reg_start_allowed()`(horn/estop/overload/fault/seek 게이트) + `app_reg_raise_ovtime()`(weld fault 세터) |
-| `fw/src/app_lcd_input.c` | `app_lcd_input_run_key_reanchor()`(토글 반전 방지) + SETUP horn 체크박스 미러 |
-| `fw/src/app_weld.c:80-83, 207` | `app_weld_hook_fault()`→`app_reg_raise_ovtime()` (STD weld OVTIME 알람) |
-
-## Code Context
-
-**표시 게이트 (0.15A 최소)** `fw/src/app_reg_calc.c`:
-```c
-#define REG_CURR_DEADBAND 14   /* v = ch1*59/126 + cal_val; v<=14 -> 0 (legacy 51-37) */
-```
-
-**weld OVTIME 알람 배선** `fw/src/app_weld.c`:
-```c
-void app_weld_hook_fault(void) {      /* weld 에너지 backstop abort 엣지 */
-    app_reg_raise_ovtime();            /* g_reg.error_status |= ERR_OVTIME */
-    mon_printf("[weld] fault: energy timeout ... -> ERR_OVTIME\r\n");
-}
-```
-
-**설계 불변식 3종** (이 세션 확립/재확인):
-1. `dgus_set_page()` 호출은 반드시 `state->lcd_status` 스탬프와 쌍 (2026-07-11).
-2. 런 페이지를 떠나는 모든 페이지 전환은 `app_lcd_input_run_key_reanchor()` 호출 (2026-07-18 신규).
-3. 여러 모듈이 같은 액추에이터를 구동하면 소유권 전이 시 캐시 우회 무조건 강제 write (2026-07-18 신규).
-
-## Resume Instructions
-
-**HMI 세션 (최우선)**:
-1. `cd ~/dev/work/gds_us_hmi` 새 세션 → 그쪽 `HANDOFF.md`(SP1 Task 8 = 실보드 E2E).
-2. 준비물: RS-485 어댑터 연결 + 보드를 LCD에서 SERIAL/addr=1/9600/EVEN 복원(현 잔재 불확정) + 이 repo research doc §6.
-
-**FW 전류 벤치 세션 (전류계 준비되면)**:
-1. 플래시 불필요(보드=main 최신). 전원/ST-LINK 확인 후 유휴 표시 확인 → RUN → 전류계 0.6A ↔ 표시 0.60A.
-2. EN_ENERGY=ON 실전류 energy-exit 확인.
-
-## Warnings
-
-1. **세션 말미 보드 전원 OFF** — 재개 시 전원/ST-LINK(target voltage) 먼저 확인. 잔재 설정 다수 토글됨(model_type/EN_*/comm_mode 불확정) → LCD/SWD 실측 후 복원.
-2. **USOUT(PB4)=PCB 이슈** — 펌웨어 무관, 재조사 불필요(코드/극성/핀 정상 확인 완료).
-3. **mbpoll**: 쓰기 값은 IP 뒤 / 부팅 직후·연속 TCP 간헐 실패 → 재시도 / 주소 1-based(STATUS=30/START=28/STOP=29/RESET=26). model_type=multi(1)이면 Modbus 직접런 자동정지 없음(30s 캡만) — 테스트 후 STOP.
-4. **SWD 규칙**([[feedback-swd-halt-breaks-board-validation]]): 런타임 검증에 halt 금지. mbpoll+LCD 육안+비침습 openocd read_memory 루프만. SWD는 플래시/부팅직후 정적 1회.
+`docs/superpowers/tools/mb_tcp.py` — **mbpoll 이 이 환경에서 안 되므로** 벤치는 이 클라이언트로 한다. 연결 유지형, 재시도 포함. 주소는 wire(0-based).
