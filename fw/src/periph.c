@@ -9,3 +9,4 @@ TIM_HandleTypeDef  htim11;
 TIM_HandleTypeDef  htim5;
 I2C_HandleTypeDef  hi2c1;   /* I2C1 — FM24C16B FRAM (Stage B) */
 ADC_HandleTypeDef  hadc1;   /* ADC1 — PB0/PB1 sense (Stage D regulation) */
+IWDG_HandleTypeDef hiwdg;   /* IWDG — 슈퍼루프 워치독 (main.c 기동/kick) */

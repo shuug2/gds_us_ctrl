@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### 2026-09-04 — IWDG 워치독 (요구사항 FW3-6, 감사 D3 잔여)
+
+브랜치 `feat/iwdg-watchdog` (base = main `2f74611`). **HW 벤치 대기.**
+
+- **`9b220c4` feat(wd) 리셋 원인 배너**: `[boot] gds_us_ctrl ready rst=0xNN[ IWDG]` — `RCC->CSR[31:24]` 읽기 → `__HAL_RCC_CLEAR_RESET_FLAGS()` 즉시 클리어(안 지우면 이전 부팅 플래그가 잔류). SWD 정적 read 용 `s_boot_rst` static. 배너 위치 불변(`app_modbus_init()` 이전 = `mon_set_enabled(false)` 전이라 comm_mode 무관 출력). 거동 무변화.
+- **`<hash>` feat(wd) IWDG 기동+kick**: 슈퍼루프 진입 직전 기동, 공칭 **5.0 s**(÷256 / RLR=624; LSI 17~47 kHz 편차 시 3.4~9.4 s), `while(1)` **단일 kick**, `__HAL_DBGMCU_FREEZE_IWDG()`로 gdb halt 보호. HAL 모듈은 **CMake 주입**(`HAL_IWDG_MODULE_ENABLED` — vendor conf:60 주석 처리분, vendor 무편집). timeout 근거 = 런타임 단일 반복 최악 2.6 s(죽은 FRAM 버스 `save_all` 38×50 ms + RTU TX @2400)에 31 % 마진. 부팅 체인(최악 12 s)은 감시 밖 — 전 구간 타임아웃 유계.
+- **의도적 legacy 이탈**(사용자 승인): samd20(`configure_wdt_off` 주석 블록)·ATmega16(`WDTCR` 해제 시퀀스) 모두 워치독 비활성. 거동 변화 = hang → **≤9.4 s 자동 리셋**, `Error_Handler`/HardFault → 재부팅 루프(감사 H4 영구 lock 해소). ⚠ IWDG 리셋은 W5500 하드리셋을 동반 → 원격기 TCP 단절(통보 대상).
+- **Modbus 계약 불변** — 리셋 원인은 mon 배너 + SWD static 으로만 표면화(STATUS 비트/신규 레지스터 미사용, 여유 7칸 보존).
+- 게이트: our-code 0-warning + host 무회귀 + FLASH 49.40→**49.51 %**(+144 B) / RAM +16 B. HW 벤치 = spec §6.2 V-1~V-6.
+
 ### 2026-07-25 — 모델 브랜드/버전을 define.h로 + MAKETECH 신설 + ether IP 커서 fix + fw.sh
 
 브랜치 `refactor/ponytail-cleanup` 위에 스택. 보드 = GDSONIC 빌드 플래시·검증됨.
