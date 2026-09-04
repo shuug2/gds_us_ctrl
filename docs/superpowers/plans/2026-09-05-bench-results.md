@@ -1,0 +1,112 @@
+# 통합 벤치 실행 결과 — 2026-09-05
+
+> **문서 요약**: `bench/2026-09-05-integrated`(= `feat/remote-status-bits` + `feat/iwdg-watchdog`, 충돌은 changelog 1곳뿐)를 실보드에 올려 실행한 결과다. **실행한 41항목 전건 PASS**, 펌웨어 결함 0건. 실측 신규값 = **IWDG timeout 4.45 s / f_LSI ≈ 35.9 kHz**, 부팅→Modbus 응답 4.00 s, 리셋 원인 NRST `0x04` · IWDG `0x24`. 체크리스트 자체의 오류 2건(S-3 전제 누락, CAL-6 기대치 오류)을 찾아 정정했고 둘 다 펌웨어가 아니라 문서 문제였다. 미실행 항목은 전부 **배선·PCB·육안 게이트**(PC8 미실장 / RS-485 없음 / mon 캡처 불가 / LCD 화면)이며 §3 에 사유와 함께 분리했다. 벤치 환경 함정 2개도 기록한다: **mbpoll 이 이 환경에서 동작하지 않고**, **TCP connect 성공은 MCU 생존을 뜻하지 않는다**(W5500 이 SYN 을 자체 응답 — 반드시 FC03 트랜잭션으로 판정할 것).
+
+**실행**: 2026-09-05 / **빌드**: STD `build/`(FLASH 50.53 %) + REMOTE+BYPASS `build-remote-bypass/`(50.78 %)
+**보드**: hw-revA, comm=ETH_STATIC 192.168.1.199, PC8 **미실장**, 부하 **분리됨**, 원격기 **분리됨**
+
+---
+
+## 1. 실행 결과 — 41항목 전건 PASS
+
+| 섹션 | 항목 | 결과 |
+|---|---|---|
+| **S** | S-2 FC03 50칸 전수 | PASS — 값이 SWD `g_cfg` 덤프와 일치 |
+| | S-3 직접런 ceiling | PASS — **555 / 558 / 552 ms** (기대 560, 과거 실측 [514,578]) ⚠ 전제 = §2-① |
+| | S-4 FC06 클램프 | PASS — 30→50, 120→100 |
+| **M** | M-3 STD 는 CAP 미러 없음 | PASS — `0x2A` 에 `0x1234` 쓰면 그대로 남음 |
+| | M-4 REMOTE 는 CAP 매직 복원 | PASS — 같은 조작이 **`0x5201`** 로 복원. 모델 축이 갈림을 실증 |
+| **B34** | B34-1/5/7/8/10/11 | PASS — HORN bit6 OFF→ON→OFF, 원격 `0x30` 조작, horn 중 START 차단 **+ bit6 로 사유 설명**(B-4 의 목적), 재부팅 시 소실, 상위비트 무오염 |
+| **MOD** | MOD-2/3/5 | PASS — freq 쓰기 2, type 쓰기 0(hand), 범위 밖 99 저장·크래시 없음 |
+| **CAL** | CAL-1/2/3/4/5 | PASS — 16/40 일치, −16 = `0xFFF0`, 상·하한 **±1000** 클램프(freq 쪽 동일) |
+| | CAL-6 EN_SAFTY 정규화 | PASS — **기대치 정정 후**(§2-②). 5→**0**, 1→1 |
+| | CAL-7 영속 | PASS — cal_val −16 이 재부팅 후 유지(SWD 덤프 `0xF0 0xFF` + FC03 양쪽 확인) |
+| **NET** | NET-1 유휴 타임아웃 | PASS — 15 s 방치 후 컨트롤러가 먼저 끊음 |
+| | NET-2 즉시 재접속 | PASS — 0.0 s (구 ~20 s 대기 없음) |
+| | NET-3 **KA 구멍 회복** | PASS — 무-데이터 연결 RST 종료 후 즉시 회복. ⭐ 구 펌웨어에서는 같은 조작이 **전원 재인가를 요구**했다(§4-①에서 실제로 겪음) |
+| | NET-4 정상 폴링 무영향 | PASS — 1 s × 60 회 끊김 0 (체크리스트 5분의 축약) |
+| **FA** | FA-1 기본 상태 | PASS — `CFG_STAT`=0, staged 9종이 cfg 미러 |
+| | FA-2 staged 무영향 | PASS — `CFG_STAT`=1(STAGED) |
+| | FA-4 DISCARD | PASS — 미러 복귀 + IDLE |
+| | FA-5 **교차 커밋 TCP→serial** | PASS — `CFG_STAT`=2(COMMIT_OK) + **TCP 링크 생존** + 실계 반영 ⭐ DG-12 전제 |
+| | FA-8 same-link 거부(TCP→ether) | PASS — `CFG_STAT`=4 + cfg 불변 + TCP 생존 |
+| | FA-9 범위 거부·부분 커밋 없음 | PASS — `CFG_STAT`=3, DISCARD 후 addr/spd 모두 원복 |
+| | FA-10 가동 중 거부 | PASS — `CFG_STAT`=5 |
+| | FA-11 타임아웃 | PASS — **30 s 정확히** 후 `CFG_STAT`=6 + 미러 복귀 |
+| | FA-12b **만료가 성공으로 오보고 안 됨** | PASS — 만료 상태 커밋 → **6 유지**(2 면 `3ce1ead` 수정분 회귀) |
+| | FA-13 `CFG_CTRL` 잔류 없음 | PASS — 값 7 → read-back 0 |
+| | FA-14 `comm_mode` 쓰기 불가 | PASS — 미러가 원값으로 덮음 |
+| **W** | W-3 **hang → IWDG 자동 리셋** | PASS — 무응답 8.45 s, `BOOT_RST=0x24`(IWDG\|PIN) 3회 연속. 레거시라면 **영구 정지**였다 |
+| | W-4 NRST 리셋 원인 | PASS — `BOOT_RST=0x04` |
+| | W-5 gdb halt 무리셋 | PASS — 30 s halt 동안 리셋 없음(`BOOT_RST` 불변) + 정상 재개 = DBGMCU freeze 동작 |
+| | W-6 ceiling 무회귀 | PASS — 559 / 558 / 556 ms |
+
+### 실측 신규값 (spec 반영 대상)
+
+| 값 | 실측 | 비고 |
+|---|---|---|
+| **IWDG timeout T** | **4.45 s** | 무응답 8.45 s − 부팅지연 4.00 s |
+| **f_LSI (역산)** | **≈ 35.9 kHz** | `256×625/4.45`. 데이터시트 17~47 kHz 내, 공칭 32 k 보다 빠름 |
+| 설계 대비 | 공칭 5.00 s → 실측 4.45 s | 명시 범위 3.4~9.4 s **내** |
+| 런타임 최악 2.6 s 대비 마진 | **71 %** | 단 spec §2.2.2 병리적 케이스(≈6.3 s)는 여전히 초과 = 리셋 1회 수용 |
+| 부팅 → FC03 첫 응답 | **4.00 s** | DGUS 대기 + 로고 dwell 포함 |
+| 리셋 원인 관측값 | NRST `0x04` / IWDG `0x24` | 전원인가 `0x0E` 는 미관측(§3) |
+
+---
+
+## 2. 체크리스트 자체의 오류 2건 — 펌웨어 아님
+
+### ① S-3 전제 누락 (수정함)
+
+체크리스트는 "START → 약 514~578 ms 후 정지"만 적었으나, 그 값이 나오려면 **`model_type = HAND(0)` 이고 `limit_on_time = 56`** 이어야 한다. 보드 잔재는 `model_type=2(std)` · `limit_on_time=750` 이었고, 이 조합에서는 **on-time ceiling 이 아예 적용되지 않는 것이 정상**이다 — `app_reg.c:451` 이 `lim->model_type == MODEL_TYPE_HAND` 를 요구한다(30 s 절대 안전 ceiling 만 남는다). 첫 실행에서 3 s 안에 안 멈춰 회귀로 오인할 뻔했다. 전제를 채우자 555/558/552 ms 로 정확히 나왔다.
+
+### ② CAL-6 기대치 오류 (수정함)
+
+체크리스트는 "`EN_SAFTY` 에 5 → read-back **1**"로 적었으나 구현은 `(holding == 1u) ? 1u : 0u`(`app_modbus.c:483`)라 **5 → 0** 이다. 이것이 옳다 — C-2 이탈을 승인한 근거 자체가 "**LCD 경로에 맞춘다**"였고 LCD 는 `(data16 == 1) ? 1 : 0`(`app_lcd_input.c:518`)이다. 요구사항 C-2 원문도 "5 를 쓰면 5 가 저장된다"를 막으라는 것이지 `5→1` 을 명시하지 않았다. **정규화는 실제로 일어났다**(5→0) = C-2 충족.
+
+---
+
+## 3. 미실행 항목과 사유 (오판 방지)
+
+| 항목 | 막은 것 |
+|---|---|
+| **A 섹션 전체**(A-1~A-15) | **PC8 인터록 미실장.** 단 **A-13 의 핵심 성질은 간접 관측** — PC8 미실장 = 단선 상태에서 `REMOTE_EN = 0(불허)`. 극성이 뒤집혔다면 1 이 나왔다 |
+| S-1 부팅 배너 · S-P pot write · NET-1 로그 · A-2/A-4 로그 | **mon(USART6) 캡처 불가** — USB 시리얼 어댑터 미인식. 리셋 원인만 **SWD 정적 read 로 대체**(`s_boot_rst`, `volatile` 수정 덕분) |
+| S-5 · M-1 · M-2 · MOD-1 · MOD-4 · MOD-7 · B34-2/3/4/9 | **LCD 화면 육안** — 자동화 불가, 사용자 확인 필요 |
+| MOD-6 E-stop 해제 확인 | **E-stop 을 활성화할 패널 배선 없음** |
+| B34-6 SENSOR 비트 | 센서(SENSE_DN) 배선 없음 |
+| FA-6 · FA-7 · FA-12 | **RS-485 어댑터 없음** (RTU 링크 필요) |
+| FA-3 · FA-15 영속 | 부분 대체 — CAL-7 이 FRAM 영속 경로를 입증 |
+| W-1 전원인가 `rst=0x0E` | 사용자의 물리 전원 재인가 필요 |
+| W-3b 출력 ON 중 hang | 부하 분리 상태라 안전하나, 출력 관측 수단(스코프·LCD)이 없어 판정 불가 |
+| weld 사이클 / `work_cnt` | 양손 SW_START1/2 · 센서 · f_safty 배선 없음 |
+
+---
+
+## 4. 벤치 환경 함정 (다음 세션이 같은 데 빠지지 않도록)
+
+### ① `nc -z` 로 포트를 찔러보지 말 것 🔴
+
+연결만 열고 프레임 0개로 닫는 동작이 정확히 **NET-3 이 기술한 KA 구멍**이다. 구 펌웨어(12 s 유휴 타임아웃 이전)에서는 이것이 **W5500 소켓을 영구 고착**시켜 **전원 재인가 전까지 Modbus 접속 불가**가 된다. 이번 세션 개시 때 실제로 이렇게 보드를 물려 30분을 날렸다. 역설적으로 NET-3 의 사전 실증이 됐지만, 다시 하지 말 것.
+
+### ② **TCP connect 성공 ≠ MCU 생존** 🔴
+
+**W5500 이 SYN 을 자체 응답**하므로 MCU 가 halt/hang 이어도 `connect()` 가 성공할 수 있다. 생존 판정은 **반드시 FC03 트랜잭션**으로 할 것. 이 함정 때문에 W-3 첫 측정(8.59 s)과 NET-2/3 첫 판정이 무효였고 전부 재실행했다.
+
+### ③ `mbpoll` 이 이 환경에서 동작하지 않는다
+
+`mbpoll: Connection failed: No route to host` 가 일관되게 났다(같은 순간 `nc`·python socket 은 성공). 샌드박스 해제로도 동일. **대체 = 자체 최소 MBAP 클라이언트**(연결 유지형, 재시도 포함) — 체크리스트의 `-r N`(1-based)을 wire 주소(0-based)로 그대로 다룬다. 벤치는 이걸로 전부 수행했다.
+
+### ④ openocd 메모리 읽기
+
+`mdb` 가 출력을 내지 않았다. `set v [read_memory ADDR 8 N]` + `echo` 를 쓸 것. Tcl 이라 `[31:24]` 같은 대괄호를 echo 문자열에 넣으면 명령 치환으로 깨진다.
+
+---
+
+## 5. 보드 마감 상태
+
+STD 빌드 재플래시 완료. 잔재 전부 원복:
+
+`OUT_POWER 77` · `ON_TIME 750` · `EN_SAFTY 0` · `MODEL_FREQ 3` · `MODEL_TYPE 2` · `COMM addr 1 / speed 4 / parity 0` · `comm_mode ETH_STATIC 192.168.1.199` · `CAL_VAL 16` · `FREQ_CAL_VAL 40` · `HORN_CMD 0` · `CFG_STAT IDLE` · `STATUS 0x00`
+
+throwaway hang 주입은 원복됨(`git status` clean).
