@@ -19,7 +19,9 @@
 #include "app_buzzer.h"
 #include "app_fault_alarm.h"
 
-static uint8_t s_boot_rst;   /* RCC->CSR[31:24] @boot — SWD 정적 read 진단용 (IWDG=0x20 비트) */
+static volatile uint8_t s_boot_rst;   /* RCC->CSR[31:24] @boot — SWD 정적 read 진단용 (IWDG=0x20
+                                      * 비트). volatile 필수: 이 값은 코드가 안 읽으므로 -O2 면
+                                      * 심볼째 사라진다(형제 i2c1.c s_err_count 동일 이유). */
 
 /* FRAM 로드+LCD 부팅 */
 void app_init(void)
