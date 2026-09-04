@@ -7,6 +7,14 @@
 #include <stdint.h>
 
 #define MB_REG_COUNT    50u    /* samd20 holdingReg[50] */
+/* 🔴 확장 한계 — 다음에 레지스터를 늘리려는 사람이 먼저 읽을 것.
+ * ① **프레임 상한 57 레지스터.** FC03 응답 = 3 + N*2 + CRC2 이고 MB_RESP_MAX=125
+ *    이므로 N<=57 이다(현재 50칸 = 105 B). 여유는 **7칸**뿐이다.
+ * ② 그 이상이 필요해지면 소비 측이 **폴링 블록을 쪼개 두 번 읽어야 하고, 두 읽기
+ *    사이의 원자성이 깨진다.** 원격기(gds_us_remote)·gds_us_hmi 의 화면 판정은
+ *    "스냅샷 하나가 진실"을 전제로 설계돼 있어, 이건 우리만의 제약이 아니다.
+ *    → 확장 전에 **어느 필드가 같은 프레임에 있어야 하는가**부터 합의할 것.
+ *    (2026-09-04 gds_us_remote 와 상호 확인) */
 #define MB_COIL_COUNT   50u    /* samd20 coils[50] */
 #define MB_FRAME_MAX    125u   /* samd20 received[125] */
 #define MB_RESP_MAX     125u   /* samd20 response[125]; FC03 all-50-regs = 105 B */
