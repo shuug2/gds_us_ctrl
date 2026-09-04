@@ -455,11 +455,26 @@ void app_modbus_apply_writes(mb_link_t link)
         dgus_write_u16(DISP_MULTI_EN, cfg->multi_ctrl ? 1u : 0u);
         save = true;
     } else if (g_mb.holding[MB_REG_EN_SAFTY] != cfg->f_safty) {
-        /* no 0/1 normalization: samd20 stores as-is (4533) — the LCD input
-         * path normalizes its own writes; comm writes stay faithful */
-        cfg->f_safty = (uint8_t)g_mb.holding[MB_REG_EN_SAFTY];
-        dgus_write_u16(DISP_SAFTY, cfg->f_safty);
-        save = true;
+        /* C-2 (2026-08-30 요구사항): 0/1 정규화.
+         *
+         * ⚠ samd20 이탈이다 — 원본 comm 경로는 as-is 저장이었고(main.c:4533)
+         * 이 포트도 그걸 의식적으로 충실 복제하고 있었다. 사용자 승인 후 변경.
+         * 이탈을 받아들인 이유: **LCD 경로는 이미 정규화한다**
+         * (app_lcd_input.c:518 `(data16 == 1) ? 1 : 0`). 즉 두 편집 경로가
+         * 갈려 있었고, 이 변경은 "원격에만 새 규칙을 발명"하는 것이 아니라
+         * 유일하게 어긋나 있던 Modbus 를 LCD 에 맞추는 쪽이다.
+         *
+         * 기능 동작은 불변 — 소비자(weld trigger FSM)는 != 0 판정이다.
+         * 달라지는 것은 read-back 값·FRAM 저장값·DISP_SAFTY 로 보내는 값. */
+        uint8_t sf = (g_mb.holding[MB_REG_EN_SAFTY] == 1u) ? 1u : 0u;
+        if (sf != cfg->f_safty) {
+            cfg->f_safty = sf;
+            dgus_write_u16(DISP_SAFTY, cfg->f_safty);
+            save = true;
+        }
+        /* 정규화 결과가 같으면(예: 이미 1인데 5 를 씀) 아무것도 하지 않는다.
+         * 다음 미러가 holding 을 1 로 되돌리므로 read-back 은 정규화를 보고,
+         * 불필요한 전체맵 FRAM 쓰기를 피한다. */
     } else if (g_mb.holding[MB_REG_CAL_VAL] != (uint16_t)cfg->cal_val) {
         /* 클램프된 쓰기는 다음 미러가 되돌리므로 이 체인을 재발화시키지 않는다
          * (기존 클램프 분기들과 같은 형태). 원격기는 read-back 으로 클램프를 본다. */
