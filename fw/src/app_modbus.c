@@ -217,6 +217,10 @@ static void mirror_live(void)
      * read-back" 계약이 staging 에서 깨져 마스터가 자기가 쓴 값을 확인할 수 없다. */
     g_mb.holding[MB_REG_COMM_MODE] = cfg->comm_mode;
     g_mb.holding[MB_REG_CFG_STAT]  = s_stg.stat;
+    /* F-A capability — **모델 무관 무조건**. 게이트 CAP(0x2A)와 달리 STD 에서도
+     * 실어야 한다: F-A 는 두 모델 모두에 있으므로, 안 실으면 소비 측이 F-A 를
+     * 지원하는 STD 유닛을 구 펌웨어로 오판한다. */
+    g_mb.holding[MB_REG_CFG_CAP]   = MB_REG_CFG_CAP_MAGIC;
     for (uint8_t i = 0u; i < (uint8_t)CFG_STG_COUNT; i++) {
         if (cfg_stage_dirty(&s_stg, i) == 0u) {
             g_mb.holding[k_stg_reg[i]] = stg_mirror_val(cfg, i);
