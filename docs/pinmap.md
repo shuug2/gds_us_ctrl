@@ -144,7 +144,7 @@
 | PB2  | CTRL_OSC0 | **mega16 PB1** | **SEEK** 신호 출력 (active-LOW binary 미러) |
 | PB10 | CTRL_OSC1 | **mega16 PB0** | **RESET** 신호 출력 (active-LOW) |
 | PB14 | CTRL_OSC4 | **mega16 PC7** | **RUN** 신호 출력 (active-LOW) |
-| PB12 | (OSC2?) | **mega16 PC4** | mega16 **입력**(`sbis 0x13,4` read) — 정체 미확정, 출력 구동 금지(미설정) |
+| PB12 | **USFB** (초음파 출력 피드백) | **mega16 PC4** | ⚠ **2026-09-04 정정 — "미확정" 아님.** `fw/drivers/io.c:20`이 **USFB = 초음파 출력 피드백 입력(active-HIGH, 출력 중 L→H)**으로 이미 사용 중. 여유 핀 ✗ |
 | PB13 | **과부하 입력** | **mega16 PA7** | **과부하 sense 입력 (active HIGH)** — OSC3 아님(오라벨 정정). 디바운스→내부 overload 처리 |
 
 > 출처: 사용자 회로 동작 확인 (2026-04-26).
@@ -164,7 +164,7 @@
 | PB3 | CON_OVLD | 과부하 출력 = 외부 **릴레이 제어 신호 (active HIGH)**. ⚠ 현재 Phase2 heartbeat 임시 점유 → heartbeat **PB8** 이전 후 복원 (2026-06-20) |
 | PB4 | CON_USOUT | **초음파 출력 게이트** (SAMD20 **PA09/B_USOUT** 흡수 — run/stop 연동 ON/OFF, `main.c:4186/4304`). ⚠ "CON_UVOUT / UV 출력" 오기 → **CON_USOUT (US OUT)** 정정 (2026-06-20) |
 | PB5 | CON_SOL_DN | 솔레노이드 하강 출력 |
-| PB8 | (heartbeat) | **신규 heartbeat 핀** (PB3에서 이전, 빈 GPIO; 2026-06-20 결정) |
+| PB8 | (heartbeat 예약) | PB3에서 이전하기로 한 heartbeat 핀 — ⚠ **2026-09-04 실측: 코드에 구현 없음.** 결정만 있고 배선/구동이 없어 실제로는 빈 핀이다 |
 
 ### GPIO Input — 커넥터 입력
 
@@ -177,6 +177,7 @@
 | PC10 | CON_RESET | 리셋 입력 |
 | PC11 | CON_ESTOP | 비상 정지 |
 | PC12 | CON_KEY1 | 키 입력 1 |
+| **PC8** | **CON_REMOTE_EN** | **원격 제어 활성화 물리 인터록** (2026-09-04 확정). 🔴 **active-LOW + 풀업** — 스위치 닫힘=LOW=허용, 열림·단선·커넥터 탈락=HIGH=**불허**(fail-safe). 키 스위치 권장, 기계 쪽 패널에 설치. 요구사항 A / `MODEL_REMOTE` 빌드 전용 |
 
 ---
 
@@ -211,6 +212,31 @@ HSE 16 MHz
 RTC ← LSI 32 kHz
 USB 48 MHz ← PLLQ
 ```
+
+---
+
+## 여유 핀 (2026-09-04 코드 실측)
+
+> 판정 근거는 문서가 아니라 **코드**다 — `fw/drivers/io.c`·`fw/src/board.c`·`fw/drivers/{adc1,freq_ic,i2c1,spi1,usart,usart1}.c`의 실제 GPIO 점유를 훑어 산출. 이 표가 여유 핀의 정본.
+
+| 포트 | 여유 핀 | 비고 |
+|---|---|---|
+| PA | `PA1` `PA3` `PA8` | PA1/PA3 = ADC1_IN1/IN3 겸용(아날로그 확장 여지) · PA8 = MCO1 |
+| PB | `PB8` `PB9` `PB15` | PB8은 heartbeat 예약이었으나 **구현이 없어 실제 여유** |
+| PC | ~~`PC8`~~ `PC0` `PC1` `PC2` `PC3` `PC9` `PC13` `PC14` `PC15` | PC8 = **CON_REMOTE_EN 으로 확정 소진** (2026-09-04) · PC0–PC3 = ADC1_IN10~13 겸용 |
+| PD | `PD2` | LQFP64 노출 |
+
+**쓰면 안 되는 것**
+
+| 핀 | 이유 |
+|---|---|
+| `PA13` `PA14` | SWD. 재할당하면 플래시·디버그를 잃는다 |
+| `PC14` `PC15` | OSC32_IN/OUT. 현재 RTC가 LSI라 비어 있지만 LSE 여지를 없앤다 |
+| `PC13` | TAMPER/RTC_OUT 겸용, 구동 능력 제한(≈3 mA, 2 MHz). 입력 전용으로만 |
+
+> 디지털 입출력에 **ADC 겸용 핀(PA1/PA3/PC0–PC3)을 먼저 쓰지 말 것** — 6b 보정에서 아날로그 채널이 더 필요해질 수 있다. 순수 디지털 후보 = `PB8` `PB9` `PB15` `PC9` `PD2`.
+>
+> ⚠ 패키지 핀번호는 이 문서가 정하지 않는다. 회로/PCB 작업 시 STM32F410RBT6 LQFP64 데이터시트로 확정할 것.
 
 ---
 

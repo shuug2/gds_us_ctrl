@@ -225,3 +225,10 @@ void app_weld_tick(void)
         app_lcd_set_work_cnt(cfg->work_cnt);
     }
 }
+
+/* SENSE_DN 라이브 판독. 극성(active-LOW: 0=감지)은 위 표시 미러와 같은 사실이라
+ * 같은 파일에 둔다 — 떨어뜨리면 한쪽만 고쳐져 원격과 화면이 반대로 갈린다. */
+uint8_t app_weld_sensor_active(void)
+{
+    return (io_read_sens_dn() == 0u) ? 1u : 0u;
+}

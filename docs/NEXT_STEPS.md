@@ -2,7 +2,9 @@
 
 > CLAUDE.md 에 명시된 first-load 문서. 새 세션 시작 시 본 파일을 가장 먼저 읽고 진행 상황 + 다음 작업을 확인.
 >
-> **본 문서 최신화: 2026-08-16** — 원격 게이트 T-1~T-4 반영 + push 상태 재정정. **✅ 브랜치 3개(main/ponytail/remote-gate)·태그 21개 전부 origin 동기 — 미푸시 없음**(8-15판의 "태그 7개 미푸시"는 그 직후 푸시로 해소). **IWDG 워치독**을 §1.2에 재편입(2026-07-02 감사 D3 "H4+IWDG 별도 슬라이스"가 이후 로드맵에서 유실돼 있었음).
+> **★ 2026-09-04 갱신 — 아래 본문보다 이 블록이 우선.** 2026-08-30 원격기 동등성 요구사항 **A·B-1~B-5·C 전항목이 `feat/remote-status-bits`(main +20, origin 동기)에 구현 완료**됐다. **HW 벤치가 유일한 남은 게이트**이고, 진입점은 `docs/superpowers/plans/2026-09-04-remote-parity-bench-checklist.md` 다. 아래 §의 "원격 게이트 T-1~T-4 / T-5 대기" 서술은 **낡았다** — T-5(LCD 활성화)는 폐기되고 PC8 물리 인터록으로 대체됐다. 상세 = `docs/superpowers/RESUME.md` 최상단.
+>
+> **이전 최신화: 2026-08-16** — 원격 게이트 T-1~T-4 반영 + push 상태 재정정. **✅ 브랜치 3개(main/ponytail/remote-gate)·태그 21개 전부 origin 동기 — 미푸시 없음**(8-15판의 "태그 7개 미푸시"는 그 직후 푸시로 해소). **IWDG 워치독**을 §1.2에 재편입(2026-07-02 감사 D3 "H4+IWDG 별도 슬라이스"가 이후 로드맵에서 유실돼 있었음).
 > (2026-08-15 — 문서/깃 대조 갱신, 코드 무변경.) ⓑ **미머지 브랜치 `refactor/ponytail-cleanup` 편입**(main+12커밋, origin 푸시됨, HW 재검증 3항목 게이트 — §2.2). ⓒ **원격 제어 활성화 게이트 로드맵 편입**(2026-08-02 정책 승인·미구현, `specs/2026-08-02-remote-enable-gate-decision.md` — §2.2). 보드는 여전히 main `61524c1`.
 > (직전 최신화 2026-07-19 — 풀배선 벤치: 사용자 신규 8건(fix/기능) 전건 HW PASS. **`6af9882`** 표시 데드밴드 20→14(최소 표시 0.15A) · **`a46eaf3`** 부팅 유령 SEEK 소멸(bak zero-init) · **`2ea5c2d`+`2cee1cc`** 부팅 beep(전원 직후) · **`6e30499`** fault 부저 알람 글루 · **`789f347`** 경고 페이지 터치 토글 반전 fix · **`519d908`** SYS_HORN horn-down 포팅 · **`61524c1`** STD weld OVTIME 알람. **USOUT(PB4)=코드 정상·PCB 원인**(무수정). 무변경 결정=EMA α=1/2·숫자 피크홀드·cal_val=16. 보드=`61524c1` 플래시됨(⚠세션 말미 전원 OFF·잔재 불확정). **★ 다음=HMI Task 8**(gds_us_hmi). 상세=루트 `HANDOFF.md`. — ⚠"push 미실행=코드 8+docs+태그"는 stale, 위 2026-08-15 ⓐ 참조.)
 > (직전 최신화 2026-07-11 — FW 벤치: 신규 3건 중 #1 유령 런·#2 REMOTE icon·energy/OVTIME 타이밍 HW PASS + OVTIME 경고화면 복귀 fix 2커밋 `83498e7`/`88faf08`.)
@@ -56,7 +58,7 @@
 - ~~**overload 보호**~~ — ✅ **실동작 E2E 사용자 벤치 PASS 2026-07-05 c** (체인 전체 정상, 코드 무변경 — physical-io 이월 3건[EMSW·OSC 구동·overload] 전부 소진). 잔여 LOW: handle_key_multi RESET의 OVLD/OUTERR 비트 휘발성(후속).
 - **[2026-07-05 c 신규 완료 참고]** seek/reset 중 측정값 라이브 표시(`e2003e1`, us_on_status 복원+벤치 4항목 PASS) / 표시 전류 전달함수 재정의(`54e5220`, 재앵커 ch1≈126 + 오프셋 제거: GAIN 59/126·OFFSET 0·DEADBAND 20 — ⚠ **최종 벤치 0.60A 표시 명시 확인 미기록 = 다음 벤치 첫 항목**; 중간 구간 2점 fit은 6b).
 
-- **IWDG 워치독 슬라이스** — ⚠ **로드맵 유실분, 2026-08-16 재편입**. `docs/requirements.md` FW3-6이 요구하고 2026-07-02 감사 D3가 "H4 + IWDG는 별도 슬라이스"로 분리했는데(§1.3 D3), 그 뒤 어느 로드맵 항목에도 다시 나타나지 않아 추적에서 빠져 있었다. **HW 불요 · 1세션 규모 · 다른 작업에 비의존** — 벤치 대기 사이에 넣기 좋다. 착수 시 슈퍼루프 kick 지점과 부팅 리셋-원인 판별(IWDG 리셋 vs POR) 설계 필요.
+- **IWDG 워치독 슬라이스** — ✅ **CODE-COMPLETE 2026-09-04** (브랜치 `feat/iwdg-watchdog`, main+4, origin 동기; spec/plan `2026-09-04-iwdg-watchdog*`). 공칭 5.0 s(÷256/RLR 624) · `while(1)` 단일 kick · DBGMCU freeze · 리셋 원인 배너(`rst=0xNN[ IWDG]`). **남은 것 = T-3 HW 벤치 V-1~V-6.** 아래는 착수 전 배경. ⚠ **로드맵 유실분, 2026-08-16 재편입**. `docs/requirements.md` FW3-6이 요구하고 2026-07-02 감사 D3가 "H4 + IWDG는 별도 슬라이스"로 분리했는데(§1.3 D3), 그 뒤 어느 로드맵 항목에도 다시 나타나지 않아 추적에서 빠져 있었다. **HW 불요 · 1세션 규모 · 다른 작업에 비의존** — 벤치 대기 사이에 넣기 좋다는 판단대로 2026-09-04 에 소진했다.
 
 **설계상 이연(slice 2)**: DHCP 핫플러그(링크 드롭 후 재획득 — 현재 LINKWAIT→UP 단방향), SERIAL boot-skip.
 
@@ -91,12 +93,12 @@ git tag -l 'hw-revA*'                  # 위 §1.1 태그들 확인
 # 빌드 + 호스트 테스트 sanity
 env -u STM32_TOOLCHAIN cmake -S fw -B fw/build -G Ninja
 env -u STM32_TOOLCHAIN cmake --build fw/build      # 0-warning 기대
-make -C fw/test test                                # 5 스위트 PASS 기대 (reg_calc/modbus_core/tcp_frame/weld_fsm/seek_reset_fsm)
+make -C fw/test test                                # rsb 16 / main 14 스위트 PASS 기대 (목록 = fw/test/Makefile 헤더)
 ```
 
 ### 2.2 다음 작업 후보
 
-**2026-08-16 현재 우선순위**: ① remote-gate **T-5(DGUS 자산 대기)** → ② HMI Task 8 → ③ 전류 실측 → ④ **IWDG 슬라이스**(HW 불요) → ⑤ 6b·B-SEAM(보류).
+**2026-09-04 현재 우선순위**: ① **★ 통합 HW 벤치** (rsb 체크리스트 S→M→B34→MOD→CAL→NET→FA→A + IWDG W 섹션 — throwaway `bench/` 브랜치에 양쪽 머지해 플래시 1회) → ② HMI Task 8 → ③ 전류 0.60A 실측 → ④ 6b·B-SEAM(보류). **HW 불요 큐는 IWDG 소진으로 비었다.**
 
 > 브랜치 스택: `main`(**ponytail 머지 완료 2026-08-16**) ← `feat/remote-enable-gate`(**재베이스 완료**, T-5 대기). 양쪽 origin 동기.
 

@@ -239,7 +239,7 @@ static void handle_key_multi(uint16_t data16)
         s_run_key_down ^= 1u;
         if (s_run_key_down != 0u) {
             app_lcd_hook_us_command(US_CMD_START);
-            app_lcd_hook_set_pot(cfg->output_power);    /* DAC on run start (stub, F2) */
+            app_lcd_hook_set_pot(cfg->output_power);    /* DAC on run start (I2C_POT 실구동) */
         } else {
             app_lcd_hook_us_command(US_CMD_RUN_RELEASE);
         }

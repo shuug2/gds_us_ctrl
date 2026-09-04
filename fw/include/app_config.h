@@ -7,6 +7,11 @@
  * comm_speed_txt[6][6] / comm_parity_txt[3][4] 크기와 동기 — 테이블 확장 시 함께. */
 #define CFG_COMM_SPEED_IDX_MAX   5u
 #define CFG_COMM_PARITY_IDX_MAX  2u
+/* 원격 커밋 검증용 슬레이브 주소 범위 (F-A §5.3). LCD 는 0(NONE)을 허용하지만
+ * 원격 커밋에서 0 은 RTU 자체를 죽여 복구 불능이 되므로 막는다 — "LCD 에 없는
+ * 규칙 발명"이 아니라 원격 경로에서만 회복 불가인 값이라서다. */
+#define CFG_COMM_ADDR_MIN        1u
+#define CFG_COMM_ADDR_MAX      247u
 
 typedef struct {
     uint8_t  model_freq;        /* 0..5  (15/20/30/35/40/50 K) */

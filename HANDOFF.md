@@ -1,8 +1,42 @@
-# Handoff: 2026-07-18~19 사용자 신규 8건(fix/기능) 전건 HW PASS + USOUT=PCB 확정, 다음 = HMI Task 8
+# Handoff: 원격기 기능 동등성 스택 CODE-COMPLETE — 남은 것은 HW 벤치 하나
 
-**Generated**: 2026-07-19 (풀배선 벤치 인터랙티브 세션, Fable→Opus)
-**Branch**: `main` tip `61524c1` → 이후 docs 커밋 진행, 현재 main = `1364e5e`. **push 완료** — 2026-08-16 실측: 브랜치 3개·태그 21개 전부 origin 동기, 미푸시 없음.
-**Status**: 사용자 신규 8건 전건 벤치 검증 완료. **★ 다음 세션 = HMI Task 8** (`~/dev/work/gds_us_hmi`, 별도 repo).
+**Generated**: 2026-09-04 (보드 없이 진행한 구현 세션, Fable)
+**Branch**: `feat/remote-status-bits` — main(`2f74611`) 위 **20커밋, origin 동기**
+**Status**: 2026-08-30 요구사항 **A·B-1~B-5·C 전항목 구현 완료.** HW 벤치가 유일한 남은 게이트.
+
+> **★ 다음 세션 진입점 = `docs/superpowers/plans/2026-09-04-remote-parity-bench-checklist.md`**
+> 스테이지별로 흩어져 있던 검증 항목을 한 장으로 모은 통합 체크리스트. 실행 순서(S→M→B34→MOD→CAL→NET→FA→A)와 그 근거, mbpoll `-r` 번호 대조표, 보드 잔재, **이번 벤치에서 할 수 없는 항목**(§6)까지 들어 있다.
+
+## 벤치 실행에 필요한 것
+
+| 필요 | 없으면 못 하는 항목 |
+|---|---|
+| 보드 | 전부 |
+| **PC8 인터록 실장 PCB** | A 섹션 전체(게이트). 회로 수정+PCB 재제작은 사용자 진행 중 |
+| 센서(SENSE_DN) 배선 | B34-6 |
+| 양손 SW_START1/2 · f_safty 배선 | weld 사이클 E2E · `work_cnt` 증가 |
+
+**PC8 미실장 보드에서 REMOTE 를 벤치하려면 `-DREMOTE_EN_GATE_BYPASS=ON`.** STD 빌드는 게이트가 없어 영향 없다 — **S·M·B34·MOD·CAL·NET·FA 는 STD 로 지금도 가능**하다.
+
+## 이 세션에서 확정된 것 (요약, 상세는 RESUME.md)
+
+1. **제품 모델 축 STD/REMOTE** — H/W 동일, F/W 기능셋으로만 분기. `MODEL=remote ./fw.sh`
+2. **게이트 = PC8 물리 인터록**, active-LOW+풀업 fail-safe, 만료 없음. **`DIS_ESTOP` 만 래치 / `DIS_LINK` 자동 복귀**
+3. **F-A comm/eth staging+commit** `0x1E~0x29`
+4. **`0x31 CFG_CAP`** — F-A capability, 모델 무관 미러
+5. **TCP 연결 자동 복구** — 앱 유휴 타임아웃 12s
+6. **B-5 가드 없음**(사용자 결정) — `MODEL_TYPE` 은 PC11 의미를 바꿔 E-stop 을 해제할 수 있다
+7. **C-2·C-3 samd20 이탈**(사용자 승인) — EN_SAFTY 0/1 정규화, work_cnt 32비트 비교
+
+## 미해결 (코드 아님)
+
+- **컨트롤러 측 `MODEL_TYPE` 차단 여부** — `gds_us_remote` 가 2026-09-04 세션 간 메시지로 **E-STOP 가드 한 줄을 정식 요청**(`app_estop_active()` 조건만, `0x30 HORN_CMD`·`0x17 MODEL_FREQ` 는 제외, `us_on_status` 는 이쪽 판단, 거부는 침묵으로 충분). 이는 2026-09-04 "가드 없음 = LCD 경로와 동형" 결정을 뒤집는 건이라 **사용자 재결정 대기**. 자리는 `app_modbus.c` 의 해당 분기 주석에 표시
+- ✅ ~~미푸시 로컬 브랜치~~ — **2026-09-04 정리 완료**. 실측 결과 5개가 아니라 6개였고(`feat/symmetric-stop` 누락), 전부 삭제. 백업 5개의 내용은 D5 reconcile 로 main 에 반영·HW 검증·태그됨. 이제 브랜치·태그 전부 origin 동기.
+- **IWDG 브랜치 별도 존재** — `feat/iwdg-watchdog`(main+4). 벤치 통합 방식 = throwaway `bench/` 브랜치에 rsb + iwdg 머지(충돌 0 확인) → 플래시 1회 → PASS 후 main 에 각각 `--no-ff` + 태그
+
+## 세션 간 협업
+
+`gds_us_remote`(세션명 `esp32-firmware-verification`)와 **상의**, `gds_us_hmi` 에는 **통보**(사용자 지시). ⚠ **계약 문서는 양쪽 규율상 벤치 PASS 후에만 갱신.**
 
 ---
 

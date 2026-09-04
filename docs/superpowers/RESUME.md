@@ -1,5 +1,25 @@
 # RESUME — 다음 세션
 
+> **상태 (2026-09-04, 원격기 동등성 스택 CODE-COMPLETE — 보드 없이 진행)**: 사용자가 **"전부 구현하고 한 번에 시험"** 방식을 택해, 2026-08-30 요구사항(`docs/superpowers/specs/2026-08-30-remote-parity-requirements.md`)의 **A·B-1~B-5·C 전항목을 브랜치 `feat/remote-status-bits`(main 위 20커밋(+이번 세션 3커밋))에 구현**했다. **HW 벤치가 유일한 남은 게이트**이고, 실행에 **보드 + PC8 실장 PCB + 패널 배선**이 필요하다.
+>
+> **★ 다음 세션 진입점 = `docs/superpowers/plans/2026-09-04-remote-parity-bench-checklist.md`** — 스테이지별로 흩어져 있던 검증 항목을 한 장으로 모은 통합 체크리스트다. 실행 순서(S→M→B34→MOD→CAL→NET→FA→A)와 그 근거, mbpoll `-r` 번호 대조표, 보드 잔재, **이번 벤치에서 할 수 없는 항목**(§6)까지 들어 있다. 벤치 당일 spec 5개를 뒤지지 않게 하는 것이 목적이다.
+>
+> **주요 결정 (전부 이 저장소가 정함 — 요구사항은 "무엇을·왜"만 적었다)**:
+> ⑴ **제품 모델 축 신설 STD/REMOTE** — H/W 동일(hw-revA), F/W 기능셋으로만 갈린다. `define.h` 가 이미 브랜드 5종에 쓰던 빌드타임 선택 + `#error` 패턴 재사용. `cmake -DMODEL=REMOTE` 또는 `MODEL=remote ./fw.sh` → `build-remote/`. **게이트는 REMOTE 전용**(STD 유닛엔 인터록 스위치가 없어 게이트를 넣으면 유선 HMI 의 설정 쓰기가 죽는다). `#if` 는 글루 2곳뿐 — 순수 모듈은 항상 컴파일돼 host 스위트가 모델 무관이다.
+> ⑵ **원격 활성화 게이트 = PC8 물리 인터록**(요구사항 A). LCD 터치(T-5)안은 폐기. **active-LOW + 풀업 = fail-safe**(닫힘=허용 / 열림·단선·커넥터 탈락=불허). **만료 없음**(A-3). 🔴 **`DIS_ESTOP` 만 래치**(스위치 OFF→ON 재무장), **`DIS_LINK` 는 자동 복귀** — 처음엔 둘 다 래치로 짰다가 **자기교착**이 드러났다(TCP 소켓 1개 + stale ESTABLISHED 자가치유 ~20초 > 침묵 임계 10초 → 재접속마다 사람이 키를 껐다 켜야 함). 상태코드 **2·5 는 결번**, `0x2C` 도 결번(항상 0).
+> ⑶ **F-A comm/eth staging+commit**(`0x1E~0x29`) 구현. `CFG_STAT` 코드값·30초 타임아웃은 스펙대로. **`CFG_ETHER_APPLY_DELAY_MS` 는 폐기** — 근거였던 "TCP 는 blocking 보장 없음"이 DG-12 와 양립하지 않는다(ether 커밋은 RTU 로만 오고 RTU 는 응답을 blocking 으로 먼저 보낸다). 🔴 **빈 커밋은 `CFG_STAT` 을 건드리지 않는다** — 무조건 `COMMIT_OK` 를 실었더니 타임아웃 폐기가 성공으로 오보고됐다(리뷰 지적).
+> ⑷ **`0x31 CFG_CAP = 0xFA01` 신설** — 모델 무관 무조건 미러. `REMOTE_CAP(0x2A)` 로 F-A 를 판별하면 **F-A 를 지원하는 STD 유닛을 미지원으로 오판**한다(모델 축 도입의 부작용). 소비 측은 **쓰기 없이 읽기만으로** 판별 가능.
+> ⑸ **TCP 연결 자동 복구**(사용자 추가 요구). 앱 유휴 타임아웃 `MB_TCP_IDLE_MAX_MS`=12s → disconnect → 재리슨. 🔴 기존 구멍을 메운다: **W5500 KA 는 데이터 1회 이상 교환 후에만 동작**해서, 연결만 하고 무송신인 피어가 사라지면 소켓 1개가 **영구 고착**됐다.
+> ⑹ **B-5 는 요구사항의 진단이 틀렸다** — "미러가 덮어서 쓰기가 안 먹는다"가 아니라 **apply 체인에 분기가 없어** 무시된 것. 미러는 그대로 두고 분기만 추가했다. 🔴 **가드 없음(사용자 결정)** — `MODEL_TYPE` 은 PC11 의미를 뒤바꿔(`app_input_fsm.c:46-60`) **살아있는 E-stop 을 해제할 수 있다.** LCD 경로에도 같은 가드가 없어 원칙 일관성을 택했다. 거부를 넣을 자리는 코드 주석에 명시.
+> ⑺ **C-2 EN_SAFTY 0/1 정규화 = samd20 이탈**(사용자 승인). LCD 는 원래 정규화하고 있었고 Modbus 만 어긋나 있었다.
+>
+> **세션 간 협업**: `gds_us_remote`(via `esp32-firmware-verification` 세션)와 **상의**, `gds_us_hmi` 에는 **통보**(사용자 지시). 계약 정정 4건·capability 설계·E-stop 노출을 상호 확인했다. ⚠ **계약 문서(`gds_us_remote/docs/reference/modbus-contract.md`)는 벤치 PASS 후에만 갱신** — 양쪽 규율.
+>
+> **⚠ 미결 1건**: **C-3 `work_cnt` 리셋 가드** — `app_modbus.c` 의 `(uint16_t)cfg->work_cnt != 0u` 가 하위워드만 비교해 **`work_cnt` 가 65536 의 배수면 Modbus 리셋이 조용히 무시된다**(LCD 경로는 32비트 비교라 정상). 캐스트 제거 1글자이나 **samd20 이탈이라 사용자 컨펌 대기**.
+>
+> **⚠ 레지스터 여유 7칸** — FC03 응답 상한이 57 레지스터(현재 50칸/105B). 그 이상은 소비 측이 폴링 블록을 쪼개야 하고 **스냅샷 원자성이 깨진다**(`app_modbus_core.h` 의 `MB_REG_COUNT` 주석 참조).
+> - **이전 상태 (2026-08-17)**: ↓ 원격 게이트 VR-2/VR-3 실보드 PASS + RS-485 mon 발견.
+
 > **상태 (2026-08-17, 벤치 이어짐 — 원격 게이트 VR-2/VR-3 실보드 PASS + RS-485 mon 발견)**: ⑴ **RS-485로 mon을 볼 수 있다** — 기존 메모리 "mon=USART6 RS-485 DE 미제어로 불가"는 **원인 오진**이었다. 트랜시버는 **auto-DE**(`usart6_mb.c:179` echo guard가 증거)이고, 진짜 제약은 `apply_config`가 RTU 점유 시 거는 `mon_set_enabled(false)`(`app_modbus.c:308`/해제 `:294`). **→ `comm_mode`가 ETH_*면 RS-485 어댑터로 mon 청취 가능**(115200 8N1, 읽기 전용). "Modbus는 TCP + 모니터는 485" 구성이 성립하고, 이번 VR-3이 그 구성으로 진행됐다. ⑵ **게이트 거부 mon 로그 신설**(`4db425d`): 무음 거부가 STATUS 무변화라는 간접 증거만 남겨 "막았다"와 "요청이 안 왔다"를 구분 못 하던 것 — `[mb] gate closed(state=N): blocked=0xNN stop_passed=N`. 소거 **전에** 명령을 잡고, 명령이 걸린 경우에만 출력(cfg 전용 쓰기까지 찍으면 원격기 주기 쓰기가 로그를 덮음). ⑶ **VR-2/VR-3 전항목 PASS**(게이트 강제 빌드 플래시 후 ETH/TCP 실측): CAP `0x2A=0x5201`·EN 0·LEFT 0 / START·RESET·SEEK 차단(STATUS 무변화 + 레지스터 소거 + **`[sr]` OSC 구동 0건** = 물리 계층 미실행) / cfg 쓰기 거부(FC06 "Written" 에코하되 read-back 미러 복원) / **STOP 상시 통과**(`blocked=0x00 stop_passed=1`). ⑷ **BYPASS 빌드 실증**: 미러 3종은 살아 있고(probe 관측 가능) `apply_writes` 강제만 꺼짐 + 부팅 mon `*** REMOTE ENABLE GATE BYPASSED ***` 확인. ⑸ 브랜치를 새 main(`6252566`, 사용자의 **대칭 정지** 반영)으로 재베이스 — 브랜치가 `app_reg.c`를 안 건드려 코드 충돌 0. **★ 다음 = ① T-5(DGUS 자산 3종 대기) ② VR-10 probe(지금 가능, T-5 불요) ③ HMI Task 8 ④ IWDG ⑤ 6b·B-SEAM(보류)**. ✅ **보드는 세션 말미 main 빌드로 복귀됨**(사용자 플래시, 덤프 대조 byte-identical 확인 — 게이트 코드 미탑재). ⚠ comm=**ETH_STATIC .199**, serial 파라미터는 **38400**/EVEN으로 변경됨(구 9600 아님). ⚠ **Modbus TCP 소켓 1개** — 원격기 연결 해제 후에도 stale ESTABLISHED가 KA 자가치유 **~20초** 뒤 풀림(실측). ⚠ `freq_cal_val=40`·`cal_val=16`은 **사용자 의도 트림, 원복 금지**.
 > - **이전 상태 (2026-08-16)**: ↓ ponytail 벤치 전항목 PASS + main 머지.
 
