@@ -125,7 +125,9 @@ env -u STM32_TOOLCHAIN cmake --build build --target flash     # 플래시
 
 **먼저 `docs/NEXT_STEPS.md`를 읽고 진행 상황과 다음 작업을 확인.**
 
-**현재 진행 (2026-09-04)**: **원격기 기능 동등성 스택 CODE-COMPLETE — 남은 것은 HW 벤치 하나.** 2026-08-30 요구사항(`docs/superpowers/specs/2026-08-30-remote-parity-requirements.md`)의 **A·B-1~B-5·C 전항목**을 브랜치 `feat/remote-status-bits`(main `2f74611` 위 **20커밋, origin 동기**)에 구현했다. FLASH 50.38% / host 16 스위트 / 경고 0 / 코드리뷰 6건 반영 완료.
+**현재 진행 (2026-09-05)**: **통합 벤치 PASS — 원격기 동등성 스택 + IWDG 둘 다 main 머지·태그 완료.** 실행 41항목 전건 PASS, 펌웨어 결함 0건. 태그 `hw-revA_fw-stage-remote-parity` / `hw-revA_fw-stage-iwdg`. 결과·환경 함정 = `docs/superpowers/plans/2026-09-05-bench-results.md`. **남은 검증은 전부 배선·PCB·육안 게이트** — ★ **A 섹션(게이트 강제) 전체가 PC8 실장 PCB 대기**. 아래 블록은 벤치 전 기록.
+
+(이전) **원격기 기능 동등성 스택 CODE-COMPLETE — 남은 것은 HW 벤치 하나.** 2026-08-30 요구사항(`docs/superpowers/specs/2026-08-30-remote-parity-requirements.md`)의 **A·B-1~B-5·C 전항목**을 브랜치 `feat/remote-status-bits`(main `2f74611` 위 **20커밋, origin 동기**)에 구현했다. FLASH 50.38% / host 16 스위트 / 경고 0 / 코드리뷰 6건 반영 완료.
 
 **★ 다음 세션 진입 = `docs/superpowers/plans/2026-09-04-remote-parity-bench-checklist.md`** (통합 벤치 체크리스트 — 실행 순서·mbpoll 번호표·보드 잔재·**할 수 없는 항목** 포함).
 

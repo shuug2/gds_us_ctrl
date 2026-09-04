@@ -98,7 +98,9 @@ make -C fw/test test                                # rsb 16 / main 14 스위트
 
 ### 2.2 다음 작업 후보
 
-**2026-09-04 현재 우선순위**: ① **★ 통합 HW 벤치** (rsb 체크리스트 S→M→B34→MOD→CAL→NET→FA→A + IWDG W 섹션 — throwaway `bench/` 브랜치에 양쪽 머지해 플래시 1회) → ② HMI Task 8 → ③ 전류 0.60A 실측 → ④ 6b·B-SEAM(보류). **HW 불요 큐는 IWDG 소진으로 비었다.**
+**2026-09-05 현재 우선순위**: ① **★ PC8 실장 PCB → A 섹션(게이트 강제) 벤치** — 통합 벤치에서 유일하게 통째로 미실행된 섹션. ② **RS-485 어댑터 확보 → FA-6/7/12 교차 커밋 RTU 측** + mon 캡처(S-P·S-1). ③ LCD 육안 항목(M-1/M-2·B34-2/3/4/9·MOD-4/7). ④ HMI Task 8. ⑤ 전류 0.60A 실측. ⑥ 6b·B-SEAM(보류).
+
+> **통합 벤치 PASS 2026-09-05** — 실행 41항목 전건, 결함 0. main 머지·태그 완료(`hw-revA_fw-stage-remote-parity` / `-iwdg`). 실측 IWDG T=4.45s / f_LSI≈35.9kHz. 🔴 **벤치 환경 함정 4건은 `plans/2026-09-05-bench-results.md` §4 를 반드시 먼저 읽을 것** — 특히 `nc -z` 금지와 "TCP connect ≠ MCU 생존".
 
 > 브랜치 스택: `main`(**ponytail 머지 완료 2026-08-16**) ← `feat/remote-enable-gate`(**재베이스 완료**, T-5 대기). 양쪽 origin 동기.
 
