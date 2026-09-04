@@ -364,8 +364,14 @@ void app_modbus_apply_writes(mb_link_t link)
                     app_lcd_hook_ether_apply(cfg->comm_mode, cfg->ether_ip,
                                              cfg->ether_nm, cfg->ether_gw);
                 }
-                /* serial 그룹은 별도 훅이 없다 — 다음 tick 의 apply_config() 가
-                 * speed/parity 변화를 감지해 USART6 를 재초기화한다(직독 확인). */
+                /* serial 그룹에는 즉시 재초기화가 **일어나지 않는다** — 그리고
+                 * 그것이 맞다. DG-12 가 serial 커밋을 RTU 에서 거부하므로 커밋은
+                 * TCP 로만 오고, TCP 분기는 comm_mode != SERIAL 일 때만 도는데,
+                 * 그때 apply_config()는 (want==0 && !owned) 로 조기 반환한다.
+                 * 즉 재설정할 살아있는 RTU 링크가 애초에 없다. 새 speed/parity 는
+                 * cfg·FRAM 에 들어가고 **다음에 SERIAL 로 전환할 때** 적용된다.
+                 * (구 주석은 "다음 tick 이 재초기화한다"고 단언했는데 도달 불가
+                 * 경로였다 — 2026-09-04 리뷰 지적, spec §5.6 U-1 행도 같은 오해.) */
                 save = true;
             }
         } else if (ctrl == 2u) {
@@ -491,13 +497,17 @@ void app_modbus_apply_writes(mb_link_t link)
         app_lcd_set_work_cnt(0u);
         save = true;
     } else {
-        /* staged 스캔 — 예약 영역 쓰기를 staging 으로 흡수한다. 기대값과 다른
-         * 첫 필드 하나만 받는다: FC06 1회당 apply 1회라 "한 번에 한 필드"라는
-         * 기존 체인 특성과 정합한다. mb_write_reg 는 건드리지 않는다(회귀 범위). */
+        /* staged 스캔 — 예약 영역 쓰기를 staging 으로 흡수한다.
+         *
+         * 🔴 전수 비교(holding != 기대값)로 하면 **stale 미러를 staged 편집으로
+         * 오인한다**: mirror_live()는 tick 말미에 돌므로, LCD 나 DHCP 가
+         * cfg->ether_* 를 바꾼 직후 한 iteration 동안 holding 은 옛값이다. 그때
+         * 아무 FC06 이나 도착하면 스캔이 **옛값**을 staged 로 잡고, 이후 커밋이
+         * 그것을 cfg·FRAM 에 되써서 조작자의 LCD 변경을 조용히 되돌린다.
+         * 그래서 "마스터가 이번에 실제로 쓴 주소"만 본다 — 코어가 기록해 준다.
+         * mb_core_decode/mb_write_reg 의 거동은 그대로다(관측값 1개 추가). */
         for (uint8_t i = 0u; i < (uint8_t)CFG_STG_COUNT; i++) {
-            uint16_t want = (cfg_stage_dirty(&s_stg, i) != 0u)
-                          ? s_stg.val[i] : stg_mirror_val(cfg, i);
-            if (g_mb.holding[k_stg_reg[i]] != want) {
+            if ((uint16_t)k_stg_reg[i] == g_mb.last_write_addr) {
                 cfg_stage_write(&s_stg, i, g_mb.holding[k_stg_reg[i]],
                                 sys_tick_get_ms());
                 break;

@@ -93,6 +93,6 @@ $(BIN_STG): test_app_cfg_stage.c ../src/app_cfg_stage.c ../include/app_cfg_stage
 	$(CC) $(CFLAGS) $(INC) -o $@ test_app_cfg_stage.c ../src/app_cfg_stage.c
 
 clean:
-	rm -f $(BIN_REG) $(BIN_MB) $(BIN_TCP) $(BIN_WELD) $(BIN_SR) $(BIN_POT) $(BIN_CFG) $(BIN_FQ) $(BIN_BZ) $(BIN_OL) $(BIN_IN) $(BIN_OSC) $(BIN_WTR) $(BIN_HORN) $(BIN_REN)
+	rm -f $(BIN_REG) $(BIN_MB) $(BIN_TCP) $(BIN_WELD) $(BIN_SR) $(BIN_POT) $(BIN_CFG) $(BIN_FQ) $(BIN_BZ) $(BIN_OL) $(BIN_IN) $(BIN_OSC) $(BIN_WTR) $(BIN_HORN) $(BIN_REN) $(BIN_STG)
 
 .PHONY: test clean

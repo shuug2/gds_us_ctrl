@@ -36,10 +36,24 @@
  * 피어는 미커버(Modbus 마스터는 즉시 요청하므로 실질 무해). */
 #define MB_TCP_KEEPALIVE_5S      2u
 
+/* 앱 계층 유휴 타임아웃 — 소켓이 1개뿐이라 죽은 피어가 물고 있으면 아무도 못 붙는다.
+ * 칩 KA 만으로는 두 가지가 부족했다:
+ *   ① KA 자가치유가 실측 ~20초로 느리다.
+ *   ② 🔴 **KA 는 데이터를 1회 이상 주고받은 뒤에만 동작한다**(위 주석). 연결만
+ *      하고 아무것도 안 보낸 피어가 사라지면 ESTABLISHED 가 **영구 고착**되어
+ *      새 SYN 이 RST 를 받는다 = 사람이 전원을 내리기 전까지 복구 불가.
+ * 그래서 "마지막 유효 요청 이후 N 초"를 앱이 직접 재고 disconnect 한다.
+ * 값: 게이트 침묵 임계(10s)보다 크고 KA 경로(~20s)보다 작게 잡아 이쪽이 지배하게
+ * 한다. 실 Modbus 마스터는 100ms~1s 주기로 폴링하므로 정상 트래픽과 겹치지 않는다. */
+#ifndef MB_TCP_IDLE_MAX_MS
+#define MB_TCP_IDLE_MAX_MS   12000u
+#endif
+
 static uint8_t  s_acc[MB_TCP_ACC_LEN];      /* 수신 누적 (partial 이월) */
 static uint16_t s_acc_len;
 static uint8_t  s_txacc[MB_TCP_TXACC_LEN];  /* poll당 응답 코얼레스 (스택 스파이크 회피) */
 static uint32_t s_cw_since_ms;              /* CLOSE_WAIT 진입 스탬프 */
+static uint32_t s_last_rx_ms;               /* 마지막 유효 요청(또는 연결 수립) 스탬프 */
 static uint8_t  s_cw_active;
 
 /* sock0 강제 close */
@@ -66,7 +80,16 @@ static void control_tcp(void)
             s_cw_active = 0u;
             if (getSn_IR(MB_TCP_SOCK) & Sn_IR_CON) {
                 setSn_IR(MB_TCP_SOCK, Sn_IR_CON);
-                s_acc_len = 0u;   /* 새 연결: 이전 피어의 stale partial 폐기 */
+                s_acc_len    = 0u;   /* 새 연결: 이전 피어의 stale partial 폐기 */
+                s_last_rx_ms = sys_tick_get_ms();   /* 유휴 시계 기준선 */
+            }
+            /* 유휴 타임아웃 → 끊고 재리슨. FSM 이 CLOSE_WAIT/CLOSED 를 거쳐
+             * 스스로 다시 listen 하므로 여기서는 disconnect 만 하면 된다.
+             * 사람 개입 없이 다음 피어가 붙을 수 있게 하는 것이 목적이다. */
+            if ((uint32_t)(sys_tick_get_ms() - s_last_rx_ms) > MB_TCP_IDLE_MAX_MS) {
+                mon_printf("[mbtcp] idle %us -> disconnect (재리슨)\r\n",
+                           (unsigned)(MB_TCP_IDLE_MAX_MS / 1000u));
+                (void)disconnect(MB_TCP_SOCK);
             }
             break;
         case SOCK_CLOSE_WAIT:
@@ -167,6 +190,7 @@ void app_modbus_tcp_poll(void)
         if (mb_tcp_build_response(app_modbus_core(), &s_acc[off], frame_len,
                                   &s_txacc[tx_len], &out_len, &fc)) {
             app_modbus_note_remote();   /* REMOTE icon (samd20 modbus_status) */
+            s_last_rx_ms = sys_tick_get_ms();   /* 유휴 시계 리셋 */
             tx_len = (uint16_t)(tx_len + out_len);
             if (fc == 0x06u) {
                 app_modbus_apply_writes(MB_LINK_TCP);

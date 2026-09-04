@@ -13,6 +13,9 @@ void mb_core_init(mb_core_t *mb, uint8_t device_addr)
 {
     memset(mb, 0, sizeof(*mb));
     mb->device_addr = device_addr;
+    /* ⚠ memset 뒤에 와야 한다 — 0 은 유효 주소(WORK_CNTH)라 앞에 두면 지워지고
+     * 부팅 직후 스캔이 존재하지 않는 쓰기를 본 것으로 오인한다. */
+    mb->last_write_addr = MB_REG_NONE;
 }
 
 /* Modbus CRC16 계산 */
@@ -81,7 +84,8 @@ static uint8_t mb_write_reg(mb_core_t *mb, const uint8_t *frame,
     if (addr >= MB_REG_COUNT) {
         return 0;
     }
-    mb->holding[addr] = val;
+    mb->holding[addr]    = val;
+    mb->last_write_addr  = addr;   /* 앱 계층 staged 스캔용 (§stale 미러 방지) */
 
     resp[0] = mb->device_addr;
     resp[1] = 0x06u;

@@ -186,9 +186,11 @@ static void test_silence_brief_gap_survives(void)
     CHECK_EQ(out.state, REN_ENABLED);
 }
 
-/* 링크 해제도 래치 — 통신이 돌아와도 자동 복귀하지 않는다.
- * 원격기가 스스로 되살아나면 "사람이 앞에 있다"가 다시 확인되지 않은 채 열린다. */
-static void test_link_loss_latched(void)
+/* 🔴 링크 해제는 **래치하지 않는다** — 통신이 돌아오면 스스로 복귀한다.
+ * 래치했더니 자기교착이었다: TCP 소켓 1개 + stale ESTABLISHED 자가치유 실측
+ * ~20초 > 침묵 임계 10초 → 원격기가 재접속할 때마다 사람이 키를 껐다 켜야 했다.
+ * 스위치가 ON 인 한 "사람이 앞에 있다"는 전제는 깨지지 않으므로 안전하다. */
+static void test_link_loss_auto_recovers(void)
 {
     remote_en_in_t in; remote_en_out_t out;
     remote_en_fsm_init();
@@ -200,15 +202,39 @@ static void test_link_loss_latched(void)
     remote_en_fsm_step(&in, &out);
     CHECK_EQ(out.state, REN_DIS_LINK);
 
-    mk(&in, 11000u + SILENCE_MS + 1000u, 1u, 0u);   /* 요청 재개 */
+    /* 아직 침묵이면 닫힌 채 유지 */
+    in.now_ms = 11000u + SILENCE_MS + 3000u;
     remote_en_fsm_step(&in, &out);
-    CHECK_EQ(out.state, REN_DIS_LINK);              /* 그래도 닫힌 채 */
+    CHECK_EQ(out.state, REN_DIS_LINK);
 
-    mk(&in, 11000u + SILENCE_MS + 2000u, 0u, 0u);   /* 스위치 사이클 */
-    remote_en_fsm_step(&in, &out);
-    mk(&in, 11000u + SILENCE_MS + 3000u, 1u, 0u);
+    /* 요청 재개 → 스위치를 만지지 않아도 복귀 */
+    mk(&in, 11000u + SILENCE_MS + 5000u, 1u, 0u);
     remote_en_fsm_step(&in, &out);
     CHECK_EQ(out.state, REN_ENABLED);
+
+    /* 복귀 후 다시 침묵하면 다시 닫힌다 (무장이 유지돼야 성립) */
+    in.now_ms = 11000u + SILENCE_MS + 5000u + SILENCE_MS;
+    remote_en_fsm_step(&in, &out);
+    CHECK_EQ(out.state, REN_DIS_LINK);
+}
+
+/* E-STOP 래치는 링크와 달리 유지된다 — 트래픽이 계속 와도 안 열린다.
+ * 이 대비가 무너지면 안전 이벤트가 통신 재개만으로 지워진다. */
+static void test_estop_latch_survives_traffic(void)
+{
+    remote_en_in_t in; remote_en_out_t out;
+    remote_en_fsm_init();
+    mk(&in, 1000u, 1u, 0u);
+    remote_en_fsm_step(&in, &out);
+    mk(&in, 2000u, 1u, 1u);            /* E-STOP */
+    remote_en_fsm_step(&in, &out);
+    CHECK_EQ(out.state, REN_DIS_ESTOP);
+
+    for (uint32_t t = 3000u; t <= 30000u; t += 1000u) {
+        mk(&in, t, 1u, 0u);            /* 트래픽 정상, E-STOP 해제됨 */
+        remote_en_fsm_step(&in, &out);
+    }
+    CHECK_EQ(out.state, REN_DIS_ESTOP);   /* 그래도 닫힌 채 */
 }
 
 /* u32 랩 근처에서도 침묵 판정이 정상 (elapsed 형태 비교) */
@@ -251,7 +277,8 @@ int main(void) {
     test_silence_unarmed_stale_req();
     test_silence_armed_link_loss();
     test_silence_brief_gap_survives();
-    test_link_loss_latched();
+    test_link_loss_auto_recovers();
+    test_estop_latch_survives_traffic();
     test_wrap_safe_silence();
     test_wire_values_match_contract();
     if (failures) { printf("%d check(s) FAILED\n", failures); return 1; }

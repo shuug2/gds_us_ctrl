@@ -98,8 +98,9 @@ uint8_t io_read_sens_up(void)    { return (uint8_t)HAL_GPIO_ReadPin(SENS_UP_PORT
 uint8_t io_read_sens_dn(void)    { return (uint8_t)HAL_GPIO_ReadPin(SENS_DN_PORT, SENS_DN_PIN); }
 /* overload 입력 읽기 */
 uint8_t io_read_overload(void)   { return (uint8_t)HAL_GPIO_ReadPin(OVLD_IN_PORT, OVLD_IN_PIN); }
+/* 원격 활성화 인터록 읽기 (raw: 닫힘=LOW=허용, 열림·단선=HIGH=불허) */
+uint8_t io_read_remote_en(void)  { return (uint8_t)HAL_GPIO_ReadPin(REMOTE_EN_PORT, REMOTE_EN_PIN); }
 /* US 피드백 읽기 */
-uint8_t io_read_remote_en(void) { return (uint8_t)HAL_GPIO_ReadPin(REMOTE_EN_PORT, REMOTE_EN_PIN); }
 uint8_t io_read_usfb(void)       { return (uint8_t)HAL_GPIO_ReadPin(USFB_PORT,    USFB_PIN);    }
 
 /* USOUT 출력 설정 */

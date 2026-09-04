@@ -54,7 +54,13 @@ uint8_t cfg_stage_commit(cfg_stage_t *s, mb_link_t link, uint8_t running)
     uint16_t d = s->dirty;
 
     if (d == 0u) {
-        s->stat = CFG_STAT_COMMIT_OK;   /* 반영할 것이 없다 = 무해한 no-op */
+        /* 🔴 stat 을 건드리지 않는다. 예전엔 COMMIT_OK 로 덮었는데, 그러면
+         * **타임아웃으로 폐기된 staging 이 성공으로 보고된다**: 마스터가 ether
+         * 6칸을 staged → 재시도로 다음 FC06 이 30초를 넘김 → staging 조용히 폐기
+         * → 마스터가 커밋하고 CFG_STAT=2 를 읽음 → "새 IP 적용됨"으로 오판.
+         * 아무것도 안 바뀌었고 REJ_TIMEOUT 증거까지 지워진 상태였다.
+         * 반영할 것이 없으면 아무 말도 하지 않는 것이 정직하다 — 직전 사유(또는
+         * IDLE)가 그대로 보이고, 마스터는 STAGED 로 전이하지 않은 것으로 안다. */
         return 0u;
     }
 

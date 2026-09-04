@@ -210,13 +210,44 @@ static void test_no_partial_commit(void)
     CHECK_EQ(cfg_stage_dirty(&s, CFG_STG_SPEED), 1u);  /* 유효 필드도 그대로 대기 */
 }
 
-/* 빈 커밋 = 무해한 no-op. 반영할 것이 없으니 반환 0, 실패도 아니다. */
-static void test_empty_commit(void)
+/* 빈 커밋은 stat 을 **건드리지 않는다**. 예전엔 무조건 COMMIT_OK 로 덮었는데,
+ * 그러면 아래 test_timeout_not_reported_as_commit_ok 의 사고가 난다. */
+static void test_empty_commit_keeps_stat(void)
 {
     cfg_stage_t s;
     cfg_stage_init(&s);
     CHECK_EQ(cfg_stage_commit(&s, MB_LINK_RTU, 0u), 0u);
-    CHECK_EQ(s.stat, CFG_STAT_COMMIT_OK);
+    CHECK_EQ(s.stat, CFG_STAT_IDLE);      /* staging 이 없었으니 IDLE 그대로 */
+}
+
+/* 🔴 타임아웃으로 폐기된 staging 에 커밋하면 **성공으로 보고되면 안 된다.**
+ * 사고 시나리오: 마스터가 ether 6칸을 staged → 재시도/링크 딸꾹질로 다음 FC06 이
+ * 30초를 넘김 → staging 이 조용히 폐기됨 → 마스터가 CFG_CTRL=1 을 보내고
+ * CFG_STAT=2(COMMIT_OK)를 읽음 → **새 IP 가 적용된 줄 안다.** 아무것도 안 바뀌었고
+ * REJ_TIMEOUT 증거까지 지워진 상태다. */
+static void test_timeout_not_reported_as_commit_ok(void)
+{
+    cfg_stage_t s;
+    cfg_stage_init(&s);
+    cfg_stage_write(&s, CFG_STG_IP_H, 0xC0A8u, 1000u);
+    cfg_stage_tick(&s, 1000u + CFG_STAGE_TIMEOUT_MS);
+    CHECK_EQ(s.stat,  CFG_STAT_REJ_TIMEOUT);
+    CHECK_EQ(s.dirty, 0u);
+
+    CHECK_EQ(cfg_stage_commit(&s, MB_LINK_RTU, 0u), 0u);
+    CHECK_EQ(s.stat, CFG_STAT_REJ_TIMEOUT);   /* 사유가 살아남아야 한다 */
+}
+
+/* 거부 사유도 마찬가지로 빈 커밋에 지워지지 않는다 */
+static void test_reject_reason_survives_empty_commit(void)
+{
+    cfg_stage_t s;
+    cfg_stage_init(&s);
+    cfg_stage_write(&s, CFG_STG_ADDR, 0u, 1000u);
+    CHECK_EQ(cfg_stage_commit(&s, MB_LINK_TCP, 0u), 0u);
+    CHECK_EQ(s.stat, CFG_STAT_REJ_RANGE);
+    cfg_stage_discard(&s);                     /* dirty 비움 */
+    CHECK_EQ(s.stat, CFG_STAT_IDLE);           /* DISCARD 는 명시적 초기화라 IDLE */
 }
 
 /* COMMIT_OK 는 다음 staged 쓰기에서 해제된다 (§5.5) */
@@ -287,7 +318,9 @@ int main(void) {
     test_running_reject();
     test_validation_order();
     test_no_partial_commit();
-    test_empty_commit();
+    test_empty_commit_keeps_stat();
+    test_timeout_not_reported_as_commit_ok();
+    test_reject_reason_survives_empty_commit();
     test_stat_clears_on_next_write();
     test_group_masks();
     test_cal_from_wire();

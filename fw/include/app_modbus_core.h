@@ -140,7 +140,13 @@ typedef struct {
     uint16_t holding[MB_REG_COUNT];
     uint8_t  coils[MB_COIL_COUNT];   /* FC 01/05 work; NO app mapping (samd20 faithful) */
     uint8_t  device_addr;
+    /* 직전 FC06 이 쓴 레지스터 주소 (없으면 MB_REG_NONE). 앱 계층의 staged 스캔이
+     * "마스터가 실제로 건드린 칸"을 알기 위해 쓴다 — 전수 비교로는 stale 미러와
+     * 구분되지 않는다. 코어 거동에는 영향 없는 순수 관측값. */
+    uint16_t last_write_addr;
 } mb_core_t;
+
+#define MB_REG_NONE  0xFFFFu
 
 /* Zero both tables + set the slave address (samd20 init_modbus tail). */
 void mb_core_init(mb_core_t *mb, uint8_t device_addr);
