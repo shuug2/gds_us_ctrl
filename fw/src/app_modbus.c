@@ -335,17 +335,14 @@ void app_modbus_apply_writes(mb_link_t link)
         g_mb.holding[MB_REG_SEEK] = 0u;
     } else if (g_mb.holding[MB_REG_START] == 1u) {
         app_reg_command(US_CMD_START, (uint8_t)US_COMM);
-        if (app_lcd_measure()->us_run_status == (uint8_t)US_COMM) {
-            /* START accepted: samd20 comm START writes the amplitude pot in
-             * the same breath (I2C_POT, main.c:4400) — stub hook logs until
-             * B-SEAM/F2 resolves the pot identity.
-             * NOTE: g_measure publishes on app_reg_tick's ~2 ms gate, so this
-             * snapshot is one publish stale and the guard evaluates FALSE in
-             * the same iter the run starts — harmless while set_pot is a log
-             * stub, but B-SEAM must replace it with a live app_reg accessor
-             * (final integration review 2026-06-12). */
-            app_lcd_hook_set_pot(cfg->output_power);
-        }
+        /* samd20 comm START 는 같은 자리에서 진폭 pot 을 쓴다(main.c:4400-4401).
+         * LCD RUN-press 경로(app_lcd_input.c:217/242)와 동형 — 무조건 write.
+         * 거부된 START 여도 출력이 없어 무해(멱등 1바이트).
+         * 구 가드 `app_lcd_measure()->us_run_status == US_COMM` 는 g_measure 가
+         * app_reg_tick(app_modbus_tick 앞)에서만 게시돼 START 를 수락한 그 iter 에
+         * 항상 FALSE 였다 — 2026-06-12 리뷰 NOTE 가 "set_pot 이 log stub 이라 무해"
+         * 로 남겼으나 2026-06-28 I2C_POT 실구동 이후 전제가 깨졌다(2026-09-04 fix). */
+        app_lcd_hook_set_pot(cfg->output_power);
         g_mb.holding[MB_REG_START] = 0u;
     } else if (g_mb.holding[MB_REG_STOP] == 1u) {
         app_reg_command(US_CMD_RUN_RELEASE, (uint8_t)US_COMM);
