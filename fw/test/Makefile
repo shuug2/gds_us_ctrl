@@ -20,9 +20,10 @@ BIN_IN  := /tmp/gds_test_app_input_fsm
 BIN_OSC := /tmp/gds_test_app_osc_init_fsm
 BIN_WTR := /tmp/gds_test_app_weld_trigger_fsm
 BIN_HORN := /tmp/gds_test_app_horn_fsm
+BIN_STG := /tmp/gds_test_app_cfg_stage
 BIN_REN := /tmp/gds_test_app_remote_en_fsm
 
-test: $(BIN_REG) $(BIN_MB) $(BIN_TCP) $(BIN_WELD) $(BIN_SR) $(BIN_POT) $(BIN_CFG) $(BIN_FQ) $(BIN_BZ) $(BIN_OL) $(BIN_IN) $(BIN_OSC) $(BIN_WTR) $(BIN_HORN) $(BIN_REN)
+test: $(BIN_REG) $(BIN_MB) $(BIN_TCP) $(BIN_WELD) $(BIN_SR) $(BIN_POT) $(BIN_CFG) $(BIN_FQ) $(BIN_BZ) $(BIN_OL) $(BIN_IN) $(BIN_OSC) $(BIN_WTR) $(BIN_HORN) $(BIN_REN) $(BIN_STG)
 	$(BIN_REG)
 	$(BIN_MB)
 	$(BIN_TCP)
@@ -37,6 +38,7 @@ test: $(BIN_REG) $(BIN_MB) $(BIN_TCP) $(BIN_WELD) $(BIN_SR) $(BIN_POT) $(BIN_CFG
 	$(BIN_OSC)
 	$(BIN_WTR)
 	$(BIN_HORN)
+	$(BIN_STG)
 	$(BIN_REN)
 
 $(BIN_HORN): test_app_horn_fsm.c ../src/app_horn_fsm.c ../include/app_horn_fsm.h
@@ -86,6 +88,9 @@ $(BIN_OSC): test_app_osc_init_fsm.c ../src/app_osc_init_fsm.c ../include/app_osc
 
 $(BIN_WTR): test_app_weld_trigger_fsm.c ../src/app_weld_trigger_fsm.c ../include/app_weld_trigger_fsm.h ../include/app_weld_fsm.h
 	$(CC) $(CFLAGS) $(INC) -o $@ test_app_weld_trigger_fsm.c ../src/app_weld_trigger_fsm.c
+
+$(BIN_STG): test_app_cfg_stage.c ../src/app_cfg_stage.c ../include/app_cfg_stage.h
+	$(CC) $(CFLAGS) $(INC) -o $@ test_app_cfg_stage.c ../src/app_cfg_stage.c
 
 clean:
 	rm -f $(BIN_REG) $(BIN_MB) $(BIN_TCP) $(BIN_WELD) $(BIN_SR) $(BIN_POT) $(BIN_CFG) $(BIN_FQ) $(BIN_BZ) $(BIN_OL) $(BIN_IN) $(BIN_OSC) $(BIN_WTR) $(BIN_HORN) $(BIN_REN)

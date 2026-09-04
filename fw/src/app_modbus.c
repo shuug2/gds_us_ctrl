@@ -21,6 +21,7 @@
 #include "app_weld.h"       /* app_weld_sensor_active (STATUS SENSOR 비트, B-3) */
 #include "app_horn.h"       /* app_horn_mode_active (STATUS HORN 비트, B-4) */
 #include "app_remote_en_fsm.h"   /* 원격 활성화 게이트 (요구사항 A) */
+#include "app_cfg_stage.h"  /* comm/eth staging + commit (F-A) */
 #include "io.h"             /* io_read_remote_en (PC8 물리 인터록) */
 #include "define.h"         /* MODEL_REMOTE — 게이트는 REMOTE 모델 전용 */
 #include "app_config.h"
@@ -50,6 +51,51 @@ static uint8_t  s_remote_seen;  /* 0 until the first request — boot/wrap guard
  * s_ren = 마지막 step 출력 캐시(미러 + apply 게이트가 소비).
  * 조작 입력은 PC8 물리 스위치 레벨뿐이라 1-shot 래치가 필요 없다. */
 static remote_en_out_t s_ren;
+
+/* comm/eth staging 버퍼 (F-A). 비영속 — 링크 전이에서 무조건 폐기한다. */
+static cfg_stage_t s_stg;
+
+/* staged 인덱스 → 레지스터 주소. 미러와 스캔이 같은 표를 쓴다. */
+static const uint8_t k_stg_reg[CFG_STG_COUNT] = {
+    MB_REG_COMM_ADDR,  MB_REG_COMM_SPEED, MB_REG_COMM_PARITY,
+    MB_REG_ETHER_IP_H, MB_REG_ETHER_IP_L,
+    MB_REG_ETHER_NM_H, MB_REG_ETHER_NM_L,
+    MB_REG_ETHER_GW_H, MB_REG_ETHER_GW_L,
+};
+
+/* 비-dirty staged 레지스터가 보여야 할 cfg 라이브 값. IP/NM/GW 는 2옥텟/레지스터
+ * (1옥텟이면 12칸을 먹고 FC06 쓰기 횟수도 2배 — RS-485 첫 write 간헐 무효 노출이
+ * 그만큼 늘어난다). WORK_CNTH/L 상하위 분할 선례와 같은 형태다. */
+static uint16_t stg_mirror_val(const app_config_t *cfg, uint8_t idx)
+{
+    switch (idx) {
+    case CFG_STG_ADDR:   return cfg->comm_address;
+    case CFG_STG_SPEED:  return cfg->comm_speed_idx;
+    case CFG_STG_PARITY: return cfg->comm_parity_idx;
+    case CFG_STG_IP_H:   return (uint16_t)((cfg->ether_ip[0] << 8) | cfg->ether_ip[1]);
+    case CFG_STG_IP_L:   return (uint16_t)((cfg->ether_ip[2] << 8) | cfg->ether_ip[3]);
+    case CFG_STG_NM_H:   return (uint16_t)((cfg->ether_nm[0] << 8) | cfg->ether_nm[1]);
+    case CFG_STG_NM_L:   return (uint16_t)((cfg->ether_nm[2] << 8) | cfg->ether_nm[3]);
+    case CFG_STG_GW_H:   return (uint16_t)((cfg->ether_gw[0] << 8) | cfg->ether_gw[1]);
+    default:             return (uint16_t)((cfg->ether_gw[2] << 8) | cfg->ether_gw[3]);
+    }
+}
+
+/* 커밋 통과분을 cfg 에 일괄 반영. d = 커밋이 dirty 를 지우기 전에 떠 둔 스냅샷.
+ * 범위 검증이 이미 통과했으므로 u16→u8 절단은 손실이 없다 (ether 는 2옥텟 패킹
+ * 자체가 무손실). */
+static void stg_apply_to_cfg(app_config_t *cfg, uint16_t d)
+{
+    if ((d & (1u << CFG_STG_ADDR))   != 0u) { cfg->comm_address    = (uint8_t)s_stg.val[CFG_STG_ADDR]; }
+    if ((d & (1u << CFG_STG_SPEED))  != 0u) { cfg->comm_speed_idx  = (uint8_t)s_stg.val[CFG_STG_SPEED]; }
+    if ((d & (1u << CFG_STG_PARITY)) != 0u) { cfg->comm_parity_idx = (uint8_t)s_stg.val[CFG_STG_PARITY]; }
+    if ((d & (1u << CFG_STG_IP_H)) != 0u) { cfg->ether_ip[0] = (uint8_t)(s_stg.val[CFG_STG_IP_H] >> 8); cfg->ether_ip[1] = (uint8_t)s_stg.val[CFG_STG_IP_H]; }
+    if ((d & (1u << CFG_STG_IP_L)) != 0u) { cfg->ether_ip[2] = (uint8_t)(s_stg.val[CFG_STG_IP_L] >> 8); cfg->ether_ip[3] = (uint8_t)s_stg.val[CFG_STG_IP_L]; }
+    if ((d & (1u << CFG_STG_NM_H)) != 0u) { cfg->ether_nm[0] = (uint8_t)(s_stg.val[CFG_STG_NM_H] >> 8); cfg->ether_nm[1] = (uint8_t)s_stg.val[CFG_STG_NM_H]; }
+    if ((d & (1u << CFG_STG_NM_L)) != 0u) { cfg->ether_nm[2] = (uint8_t)(s_stg.val[CFG_STG_NM_L] >> 8); cfg->ether_nm[3] = (uint8_t)s_stg.val[CFG_STG_NM_L]; }
+    if ((d & (1u << CFG_STG_GW_H)) != 0u) { cfg->ether_gw[0] = (uint8_t)(s_stg.val[CFG_STG_GW_H] >> 8); cfg->ether_gw[1] = (uint8_t)s_stg.val[CFG_STG_GW_H]; }
+    if ((d & (1u << CFG_STG_GW_L)) != 0u) { cfg->ether_gw[2] = (uint8_t)(s_stg.val[CFG_STG_GW_L] >> 8); cfg->ether_gw[3] = (uint8_t)s_stg.val[CFG_STG_GW_L]; }
+}
 
 /* REMOTE 시각 스탬프 */
 void app_modbus_note_remote(void)
@@ -163,6 +209,17 @@ static void mirror_live(void)
     };
     g_mb.holding[MB_REG_STATUS]      = mb_status_bits(&sin);
 
+    /* F-A comm/eth 미러. COMM_MODE·CFG_STAT 는 무조건, staged 9종은 **비-dirty 일
+     * 때만** cfg 라이브 값으로 덮는다 — dirty 인 동안 미러가 덮으면 "쓰기 후
+     * read-back" 계약이 staging 에서 깨져 마스터가 자기가 쓴 값을 확인할 수 없다. */
+    g_mb.holding[MB_REG_COMM_MODE] = cfg->comm_mode;
+    g_mb.holding[MB_REG_CFG_STAT]  = s_stg.stat;
+    for (uint8_t i = 0u; i < (uint8_t)CFG_STG_COUNT; i++) {
+        if (cfg_stage_dirty(&s_stg, i) == 0u) {
+            g_mb.holding[k_stg_reg[i]] = stg_mirror_val(cfg, i);
+        }
+    }
+
     /* 원격 게이트 미러. CAP는 매직 무조건 복원 = capability probe의 신-펌웨어
      * 판별점("read-only는 미러가 덮음" — MODEL_FREQ/TYPE 위와 동형). 0x2D는
      * 예약이라 미러하지 않는다. 조건 없이 함수 말미에 두어야 세 호출처
@@ -183,7 +240,7 @@ static void mirror_live(void)
 }
 
 /* FC06 write 적용 */
-void app_modbus_apply_writes(void)
+void app_modbus_apply_writes(mb_link_t link)
 {
     /* samd20 update_holding_reg(1): one else-if chain per message — commands
      * first (consume-and-clear), then the single config field that differs
@@ -244,6 +301,12 @@ void app_modbus_apply_writes(void)
          * STOP=2 같은 비-1 write가 영영 잔류해(미러 대상 아님, 아래 체인도 ==1만
          * 매치) FC03 읽기가 유령 pending STOP을 계속 보고한다. */
         g_mb.holding[MB_REG_STOP] = 0u;
+        /* F-A: 커밋은 실계 변경이라 게이트 대상이다. 값 불문 소거하되 CFG_STAT 는
+         * 건드리지 않는다 — 게이트 거부와 커밋 검증 거부는 다른 층이고, 사유는
+         * REMOTE_EN(0x2B)을 읽어 안다. staged 쓰기 자체는 실계 무영향이라
+         * 게이트 대상이 아니지만, 이 return 이 스캔 분기도 함께 건너뛴다:
+         * 게이트가 닫힌 동안의 staged 편집은 열린 뒤 다시 쓰면 된다. */
+        g_mb.holding[MB_REG_CFG_CTRL] = 0u;
         return;
     }
 #endif
@@ -273,6 +336,38 @@ void app_modbus_apply_writes(void)
     } else if (g_mb.holding[MB_REG_STOP] == 1u) {
         app_reg_command(US_CMD_RUN_RELEASE, (uint8_t)US_COMM);
         g_mb.holding[MB_REG_STOP] = 0u;
+    } else if (g_mb.holding[MB_REG_CFG_CTRL] != 0u) {
+        /* F-A 커밋/폐기. 🔴 소거는 무조건, 디스패치는 조건부 — 소거를 ==1/==2
+         * 안에 두면 CFG_CTRL=7 같은 값이 영구 잔류하고(0x28 은 미러 대상 ✗)
+         * 이후 모든 FC03 읽기가 유령 pending 커밋을 보고한다. */
+        uint16_t ctrl = g_mb.holding[MB_REG_CFG_CTRL];
+        g_mb.holding[MB_REG_CFG_CTRL] = 0u;
+
+        if (ctrl == 1u) {
+            /* 커밋이 dirty 를 지우기 전에 스냅샷 — 무엇을 반영할지가 여기에 있다. */
+            uint16_t d = s_stg.dirty;
+            /* 가동 중 판정 = us_on_status (run OR seek/reset). 가동 중 통신 링크
+             * 재초기화를 막는다. */
+            if (cfg_stage_commit(&s_stg, link,
+                                 app_lcd_measure()->us_on_status) != 0u) {
+                stg_apply_to_cfg(cfg, d);
+                if ((d & CFG_STG_ETHER_MASK) != 0u) {
+                    /* LCD SAVE 와 같은 훅을 재사용 — app_eth_tick 이 dirty 를
+                     * consume 해 재적용한다. RTU 는 응답을 blocking 으로 먼저
+                     * 보내고 나서 apply 를 부르므로(send → apply 순서, 아래 tick)
+                     * 지연이 불필요하다. DG-12 로 ether 커밋은 RTU 로만 도착하니
+                     * TCP 응답 유실 시나리오 자체가 없다 — spec §7 의 500ms 지연
+                     * 상수는 근거가 사라져 도입하지 않는다(T-1 재확인 결과). */
+                    app_lcd_hook_ether_apply(cfg->comm_mode, cfg->ether_ip,
+                                             cfg->ether_nm, cfg->ether_gw);
+                }
+                /* serial 그룹은 별도 훅이 없다 — 다음 tick 의 apply_config() 가
+                 * speed/parity 변화를 감지해 USART6 를 재초기화한다(직독 확인). */
+                save = true;
+            }
+        } else if (ctrl == 2u) {
+            cfg_stage_discard(&s_stg);
+        }
     } else if (g_mb.holding[MB_REG_DELAY1] != cfg->limit_delay_time1) {
         v = g_mb.holding[MB_REG_DELAY1];
         if (v > 500u) { v = 500u; }
@@ -369,6 +464,19 @@ void app_modbus_apply_writes(void)
         cfg->work_cnt = 0u;
         app_lcd_set_work_cnt(0u);
         save = true;
+    } else {
+        /* staged 스캔 — 예약 영역 쓰기를 staging 으로 흡수한다. 기대값과 다른
+         * 첫 필드 하나만 받는다: FC06 1회당 apply 1회라 "한 번에 한 필드"라는
+         * 기존 체인 특성과 정합한다. mb_write_reg 는 건드리지 않는다(회귀 범위). */
+        for (uint8_t i = 0u; i < (uint8_t)CFG_STG_COUNT; i++) {
+            uint16_t want = (cfg_stage_dirty(&s_stg, i) != 0u)
+                          ? s_stg.val[i] : stg_mirror_val(cfg, i);
+            if (g_mb.holding[k_stg_reg[i]] != want) {
+                cfg_stage_write(&s_stg, i, g_mb.holding[k_stg_reg[i]],
+                                sys_tick_get_ms());
+                break;
+            }
+        }
     }
 
     if (save) {
@@ -425,6 +533,7 @@ static void apply_config(void)
                    (unsigned)cfg->comm_address);
         mon_set_enabled(false);
         usart6_mb_open(cfg->comm_speed_idx, cfg->comm_parity_idx);
+        cfg_stage_discard(&s_stg);  /* 링크 전이 = staging 무조건 폐기 */
         mb_core_init(&g_mb, cfg->comm_address);   /* samd20 init_modbus zeroes tables */
         g_applied.owned      = 1u;
         g_applied.speed_idx  = cfg->comm_speed_idx;
@@ -453,6 +562,7 @@ void app_modbus_init(void)
      * 통째로 버린다(호스트 테스트는 모델과 무관하게 계속 돈다). */
     s_ren.state = (uint8_t)REN_ENABLED;
 #endif
+    cfg_stage_init(&s_stg);
     mb_core_init(&g_mb, 0u);
     apply_config();
 }
@@ -476,6 +586,8 @@ void app_modbus_tick(void)
     /* 게이트는 분기 밖 첫 문장 — RTU 점유/TCP/미점유 어디로 빠지든 시간이 흐르고
      * 만료돼야 한다 (spec §6). 이후 같은 tick의 mirror_live()가 최신 상태를 싣는다. */
     remote_en_step();
+    /* staging 타임아웃 — 분기 밖. 어느 경로로 빠지든 만료돼야 한다. */
+    cfg_stage_tick(&s_stg, sys_tick_get_ms());
     apply_config();
     const app_config_t *cfg = app_lcd_cfg();
 
@@ -494,7 +606,7 @@ void app_modbus_tick(void)
                 usart6_mb_send(resp, n);
             }
             if (fc == 0x06u) {
-                app_modbus_apply_writes(); /* samd20: update_holding_reg(1) on FC06 */
+                app_modbus_apply_writes(MB_LINK_RTU); /* samd20: update_holding_reg(1) on FC06 */
             }
         }
         mirror_live();
@@ -506,6 +618,7 @@ void app_modbus_tick(void)
      * mirror_live() never ran in ETH mode, so FC03 reads would go stale. */
     if ((cfg->comm_mode != MB_COMM_MODE_SERIAL) && app_eth_available()) {
         if (g_tcp_active == 0u) {
+            cfg_stage_discard(&s_stg);  /* 링크 전이 = staging 무조건 폐기 */
             mb_core_init(&g_mb, cfg->comm_address);  /* seed addr + zero tables */
             mirror_live();   /* baseline before first poll (matches apply_config
                               * RTU-acquisition): avoids a zeroed-holding[] read

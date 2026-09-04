@@ -44,7 +44,39 @@
 #define MB_REG_STATUS       0x1Du
 
 /* 원격 제어 활성화 게이트 (2026-08-15 spec §4) — samd20 대응물 없는 신규.
- * 0x1E~0x29는 F-A(comm/eth 확장) 예약으로 비워 둔다. MB_REG_COUNT(50) 불변. */
+ * 0x1E~0x29 = F-A(comm/eth 확장). MB_REG_COUNT(50) 불변. */
+/* --- F-A: comm/ethernet 확장 (0x1E~0x29) ---
+ * 값 레지스터가 아니라 **staging + commit** 이다. 통신 설정은 그 값을 쓰는 데
+ * 쓰이는 링크 자체를 제어하므로, 즉시 반영하면 반쪽 IP 가 FRAM 에 영속되고 첫
+ * 필드 반영 순간 링크가 끊겨 나머지를 쓸 기회가 사라진다.
+ * staged 쓰기는 실계 무영향 → CFG_CTRL=1 한 번으로 일괄 커밋. 부분 커밋 없음.
+ * spec: docs/superpowers/specs/2026-08-16-comm-eth-register-extension-design.md */
+#define MB_REG_COMM_ADDR        0x1Eu  /* R/W staged — 슬레이브 주소 1..247 */
+#define MB_REG_COMM_SPEED       0x1Fu  /* R/W staged — 보드레이트 index 0..5 */
+#define MB_REG_COMM_PARITY      0x20u  /* R/W staged — 패리티 index 0..2 */
+#define MB_REG_COMM_MODE        0x21u  /* R only — 0 SERIAL / 1 ETH_STATIC / 2 ETH_DHCP.
+                                        * 원격 쓰기 ✗: SERIAL↔ETH 전환은 어느 링크로
+                                        * 커밋해도 한쪽을 끊는 본질적 자기참조라
+                                        * 교차 규칙으로 못 푼다. LCD 전용 유지 */
+#define MB_REG_ETHER_IP_H       0x22u  /* R/W staged — ip[0]<<8 | ip[1] */
+#define MB_REG_ETHER_IP_L       0x23u  /* R/W staged — ip[2]<<8 | ip[3] */
+#define MB_REG_ETHER_NM_H       0x24u
+#define MB_REG_ETHER_NM_L       0x25u
+#define MB_REG_ETHER_GW_H       0x26u
+#define MB_REG_ETHER_GW_L       0x27u
+#define MB_REG_CFG_CTRL         0x28u  /* W cmd — 1 COMMIT / 2 DISCARD. 값 불문 무조건 소거 */
+#define MB_REG_CFG_STAT         0x29u  /* R — CFG_STAT_* (미러) */
+
+/* CFG_STAT(0x29) 코드. 거부 사유는 다음 staged 쓰기까지 래치된다.
+ * ⚠ 게이트 거부와는 **다른 층**이다 — 게이트 사유는 0x2B 를 읽어 안다. */
+#define CFG_STAT_IDLE           0u
+#define CFG_STAT_STAGED         1u   /* dirty 필드 존재, 커밋 대기 */
+#define CFG_STAT_COMMIT_OK      2u
+#define CFG_STAT_REJ_RANGE      3u
+#define CFG_STAT_REJ_SAME_LINK  4u   /* 자기 링크 그룹 커밋 시도 (DG-12) */
+#define CFG_STAT_REJ_RUNNING    5u
+#define CFG_STAT_REJ_TIMEOUT    6u   /* staging 만료 폐기 */
+
 #define MB_REG_REMOTE_CAP       0x2Au  /* R: capability probe — 미러가 매 tick 매직 복원 */
 #define MB_REG_REMOTE_EN        0x2Bu  /* R: 게이트 상태 0~5 (사유는 다음 활성화까지 래치) */
 #define MB_REG_REMOTE_EN_LEFT   0x2Cu  /* 결번 — 구 "잔여 활성 초". 레벨 스위치는

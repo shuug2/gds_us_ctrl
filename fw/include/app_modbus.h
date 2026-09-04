@@ -4,6 +4,7 @@
  * US_COMM, and arbitrates USART6 between mon and Modbus-RTU per the occupancy
  * rule (comm_mode==SERIAL && comm_address!=0, spec §5). */
 #pragma once
+#include "app_cfg_stage.h"   /* mb_link_t — 전송 경로 판정 */
 #include <stdbool.h>
 #include <stdint.h>
 #include "app_modbus_core.h"
@@ -26,7 +27,10 @@ mb_core_t *app_modbus_core(void);
  * config field, persist to FRAM, dispatch commands. Called by whichever
  * transport processed an FC06 (RTU inline; TCP via this accessor). Operates
  * on the shared core from app_modbus_core(). */
-void app_modbus_apply_writes(void);
+/* FC06 write 적용. link = 커밋이 도착한 전송 경로 — F-A 의 same-link 거부(DG-12)
+ * 판정에 쓴다. 파일 스코프 플래그가 아니라 인자인 이유: 호출부가 늘거나 순서가
+ * 바뀌면 조용히 틀리는 대신 컴파일 에러로 드러난다. */
+void app_modbus_apply_writes(mb_link_t link);
 
 /* REMOTE-icon activity (samd20 modbus_status/modbus_comm_cnt, main.c:5187-
  * 5199): note_remote() is stamped by whichever transport decodes a valid

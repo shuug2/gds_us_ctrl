@@ -169,7 +169,7 @@ void app_modbus_tcp_poll(void)
             app_modbus_note_remote();   /* REMOTE icon (samd20 modbus_status) */
             tx_len = (uint16_t)(tx_len + out_len);
             if (fc == 0x06u) {
-                app_modbus_apply_writes();
+                app_modbus_apply_writes(MB_LINK_TCP);
                 wrote = true;
             }
         }

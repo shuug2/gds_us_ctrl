@@ -196,7 +196,21 @@ comm/ethernet 은 **그 값을 쓰는 데 쓰이는 링크 자체를 제어**한
 | serial | cfg 반영만 하면 **다음 tick `apply_config()` 가 재초기화**. RTU 응답은 blocking 송신이라 커밋 응답이 구 설정으로 송신 완료된 뒤에만 재초기화된다 — **추가 지연 불필요** |
 | ether | `app_lcd_hook_ether_apply()` 의 dirty-플래그 경로 재사용. 단 **커밋 응답 송출 여유로 `CFG_ETHER_APPLY_DELAY_MS`(500 ms) 지연 적용** — TCP 는 blocking 보장이 없어 즉시 재초기화 시 커밋 응답이 유실될 수 있다 |
 
+> ✅ **T-1 재확인 완료 (2026-09-04, 코드 직독)** — 아래 회색 경고는 이력으로 남긴다.
+>
+> | # | 결과 | 근거 |
+> |---|---|---|
+> | U-1 | **확인** — `apply_config()` 가 매 tick `comm_speed_idx`/`comm_parity_idx` 를 `g_applied` 와 비교해 close→open 재초기화. 주소만 바뀌면 라인 재초기화 없이 slave id 만 갱신 | `app_modbus.c` `apply_config()` |
+> | U-2 | **확인** — `usart6_mb_send()` 는 `HAL_UART_Transmit`(blocking, 길이 기반 timeout) | `usart6_mb.c:167-177` |
+> | U-3 | **확인** — `app_lcd_hook_ether_apply()` → `s_ether_dirty`, `app_eth.c:222` 의 `app_lcd_ether_dirty_take()` 가 consume→`eth_apply_on_link()` | `app_lcd.c:63-77` / `app_eth.c:222` |
+> | U-4 | **확인** — `lcd_measure_t.us_on_status` (run OR seek/reset) 가 그대로 "가동 중". `app_lcd_measure()` 로 읽는다 | `app_lcd.h:131` |
+> | **U-5** | 🔴 **폐기** — `CFG_ETHER_APPLY_DELAY_MS` 는 **불필요**. RTU 는 응답을 blocking 으로 **먼저** 보내고(`app_modbus.c:494`) 그 다음에 `apply_writes` 를 부른다(`:497`). DG-12 로 ether 커밋은 RTU 로만 도착하므로 "TCP 라 blocking 보장이 없다"는 전제 자체가 성립하지 않는다. 상수 도입 안 함 | 코드 직독 |
+>
+> <details><summary>원문 (작성 시점의 미확인 경고)</summary>
+>
 > ⚠️ **미확인 — T-1 착수 시 이 브랜치에서 재확인할 것**: 위 두 행의 근거(`apply_config()` 의 tick 감지 재초기화 / RTU blocking TX / `app_lcd_hook_ether_apply` 의 dirty 플래그 소비)는 **원격기 제안서의 조사 기록을 인용한 것이고 본 문서 작성 시 재검증하지 않았다.** ponytail 리팩터가 `app_lcd_input.c` 를 분할했으므로 좌표가 이동했을 수 있다. 확인 방법: `app_modbus.c` 의 `apply_config()` 와 `usart6_mb.c` 의 송신 함수, `app_lcd.c` 의 ether 훅을 직접 읽고 §7 상수에 실측 근거를 적는다.
+
+</details>
 
 DG-12(거부) 덕분에 **커밋에 사용한 링크는 절대 끊기지 않는다** → 같은 링크에서 `CFG_STAT` 와 재미러 값 read-back 으로 적용을 확인할 수 있다.
 
@@ -252,10 +266,10 @@ F-B 가 `app_remote_en_fsm` 을 순수 FSM 으로 뽑아 host 테스트한 선�
 
 ```c
 #define CFG_STAGE_TIMEOUT_MS       30000u  /* staged 편집 자동 폐기 */
-#define CFG_ETHER_APPLY_DELAY_MS     500u  /* 커밋 응답 송출 여유 */
 #define CFG_COMM_ADDR_MIN              1u
 #define CFG_COMM_ADDR_MAX            247u
 ```
+~~`CFG_ETHER_APPLY_DELAY_MS`~~ — **T-1 에서 폐기**(위 §5.6 표 U-5). 근거였던 "TCP 는 blocking 보장이 없다"가 DG-12 와 양립하지 않는다: ether 커밋은 RTU 로만 도착하고 RTU 응답은 apply 전에 이미 송신을 마친다.
 `CFG_COMM_SPEED_IDX_MAX`(5) · `CFG_COMM_PARITY_IDX_MAX`(2)는 `app_config.h` 에 **이미 있다** — 재정의하지 말고 그대로 쓴다.
 
 > 두 타이밍 상수 모두 **초기값이며 벤치(§9)에서 확정**한다. `CFG_ETHER_APPLY_DELAY_MS` 는 특히 근거가 약하다(§5.6 미확인 항목).
