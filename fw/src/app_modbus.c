@@ -538,9 +538,19 @@ void app_modbus_apply_writes(mb_link_t link)
         cfg->freq_cal_val = cfg_cal_from_wire(g_mb.holding[MB_REG_FREQ_CAL_VAL]);
         save = true;
     } else if ((g_mb.holding[MB_REG_WORK_CNTL] == 0u) &&
-               ((uint16_t)cfg->work_cnt != 0u)) {
+               (cfg->work_cnt != 0u)) {
         /* CNTL=0 write = work counter reset (samd20 main.c:4539: cfg + FRAM +
-         * LCD refresh). Low-word compare faithful to the samd20 condition. */
+         * LCD refresh).
+         *
+         * ⚠ samd20 이탈(사용자 승인 2026-09-04): 원본은 하위 워드만 비교했고 이
+         * 포트도 그것을 충실 복제했는데, `work_cnt` 는 uint32_t 라 **65536 의
+         * 배수일 때 `(uint16_t)work_cnt == 0` 이 되어 리셋이 조용히 무시된다.**
+         * 조작자가 WORK_CNTL=0 을 써도 아무 일도 안 일어나고 에러도 안 난다.
+         * 용접기 수명 동안 사이클 65536 회는 충분히 도달하므로 이론적이지 않다.
+         * LCD 경로는 원래부터 32비트 전체를 비교한다(app_lcd_input.c:385) —
+         * 여기서도 그렇게 맞춘다. 거동 차이는 **65536 의 배수라는 한 점에서만**
+         * 생기고(다른 모든 값에서 두 비교는 일치한다), 그 변화는
+         * "조용히 실패 → 정상 동작" 방향이다. */
         cfg->work_cnt = 0u;
         app_lcd_set_work_cnt(0u);
         save = true;
