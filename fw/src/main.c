@@ -14,6 +14,7 @@
 #include "app_horn.h"
 #include "app_osc_init.h"
 #include "sys_tick.h"
+#include "periph.h"
 #include "usart1.h"
 #include "i2c1.h"
 #include "freq_ic.h"
@@ -27,11 +28,23 @@ extern void board_init(void);    /* src/board.c */
 
 #define BOOT_BEEP_MS  100u   /* 부팅 완료 1회 beep 길이 (점멸계 250ms와 구분) */
 
+/* IWDG — 슈퍼루프 워치독. LSI 32 kHz 공칭, 데이터시트 17~47 kHz →
+ * 256·(624+1)/f_LSI = 공칭 5.0 s, 실범위 3.4~9.4 s. 런타임 단일 반복 최악 2.6 s
+ * (FRAM 버스 사망 시 save_all 38×50 ms + RTU TX @2400)에 31 % 마진.
+ * ⚠ 이 마진은 무조건이 아니다 — I2C 버스가 죽은 채 한 iter 에 save_all 이 겹치면
+ * 초과한다(spec §2.2.2 병리적 케이스 ≈6.3 s. app.c 의 DGUS drain 은 무한 루프라
+ * SAVE 연타만으로도 2회 커밋 ≈3.9 s > 3.40 s@47 kHz). FRAM 이 죽은 시점에 이미
+ * degraded(전 필드 기본값 폴백) 이므로 **리셋 1회를 수용**한다(spec §5).
+ * 기동은 슈퍼루프 진입 직전 — 부팅 체인(최악 12 s)은 감시 밖(전 구간 타임아웃 유계).
+ * spec docs/superpowers/specs/2026-09-04-iwdg-watchdog-design.md §3 */
+#define IWDG_PRESC    IWDG_PRESCALER_256
+#define IWDG_RELOAD   624u
+_Static_assert(IWDG_RELOAD <= IWDG_RLR_RL, "IWDG reload exceeds 12-bit RLR");
+
 /* 부팅 초기화+슈퍼루프 */
 int main(void) {
     HAL_Init();
     clock_init();      /* 96 MHz */
-    /* TODO Stage A: iwdg_init(2000); */
     usart6_init();     /* PC6/PC7 + 115200 8N1 */
     usart1_init();     /* Stage A: PA9/PA10 AF7 + NVIC + 첫 RX 무장 */
     i2c1_init();       /* Stage B: I2C1 @400kHz (PB6/PB7) for FRAM */
@@ -67,8 +80,18 @@ int main(void) {
                         * ETH_STATIC or ETH_DHCP; slice 2b drives the DHCP client
                         * from app_eth_tick() in the superloop. */
 
+    /* 워치독 기동 — 여기서부터 매 iter kick. 한 번 켜면 리셋 외 해제 불가(RM0401).
+     * freeze = gdb halt 중 카운터 정지(./fw.sh gdb 보호; 실행 중·미연결 시 무영향).
+     * Init 실패(HAL_TIMEOUT = LSI 무응답)는 조치 불가 — enable 은 이미 끝났고, LSI 가
+     * 죽었다면 IWDG 도 안 돈다. */
+    __HAL_DBGMCU_FREEZE_IWDG();
+    hiwdg.Instance       = IWDG;
+    hiwdg.Init.Prescaler = IWDG_PRESC;
+    hiwdg.Init.Reload    = IWDG_RELOAD;
+    (void)HAL_IWDG_Init(&hiwdg);
+
     while (1) {
         app_loop_iter();
-        /* TODO Stage A: HAL_IWDG_Refresh(&hiwdg); */
+        HAL_IWDG_Refresh(&hiwdg);   /* 단일 kick 지점 — 블로킹 함수 내부 kick 금지 */
     }
 }

@@ -31,6 +31,7 @@ add_compile_definitions(
     STM32F410Rx
     USE_HAL_DRIVER
     HSE_VALUE=16000000U    # 보드 16MHz X-tal (vendor conf 기본 25MHz 오버라이드 — vendor 무편집)
+    HAL_IWDG_MODULE_ENABLED    # vendor conf:60 이 주석 처리한 모듈을 CMake로 켬 (vendor 무편집)
 )
 
 # 제품 모델(기능 티어) — H/W는 동일(hw-revA), F/W 기능셋으로만 갈린다.
@@ -75,6 +76,8 @@ set(HAL_SOURCES
     ${VENDOR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_adc.c
     # Stage C slice 2a — W5500 SPI:
     ${VENDOR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_spi.c
+    # IWDG 워치독:
+    ${VENDOR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_iwdg.c
 )
 
 add_library(stm32_hal STATIC

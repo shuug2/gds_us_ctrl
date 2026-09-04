@@ -89,4 +89,4 @@ ATSAMD20 + ATmega16 두 MCU로 분리되어 있던 초음파 컨트롤러를 **S
 3. **Stage B — Modbus 통신**: `init_modbus`, `decode_comm` (RTU 우선, holding 레지스터)
 4. **Stage C — Ethernet 통신**: W5500 SPI 드라이버, DHCP/정적 IP, Modbus TCP
 5. **Stage D — mega16 기능 흡수**: ADC 평균화, 21단계 룩업, 출력 레벨 + CTRL_OSC + TIM5 PWM, `do_control()`, I2C EEPROM, I2C 디지털 POT
-6. 워치독, 단위 테스트, 통합 테스트, 첫 릴리즈 태그
+6. 워치독 ✅(IWDG 공칭 5s, 슈퍼루프 단일 kick — 설계 `docs/superpowers/specs/2026-09-04-iwdg-watchdog-design.md`, HW 벤치 대기), 단위 테스트, 통합 테스트, 첫 릴리즈 태그
