@@ -77,6 +77,7 @@ H4 와의 관계: `Error_Handler`(`irq.c:28`, `__disable_irq(); while(1)`)와 fa
 
 **단일 반복 최악(현실적, FRAM 경로 1개)** = save_all 1.90 + RTU TX 0.53 + LCD 0.03 + mon 2줄 0.10 + POT 0.05 ≈ **2.6 s**.
 **병리적 케이스** = LCD DATA_SAVE + weld cycle_done + FC06 이 **같은 iter** 에 겹치고 **동시에 I2C 버스가 죽은** 경우 ≈ 6.3 s → 설계 timeout 초과. 이때는 FRAM 이 이미 죽어 있는 degraded 상태(로드도 전 필드 기본값 폴백)이므로 **리셋 1회를 수용**(§5). 정상 버스에서는 어떤 조합도 ≤ 0.7 s.
+**⚠ 문턱은 위 3중 동시보다 낮다**(2026-09-04 `/code-review high` 발견): `app.c:103` 의 DGUS drain 은 `while (dgus_rx_poll(&f))` 무한 루프라 한 iter 에 **DATA_SAVE 프레임을 여러 개 소화**한다. I2C 가 죽어 한 iter 가 ~2 s 걸리면 패널이 얼어붙은 것처럼 보여 **작업자 한 명이 SAVE 를 두 번 누르는 것만으로** 2회 커밋 ≈ 3.9 s > 3.40 s(LSI 47 kHz 하한) 에 도달한다. **코드 무변경 결정**(사용자, 2026-09-04): drain 상한은 LCD 입력 거동을 바꿔 별도 벤치가 필요하고, timeout 상향은 §3.1 이 안전 근거로 기각한 안이다. FRAM 이 죽은 시점에 이미 degraded 이므로 리셋 1회를 수용한다.
 
 ### 2.3 부팅 순서가 IWDG 시작 시점에 미치는 영향
 
