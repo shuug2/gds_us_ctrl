@@ -125,15 +125,27 @@ env -u STM32_TOOLCHAIN cmake --build build --target flash     # 플래시
 
 **먼저 `docs/NEXT_STEPS.md`를 읽고 진행 상황과 다음 작업을 확인.**
 
-**현재 진행 (2026-08-15)**: **포팅 본체 종료 — main은 안정, 열린 것은 4건.** 2026-07-18~19 사용자 벤치 신규 8건(표시 데드밴드 0.15A·부팅 유령 SEEK·부팅 beep·fault 부저 알람·경고 페이지 터치 토글 반전·SYS_HORN horn-down·STD weld OVTIME 알람) **전건 HW PASS**, USOUT(PB4) 미출력=**PCB 원인 확정**(펌웨어 무수정). 보드=main `61524c1` 플래시·검증됨(⚠세션 말미 전원 OFF·잔재 설정 불확정).
+**현재 진행 (2026-09-04)**: **원격기 기능 동등성 스택 CODE-COMPLETE — 남은 것은 HW 벤치 하나.** 2026-08-30 요구사항(`docs/superpowers/specs/2026-08-30-remote-parity-requirements.md`)의 **A·B-1~B-5·C 전항목**을 브랜치 `feat/remote-status-bits`(main `2f74611` 위 **20커밋, origin 동기**)에 구현했다. FLASH 50.38% / host 16 스위트 / 경고 0 / 코드리뷰 6건 반영 완료.
+
+**★ 다음 세션 진입 = `docs/superpowers/plans/2026-09-04-remote-parity-bench-checklist.md`** (통합 벤치 체크리스트 — 실행 순서·mbpoll 번호표·보드 잔재·**할 수 없는 항목** 포함).
+
+주요 신설:
+1. **제품 모델 축 STD/REMOTE** — H/W 동일(hw-revA), F/W 기능셋으로만 갈린다. `MODEL=remote ./fw.sh` → `build-remote/`. **게이트는 REMOTE 전용**. 버전 문자열로 구분(`V3.0.0` / `V3.0.0R`)
+2. **원격 활성화 게이트 = PC8 물리 인터록** (active-LOW+풀업 **fail-safe**, 만료 없음, `DIS_ESTOP` 만 래치)
+3. **F-A comm/eth staging+commit** `0x1E~0x29` · **calibration** `0x2E/0x2F` · **HORN_CMD** `0x30` · **CFG_CAP** `0x31`
+4. **TCP 연결 자동 복구** (앱 유휴 타임아웃 12s)
+
+⚠ **레지스터 여유 7칸** — FC03 응답 상한 57칸(현재 50칸). 그 이상은 소비 측 스냅샷 원자성이 깨진다 (`app_modbus_core.h` `MB_REG_COUNT` 주석).
 
 열린 항목:
-1. **★ HMI SP1 Task 8 실보드 E2E** — `~/dev/work/gds_us_hmi`(별도 repo) 세션. RS-485 어댑터 + LCD에서 SERIAL/addr=1/9600/EVEN 복원 필요, `docs/superpowers/research/2026-07-05-rs485-first-write.md` §6 지참.
-2. ✅ ~~`refactor/ponytail-cleanup` HW 재검증→머지~~ — **완료 2026-08-16**. 리팩토링 4스테이지 + `define.h` 브랜드/버전 분리·MAKETECH·ether IP 커서 fix·`fw.sh`가 전부 main에 있다. 벤치 전항목 PASS(ceiling 실측 [514,578] ms·FC03/06·LCD 3항목).
-3. **원격 제어 활성화 게이트 — T-1~T-4 CODE-COMPLETE** (브랜치 `feat/remote-enable-gate`, base=ponytail, origin 푸시됨). 순수 FSM+레지스터 `0x2A~0x2D`+글루+`apply_writes` 게이트 완료, **T-5(LCD 조작/표시)=DGUS 자산 대기**. ⚠ **기본 빌드 플래시 금지** — 게이트를 켤 수단이 없어 원격 명령이 전부 막히고 mbpoll 벤치가 죽는다. 벤치는 `-DREMOTE_EN_GATE_BYPASS=ON`. **T-5 없이 main 머지 금지.** 진입=브랜치 `HANDOFF.md`, 설계=`docs/superpowers/specs/2026-08-15-remote-enable-gate-design.md`. F-A(`0x1E~0x29` comm/eth)는 별도 스테이지.
-4. **전류 0.60A 실측**(3회째 이월, 전류계 세션·플래시 불필요) / **6b·B-SEAM**(사용자 보류).
+1. **★ HW 벤치** — 보드 + **PC8 실장 PCB**(회로 수정 진행 중) + 패널 배선 필요. PC8 없이도 **STD 빌드로 S·M·B34·MOD·CAL·NET·FA 는 가능**
+2. **HMI SP1 Task 8 실보드 E2E** — `~/dev/work/gds_us_hmi`(별도 repo)
+3. **컨트롤러 측 `MODEL_TYPE` 차단 여부** — `gds_us_remote` 사용자 판단 대기(한 줄, 자리는 코드 주석에 표시)
+4. **전류 0.60A 실측** / **6b·B-SEAM**(사용자 보류) / **IWDG**
 
-✅ push: **2026-08-16 실측 — 브랜치 3개·태그 21개 전부 origin 동기. 미푸시 없음.**
+**세션 간 협업**: `gds_us_remote`(세션명 `esp32-firmware-verification`)와 **상의**, `gds_us_hmi` 에는 **통보**. ⚠ **계약 문서는 양쪽 규율상 벤치 PASS 후에만 갱신.**
+
+✅ push: **2026-09-04 — `feat/remote-status-bits` origin 동기, 태그 미푸시 없음.** ⚠ 단 `backup/pre-d5-*`·`feat/physical-io-slice-a/c` **5개는 로컬 전용**(의도적으로 보이나 미확인) — 과거 "전부 동기" 기록은 부정확했다.
 ⚠ model_type=multi(1) 잔재에서 Modbus 직접런 ceiling 미적용=정상(HAND 전용 설계, 30s 캡만 — 테스트 후 STOP 필수).
 
 상세 진입 = 루트 `HANDOFF.md` + `docs/NEXT_STEPS.md`, 세션별 상태 = `docs/superpowers/RESUME.md`(자동 로드), 변경 이력 = `docs/changelog.md`.

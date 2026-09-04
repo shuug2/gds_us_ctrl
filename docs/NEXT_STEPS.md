@@ -2,7 +2,9 @@
 
 > CLAUDE.md 에 명시된 first-load 문서. 새 세션 시작 시 본 파일을 가장 먼저 읽고 진행 상황 + 다음 작업을 확인.
 >
-> **본 문서 최신화: 2026-08-16** — 원격 게이트 T-1~T-4 반영 + push 상태 재정정. **✅ 브랜치 3개(main/ponytail/remote-gate)·태그 21개 전부 origin 동기 — 미푸시 없음**(8-15판의 "태그 7개 미푸시"는 그 직후 푸시로 해소). **IWDG 워치독**을 §1.2에 재편입(2026-07-02 감사 D3 "H4+IWDG 별도 슬라이스"가 이후 로드맵에서 유실돼 있었음).
+> **★ 2026-09-04 갱신 — 아래 본문보다 이 블록이 우선.** 2026-08-30 원격기 동등성 요구사항 **A·B-1~B-5·C 전항목이 `feat/remote-status-bits`(main +20, origin 동기)에 구현 완료**됐다. **HW 벤치가 유일한 남은 게이트**이고, 진입점은 `docs/superpowers/plans/2026-09-04-remote-parity-bench-checklist.md` 다. 아래 §의 "원격 게이트 T-1~T-4 / T-5 대기" 서술은 **낡았다** — T-5(LCD 활성화)는 폐기되고 PC8 물리 인터록으로 대체됐다. 상세 = `docs/superpowers/RESUME.md` 최상단.
+>
+> **이전 최신화: 2026-08-16** — 원격 게이트 T-1~T-4 반영 + push 상태 재정정. **✅ 브랜치 3개(main/ponytail/remote-gate)·태그 21개 전부 origin 동기 — 미푸시 없음**(8-15판의 "태그 7개 미푸시"는 그 직후 푸시로 해소). **IWDG 워치독**을 §1.2에 재편입(2026-07-02 감사 D3 "H4+IWDG 별도 슬라이스"가 이후 로드맵에서 유실돼 있었음).
 > (2026-08-15 — 문서/깃 대조 갱신, 코드 무변경.) ⓑ **미머지 브랜치 `refactor/ponytail-cleanup` 편입**(main+12커밋, origin 푸시됨, HW 재검증 3항목 게이트 — §2.2). ⓒ **원격 제어 활성화 게이트 로드맵 편입**(2026-08-02 정책 승인·미구현, `specs/2026-08-02-remote-enable-gate-decision.md` — §2.2). 보드는 여전히 main `61524c1`.
 > (직전 최신화 2026-07-19 — 풀배선 벤치: 사용자 신규 8건(fix/기능) 전건 HW PASS. **`6af9882`** 표시 데드밴드 20→14(최소 표시 0.15A) · **`a46eaf3`** 부팅 유령 SEEK 소멸(bak zero-init) · **`2ea5c2d`+`2cee1cc`** 부팅 beep(전원 직후) · **`6e30499`** fault 부저 알람 글루 · **`789f347`** 경고 페이지 터치 토글 반전 fix · **`519d908`** SYS_HORN horn-down 포팅 · **`61524c1`** STD weld OVTIME 알람. **USOUT(PB4)=코드 정상·PCB 원인**(무수정). 무변경 결정=EMA α=1/2·숫자 피크홀드·cal_val=16. 보드=`61524c1` 플래시됨(⚠세션 말미 전원 OFF·잔재 불확정). **★ 다음=HMI Task 8**(gds_us_hmi). 상세=루트 `HANDOFF.md`. — ⚠"push 미실행=코드 8+docs+태그"는 stale, 위 2026-08-15 ⓐ 참조.)
 > (직전 최신화 2026-07-11 — FW 벤치: 신규 3건 중 #1 유령 런·#2 REMOTE icon·energy/OVTIME 타이밍 HW PASS + OVTIME 경고화면 복귀 fix 2커밋 `83498e7`/`88faf08`.)
