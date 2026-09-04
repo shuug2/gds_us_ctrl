@@ -13,7 +13,8 @@
  *   lcd_temp_buf     -> local scratch buffer (de-globalized)
  *
  * The samd20 I2C_POT write on setup-page-1 entry is routed through
- * app_lcd_hook_set_pot() (no real I2C this stage — U4 identity is open Q F2).
+ * app_lcd_hook_set_pot() = U4 @0x28 실구동 (drivers/i2c_pot.c, tag
+ * hw-revA_fw-stage-i2c-pot). 칩 스케일/극성 보정은 6b.
  */
 #include <stdint.h>
 #include "define.h"    /* VERSION_MSG */
@@ -107,7 +108,7 @@ void app_lcd_change_page(uint8_t page)
         dgus_write_bytes(DISP_VERSION, (const uint8_t *)VERSION_MSG, 20);
         dgus_write_u16(LV_MAX_ON_TIME, cfg->limit_on_time);
         dgus_write_u16(LV_OUT_POWER,   cfg->output_power);
-        app_lcd_hook_set_pot(cfg->output_power);   /* samd20 inline I2C_POT write -> hook (F2 open) */
+        app_lcd_hook_set_pot(cfg->output_power);   /* samd20 inline I2C_POT write -> hook (실구동) */
         dgus_write_u32(LV_ENERGY_VAL,  cfg->limit_energy);
         dgus_write_u16(LV_ENERGY_EDIT, (uint16_t)cfg->limit_energy);
         dgus_write_u16(DISP_ENERGY_EN, cfg->energy_ctrl ? 1u : 0u);

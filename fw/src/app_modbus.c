@@ -325,12 +325,13 @@ void app_modbus_apply_writes(mb_link_t link)
 #endif
 
     if (g_mb.holding[MB_REG_RESET] == 1u) {
-        /* Routed for the consume-and-clear shape; effect = no-op this slice
-         * (RESET->SEEK chain + error machine deferred, spec §3.3). */
+        /* app_reg_command 가 app_seek_reset 에 위임: RESET→SEEK 자동 체인 +
+         * 물리 OSC 구동 + fault 클리어 (tag hw-revA_fw-stage-seekreset, 물리
+         * 구동 `29803ae`). */
         app_reg_command(US_CMD_RESET, (uint8_t)US_COMM);
         g_mb.holding[MB_REG_RESET] = 0u;
     } else if (g_mb.holding[MB_REG_SEEK] == 1u) {
-        app_reg_command(US_CMD_SEEK, (uint8_t)US_COMM);   /* no-op, deferred */
+        app_reg_command(US_CMD_SEEK, (uint8_t)US_COMM);   /* SEEK 단발 → app_seek_reset 위임 */
         g_mb.holding[MB_REG_SEEK] = 0u;
     } else if (g_mb.holding[MB_REG_START] == 1u) {
         app_reg_command(US_CMD_START, (uint8_t)US_COMM);

@@ -22,8 +22,8 @@ app_config_t    *app_lcd_cfg(void)   { return &g_cfg; }
 /* 측정값 제공 */
 const lcd_measure_t *app_lcd_measure(void)
 {
-    /* Stage D slice 1: live regulation values (amp + scaled level). Cycle/freq/
-     * energy/status stay 0 until slice 2 (honest "regulating, no cycle yet"). */
+    /* app_reg 가 게시하는 라이브 측정값 — 진폭·주파수·에너지·상태 전부
+     * (slice 2 이후 전 필드 라이브). */
     return app_reg_measure();
 }
 

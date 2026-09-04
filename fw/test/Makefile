@@ -1,7 +1,8 @@
 # fw/test/Makefile — host unit tests for the HAL-free layers.
 # Suites: reg_calc / modbus_core / tcp_frame / weld_fsm / seek_reset_fsm /
 #         i2c_pot / app_config(mock-fram) / freq_fsm / buzzer_fsm / overload_fsm /
-#         input_fsm / osc_init_fsm / weld_trigger_fsm / horn_fsm / remote_en_fsm.
+#         input_fsm / osc_init_fsm / weld_trigger_fsm / horn_fsm / cfg_stage /
+#         remote_en_fsm.   (총 16 = grep -c '^BIN_')
 # Usage: make -C fw/test test
 CC     ?= cc
 CFLAGS := -std=c11 -Wall -Wextra -Wundef -Wshadow -O0 -g
