@@ -22,6 +22,25 @@
 #define CFG_STAGE_TIMEOUT_MS  30000u
 #endif
 
+/* calibration 원격 쓰기 클램프 (C-3). 대칭.
+ *
+ * 🔴 근거: `cal_val` 은 표시 보정이 **아니라 제어 루프 입력**이다 —
+ *   cal_val → reg_current_from_adc → disp_amp → curr_power → acc_energy →
+ *   weld 에너지 EXIT 판정, 그리고 app_reg 의 비사이클 가동 정지 판정.
+ *   범위 밖 값은 화면이 아니라 **기계의 정지 시점**을 왜곡한다.
+ *
+ * 값 선정: 넉넉하게 잡았다. LCD 편집 경로에는 클램프가 없고(app_lcd_input.c:456)
+ *   실사용 트림은 한 자리~두 자리다(현장 cal_val=16 / freq_cal_val=40, 데드밴드 14).
+ *   ±1000 은 그보다 훨씬 넓어 **정당한 보정을 절대 막지 않으면서**, 32767 같은
+ *   값이 없는 전류를 만들어내는 것만 차단한다. 물리 보정 여지를 좁히는 쪽이
+ *   레지스터 하나 지키는 것보다 나쁘다 — 벤치 실측 후 재조정 가능. */
+#define CFG_CAL_MAX    1000
+#define CFG_CAL_MIN  (-1000)
+
+/* u16 wire → int16 cfg. 2의 보수 해석 후 부호 도메인에서 클램프한다.
+ * 순서가 중요하다: u16 상태로 비교하면 음수가 65000대 양수로 보여 전부 통과한다. */
+int16_t cfg_cal_from_wire(uint16_t wire);
+
 /* staged 그룹 9개. 순서는 레지스터 0x1E~0x20 / 0x22~0x27 과 같다. */
 enum {
     CFG_STG_ADDR = 0,

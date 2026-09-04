@@ -77,6 +77,13 @@
 #define CFG_STAT_REJ_RUNNING    5u
 #define CFG_STAT_REJ_TIMEOUT    6u   /* staging 만료 폐기 */
 
+/* --- B-2: calibration (2026-08-30 요구사항). 2026-08-01 "컨트롤러 전용" 제외
+ * 결정이 번복된 항목이다 — 목표가 "모든 기능 동일"이 되면서 포함으로 바뀌었다.
+ * 🔴 인코딩은 **int16 2의 보수** (C-1). 명시하지 않으면 음수 cal 이 65000대
+ *    양수로 읽히는 조용한 사고가 난다. 쓰기는 CFG_CAL_MIN..MAX 로 클램프(C-3). */
+#define MB_REG_CAL_VAL          0x2Eu  /* R/W int16 — ⚠ 표시 보정이 아니라 제어 루프 입력 */
+#define MB_REG_FREQ_CAL_VAL     0x2Fu  /* R/W int16 — 표시 전용 */
+
 #define MB_REG_REMOTE_CAP       0x2Au  /* R: capability probe — 미러가 매 tick 매직 복원 */
 #define MB_REG_REMOTE_EN        0x2Bu  /* R: 게이트 상태 0~5 (사유는 다음 활성화까지 래치) */
 #define MB_REG_REMOTE_EN_LEFT   0x2Cu  /* 결번 — 구 "잔여 활성 초". 레벨 스위치는

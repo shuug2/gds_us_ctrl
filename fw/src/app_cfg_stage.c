@@ -95,3 +95,12 @@ uint8_t cfg_stage_commit(cfg_stage_t *s, mb_link_t link, uint8_t running)
     s->stat  = CFG_STAT_COMMIT_OK;
     return 1u;
 }
+
+/* calibration wire 변환 + 클램프 (C-1/C-3) */
+int16_t cfg_cal_from_wire(uint16_t wire)
+{
+    int16_t v = (int16_t)wire;          /* 2의 보수 해석이 먼저 */
+    if (v > CFG_CAL_MAX) { return CFG_CAL_MAX; }
+    if (v < CFG_CAL_MIN) { return CFG_CAL_MIN; }
+    return v;
+}

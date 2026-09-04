@@ -245,6 +245,34 @@ static void test_group_masks(void)
     CHECK_EQ(CFG_STG_COUNT, 9u);
 }
 
+/* C-1/C-3 — calibration 은 int16 인데 레지스터는 u16 이다. 이 변환에 부호 사고가
+ * 산다: 명시하지 않으면 음수 cal 이 65000대 양수로 읽힌다.
+ * 클램프가 필요한 이유는 표시가 아니다 — cal_val 은 제어 루프 입력이라
+ * (cal_val → disp_amp → curr_power → acc_energy → weld 에너지 EXIT 판정,
+ *  그리고 app_reg 의 비사이클 가동 정지 판정) 범위 밖 값이 **기계의 정지 시점**을
+ * 왜곡한다. */
+static void test_cal_from_wire(void)
+{
+    /* 양수 · 음수 2의 보수 왕복 */
+    CHECK_EQ(cfg_cal_from_wire(16u),     16);
+    CHECK_EQ(cfg_cal_from_wire(0u),      0);
+    CHECK_EQ(cfg_cal_from_wire(0xFFFFu), -1);      /* 65535 = -1, 65534 = -2 ... */
+    CHECK_EQ(cfg_cal_from_wire(0xFFF0u), -16);
+
+    /* 경계 — 클램프는 부호 도메인에서 일어나야 한다 */
+    CHECK_EQ(cfg_cal_from_wire(CFG_CAL_MAX),        CFG_CAL_MAX);
+    CHECK_EQ(cfg_cal_from_wire(CFG_CAL_MAX + 1u),   CFG_CAL_MAX);
+    CHECK_EQ(cfg_cal_from_wire((uint16_t)CFG_CAL_MIN),        CFG_CAL_MIN);
+    CHECK_EQ(cfg_cal_from_wire((uint16_t)(CFG_CAL_MIN - 1)),  CFG_CAL_MIN);
+
+    /* 극단값이 조용히 통과하지 않는다 */
+    CHECK_EQ(cfg_cal_from_wire(0x7FFFu), CFG_CAL_MAX);   /* +32767 */
+    CHECK_EQ(cfg_cal_from_wire(0x8000u), CFG_CAL_MIN);   /* -32768 */
+
+    /* 대칭 — 한쪽만 넓으면 트림이 한 방향으로 치우친다 */
+    CHECK_EQ(CFG_CAL_MAX, -CFG_CAL_MIN);
+}
+
 int main(void) {
     test_init_idle();
     test_write_marks_dirty();
@@ -262,6 +290,7 @@ int main(void) {
     test_empty_commit();
     test_stat_clears_on_next_write();
     test_group_masks();
+    test_cal_from_wire();
     if (failures) { printf("%d check(s) FAILED\n", failures); return 1; }
     printf("app_cfg_stage: all tests passed\n");
     return 0;

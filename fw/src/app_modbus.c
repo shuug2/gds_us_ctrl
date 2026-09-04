@@ -193,6 +193,9 @@ static void mirror_live(void)
     g_mb.holding[MB_REG_EN_ENERGY]   = cfg->energy_ctrl ? 1u : 0u;
     g_mb.holding[MB_REG_EN_MULTI]    = cfg->multi_ctrl  ? 1u : 0u;
     g_mb.holding[MB_REG_EN_SAFTY]    = cfg->f_safty;
+    /* B-2 calibration — int16 를 2의 보수 그대로 싣는다 (C-1). */
+    g_mb.holding[MB_REG_CAL_VAL]      = (uint16_t)cfg->cal_val;
+    g_mb.holding[MB_REG_FREQ_CAL_VAL] = (uint16_t)cfg->freq_cal_val;
     /* STATUS bit0 = run active (spec §3.1: us_run_status != US_IDLE).
      * OVTIME = app_reg가 publish한 energy 모드 직접런 과대시간 fault
      * (2026-06-28-ovtime spec). OVLD = app_overload_active() 라이브 반영
@@ -456,6 +459,14 @@ void app_modbus_apply_writes(mb_link_t link)
          * path normalizes its own writes; comm writes stay faithful */
         cfg->f_safty = (uint8_t)g_mb.holding[MB_REG_EN_SAFTY];
         dgus_write_u16(DISP_SAFTY, cfg->f_safty);
+        save = true;
+    } else if (g_mb.holding[MB_REG_CAL_VAL] != (uint16_t)cfg->cal_val) {
+        /* 클램프된 쓰기는 다음 미러가 되돌리므로 이 체인을 재발화시키지 않는다
+         * (기존 클램프 분기들과 같은 형태). 원격기는 read-back 으로 클램프를 본다. */
+        cfg->cal_val = cfg_cal_from_wire(g_mb.holding[MB_REG_CAL_VAL]);
+        save = true;
+    } else if (g_mb.holding[MB_REG_FREQ_CAL_VAL] != (uint16_t)cfg->freq_cal_val) {
+        cfg->freq_cal_val = cfg_cal_from_wire(g_mb.holding[MB_REG_FREQ_CAL_VAL]);
         save = true;
     } else if ((g_mb.holding[MB_REG_WORK_CNTL] == 0u) &&
                ((uint16_t)cfg->work_cnt != 0u)) {
