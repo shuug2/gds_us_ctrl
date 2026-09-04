@@ -24,6 +24,8 @@
 #define ESTOP_PIN       GPIO_PIN_11
 #define KEY1_PORT       GPIOC
 #define KEY1_PIN        GPIO_PIN_12
+#define REMOTE_EN_PORT  GPIOC
+#define REMOTE_EN_PIN   GPIO_PIN_8      /* 원격 활성화 물리 인터록 (요구사항 A) */
 
 /* ---- 출력 핀 ---- */
 #define BUZZER_PORT     GPIOA
@@ -60,6 +62,10 @@ void io_init(void)
     in_pu.Pin = PANEL_RESET_PIN;   HAL_GPIO_Init(PANEL_RESET_PORT,   &in_pu);
     in_pu.Pin = ESTOP_PIN;   HAL_GPIO_Init(ESTOP_PORT,   &in_pu);  /* 폴라리티는 호출측 model_type 분기 */
     in_pu.Pin = KEY1_PIN;    HAL_GPIO_Init(KEY1_PORT,    &in_pu);
+    /* 🔴 REMOTE_EN은 풀업이 안전 방향이다 — 스위치가 닫혀야(LOW) 허용이고,
+     * 단선·커넥터 탈락은 풀업으로 HIGH=불허가 된다. 풀다운으로 잡으면 신호선이
+     * 끊어졌을 때 "허용"으로 읽혀 인터록이 무의미해진다. */
+    in_pu.Pin = REMOTE_EN_PIN; HAL_GPIO_Init(REMOTE_EN_PORT, &in_pu);
 
     /* 입력 active-HIGH (pull-down → idle LOW): overload sense + 초음파 출력 피드백 */
     in_pd.Pin = OVLD_IN_PIN; HAL_GPIO_Init(OVLD_IN_PORT, &in_pd);
@@ -93,6 +99,7 @@ uint8_t io_read_sens_dn(void)    { return (uint8_t)HAL_GPIO_ReadPin(SENS_DN_PORT
 /* overload 입력 읽기 */
 uint8_t io_read_overload(void)   { return (uint8_t)HAL_GPIO_ReadPin(OVLD_IN_PORT, OVLD_IN_PIN); }
 /* US 피드백 읽기 */
+uint8_t io_read_remote_en(void) { return (uint8_t)HAL_GPIO_ReadPin(REMOTE_EN_PORT, REMOTE_EN_PIN); }
 uint8_t io_read_usfb(void)       { return (uint8_t)HAL_GPIO_ReadPin(USFB_PORT,    USFB_PIN);    }
 
 /* USOUT 출력 설정 */

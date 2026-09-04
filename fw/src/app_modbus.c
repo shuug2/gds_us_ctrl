@@ -20,7 +20,9 @@
 #include "app_input.h"      /* app_estop_active (STATUS ESTOP 비트 + 게이트 해제) */
 #include "app_weld.h"       /* app_weld_sensor_active (STATUS SENSOR 비트, B-3) */
 #include "app_horn.h"       /* app_horn_mode_active (STATUS HORN 비트, B-4) */
-#include "app_remote_en_fsm.h"   /* 원격 활성화 게이트 (spec 2026-08-15) */
+#include "app_remote_en_fsm.h"   /* 원격 활성화 게이트 (요구사항 A) */
+#include "io.h"             /* io_read_remote_en (PC8 물리 인터록) */
+#include "define.h"         /* MODEL_REMOTE — 게이트는 REMOTE 모델 전용 */
 #include "app_config.h"
 #include "dgus_lcd.h"     /* DISP_*_EN echo (samd20 send_lcd_data_var) */
 #include "sys_tick.h"     /* REMOTE icon 1 s hold timestamp */
@@ -43,13 +45,11 @@ static uint8_t g_tcp_active;   /* rising-edge baseline guard for ETH mode */
 static uint32_t s_remote_ms;    /* last decoded request (REMOTE icon hold base) */
 static uint8_t  s_remote_seen;  /* 0 until the first request — boot/wrap guard */
 
-/* 원격 활성화 게이트 상태 (spec §5.4: 비영속 — holding[]은 링크 전이의
- * mb_core_init이 0으로 지우고 FRAM은 요구사항 위반이라, 파일 static만 가능).
- * s_ren = 마지막 step 출력 캐시(미러 + apply 게이트가 소비),
- * s_ren_lcd_* = LCD 이벤트 1-shot 래치(다음 tick step이 소비하고 지움). */
+/* 원격 활성화 게이트 상태 (비영속 — holding[]은 링크 전이의 mb_core_init이 0으로
+ * 지우고 FRAM 저장은 요구사항 위반이라, 파일 static만 가능).
+ * s_ren = 마지막 step 출력 캐시(미러 + apply 게이트가 소비).
+ * 조작 입력은 PC8 물리 스위치 레벨뿐이라 1-shot 래치가 필요 없다. */
 static remote_en_out_t s_ren;
-static uint8_t s_ren_lcd_enable;
-static uint8_t s_ren_lcd_disable;
 
 /* REMOTE 시각 스탬프 */
 void app_modbus_note_remote(void)
@@ -67,54 +67,37 @@ bool app_modbus_remote_active(void)
            ((uint32_t)(sys_tick_get_ms() - s_remote_ms) < MB_REMOTE_HOLD_MS);
 }
 
-/* 게이트 FSM 1 tick */
+/* 게이트 FSM 1 tick.
+ *
+ * MODEL_STD 에는 인터록 스위치가 없다 — 게이트를 넣으면 스위치 미장착 유닛에서
+ * 유선 Modbus HMI 의 설정 쓰기가 죽는다. 그래서 STD 는 게이트 자체를 두지 않고
+ * 상시 개방으로 고정한다. 이 #if 하나가 apply_writes 쪽 분기를 대신하므로
+ * 아래 게이트 검사는 두 모델 공통 코드로 남는다 (분기 확산 방지). */
 static void remote_en_step(void)
 {
+#if defined(MODEL_REMOTE)
     remote_en_in_t in;
 
     in.now_ms      = sys_tick_get_ms();
-    in.lcd_enable  = s_ren_lcd_enable;
-    in.lcd_disable = s_ren_lcd_disable;
+    /* PC8 active-LOW → 논리 "허용". 극성은 여기 한 곳에서만 뒤집는다. */
+    in.sw          = (io_read_remote_en() == 0u) ? 1u : 0u;
     /* 침묵 입력 = REMOTE 아이콘과 같은 스탬프. note_remote가 유효 디코드 전부에
-     * 찍히므로 읽기 요청도 링크 생존 신호다. 활성화 이전 값일 수 있으나 FSM의
-     * 무장 규칙이 걸러낸다 (spec §5.2). MB_REMOTE_HOLD_MS와는 무관. */
+     * 찍히므로 읽기 요청도 링크 생존 신호다. 진입 이전 값일 수 있으나 FSM의
+     * 무장 규칙이 걸러낸다. MB_REMOTE_HOLD_MS와는 무관. */
     in.last_req_ms = s_remote_ms;
     in.req_valid   = s_remote_seen;
     in.estop       = app_estop_active();
 
     remote_en_fsm_step(&in, &s_ren);
-
-    s_ren_lcd_enable  = 0u;   /* 1-shot 소비 */
-    s_ren_lcd_disable = 0u;
-}
-
-/* LCD 게이트 조작 (T-5 dispatch가 호출) */
-void app_remote_en_set(bool on)
-{
-    /* E-stop 중 거부는 FSM 책임 — LCD 쪽에 중복 검사를 두지 않는다.
-     * 반대쪽 래치를 지워 두 플래그가 동시에 서지 않게 한다: 한 superloop iter에
-     * 두 조작이 드레인되면(DGUS 터치 버스트) FSM은 enable을 마지막에 무조건
-     * 평가하므로 순서와 무관하게 ENABLED가 되어 의도적 해제가 삼켜진다.
-     * 여기서 상호배타를 보장해야 "마지막 조작이 이긴다"가 실제로 성립한다. */
-    if (on) {
-        s_ren_lcd_enable  = 1u;
-        s_ren_lcd_disable = 0u;
-    } else {
-        s_ren_lcd_disable = 1u;
-        s_ren_lcd_enable  = 0u;
-    }
+#else
+    s_ren.state = (uint8_t)REN_ENABLED;   /* STD: 인터록 없음 = 상시 통과 */
+#endif
 }
 
 /* 게이트 상태 조회 */
 uint8_t app_remote_en_state(void)
 {
     return s_ren.state;
-}
-
-/* 게이트 잔여 초 조회 */
-uint16_t app_remote_en_left_s(void)
-{
-    return s_ren.left_s;
 }
 
 /* mb 코어 ctx 반환 */
@@ -180,14 +163,23 @@ static void mirror_live(void)
     };
     g_mb.holding[MB_REG_STATUS]      = mb_status_bits(&sin);
 
-    /* 원격 게이트 미러 (spec §4/§5.1). CAP는 매직 무조건 복원 = capability
-     * probe의 신-펌웨어 판별점("read-only는 미러가 덮음" — MODEL_FREQ/TYPE 위와
-     * 동형). 0x2D는 예약이라 미러하지 않는다. 조건 없이 함수 말미에 두어야
-     * 세 호출처(apply_config RTU 획득 / tick RTU / tick TCP)가 전부 커버되고,
-     * 링크 전이의 mb_core_init 0-리셋도 같은 tick에 즉시 복원된다 (§5.4). */
+    /* 원격 게이트 미러. CAP는 매직 무조건 복원 = capability probe의 신-펌웨어
+     * 판별점("read-only는 미러가 덮음" — MODEL_FREQ/TYPE 위와 동형). 0x2D는
+     * 예약이라 미러하지 않는다. 조건 없이 함수 말미에 두어야 세 호출처
+     * (apply_config RTU 획득 / tick RTU / tick TCP)가 전부 커버되고, 링크 전이의
+     * mb_core_init 0-리셋도 같은 tick에 즉시 복원된다.
+     *
+     * ⚠ STD 는 미러하지 않는다 — 인터록이 없는데 CAP 매직을 실으면 원격기가
+     * "이 컨트롤러는 게이트를 지원한다"고 오판한다(A-7의 판별이 정확히 이것).
+     * 미러가 없으면 0x2A 는 원격기가 쓴 probe 값 P 가 그대로 남아 구-펌웨어와
+     * 같은 판정을 받는다 = 의도한 동작. */
+#if defined(MODEL_REMOTE)
     g_mb.holding[MB_REG_REMOTE_CAP]     = MB_REG_REMOTE_CAP_MAGIC;
     g_mb.holding[MB_REG_REMOTE_EN]      = s_ren.state;
-    g_mb.holding[MB_REG_REMOTE_EN_LEFT] = s_ren.left_s;
+    /* 0x2C 는 결번(구 잔여-초). 레벨 스위치는 만료가 없다 — 원격기가 옛 의미로
+     * 읽지 않도록 0 으로 고정한다. */
+    g_mb.holding[MB_REG_REMOTE_EN_LEFT] = 0u;
+#endif
 }
 
 /* FC06 write 적용 */
@@ -453,11 +445,14 @@ void app_modbus_init(void)
 #endif
     /* 게이트는 apply_config()의 첫 mirror_live()보다 먼저 초기화 — 부팅 첫 미러가
      * 쓰레기 대신 DISABLED/0을 싣도록. */
+#if defined(MODEL_REMOTE)
     remote_en_fsm_init();
-    s_ren.state       = (uint8_t)REN_DISABLED;
-    s_ren.left_s      = 0u;
-    s_ren_lcd_enable  = 0u;
-    s_ren_lcd_disable = 0u;
+    s_ren.state = (uint8_t)REN_DISABLED;
+#else
+    /* STD 는 FSM 을 아예 호출하지 않는다 — init 까지 빼야 링커가 순수 모듈을
+     * 통째로 버린다(호스트 테스트는 모델과 무관하게 계속 돈다). */
+    s_ren.state = (uint8_t)REN_ENABLED;
+#endif
     mb_core_init(&g_mb, 0u);
     apply_config();
 }

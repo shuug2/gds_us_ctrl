@@ -84,15 +84,6 @@ $(BIN_IN): test_app_input_fsm.c ../src/app_input_fsm.c ../include/app_input_fsm.
 $(BIN_OSC): test_app_osc_init_fsm.c ../src/app_osc_init_fsm.c ../include/app_osc_init_fsm.h
 	$(CC) $(CFLAGS) $(INC) -o $@ test_app_osc_init_fsm.c ../src/app_osc_init_fsm.c
 
-$(BIN_OL): test_app_overload_fsm.c ../src/app_overload_fsm.c ../include/app_overload_fsm.h
-	$(CC) $(CFLAGS) $(INC) -o $@ test_app_overload_fsm.c ../src/app_overload_fsm.c
-
-$(BIN_IN): test_app_input_fsm.c ../src/app_input_fsm.c ../include/app_input_fsm.h
-	$(CC) $(CFLAGS) $(INC) -o $@ test_app_input_fsm.c ../src/app_input_fsm.c
-
-$(BIN_OSC): test_app_osc_init_fsm.c ../src/app_osc_init_fsm.c ../include/app_osc_init_fsm.h
-	$(CC) $(CFLAGS) $(INC) -o $@ test_app_osc_init_fsm.c ../src/app_osc_init_fsm.c
-
 $(BIN_WTR): test_app_weld_trigger_fsm.c ../src/app_weld_trigger_fsm.c ../include/app_weld_trigger_fsm.h ../include/app_weld_fsm.h
 	$(CC) $(CFLAGS) $(INC) -o $@ test_app_weld_trigger_fsm.c ../src/app_weld_trigger_fsm.c
 

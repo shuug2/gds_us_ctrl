@@ -36,9 +36,7 @@ void app_modbus_apply_writes(void);
 void app_modbus_note_remote(void);
 bool app_modbus_remote_active(void);
 
-/* 원격 제어 활성화 게이트 (spec 2026-08-15 §5~§6). 상태는 비영속 파일 static.
- * set()은 LCD 전용 조작 — 롱프레스 릴리스=on, 짧은 탭=off (게이트 버튼 dispatch).
- * E-stop 중 on 거부는 FSM 책임이라 호출자가 중복 검사할 필요 없다. */
-void     app_remote_en_set(bool on);
-uint8_t  app_remote_en_state(void);   /* MB_REMOTE_EN_* (0~5), 해제 사유 포함 */
-uint16_t app_remote_en_left_s(void);  /* 잔여 활성 초; 비활성 0 */
+/* 원격 제어 활성화 게이트 (요구사항 A). 상태는 비영속 파일 static.
+ * 조작 입력은 PC8 물리 스위치 레벨뿐 — 소프트웨어 조작 API는 없다(그게 인터록의
+ * 요점이다). MODEL_STD 빌드는 게이트가 없어 항상 MB_REMOTE_EN_ENABLED. */
+uint8_t app_remote_en_state(void);   /* MB_REMOTE_EN_* — 해제 사유 포함 */

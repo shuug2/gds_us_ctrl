@@ -47,7 +47,8 @@
  * 0x1E~0x29는 F-A(comm/eth 확장) 예약으로 비워 둔다. MB_REG_COUNT(50) 불변. */
 #define MB_REG_REMOTE_CAP       0x2Au  /* R: capability probe — 미러가 매 tick 매직 복원 */
 #define MB_REG_REMOTE_EN        0x2Bu  /* R: 게이트 상태 0~5 (사유는 다음 활성화까지 래치) */
-#define MB_REG_REMOTE_EN_LEFT   0x2Cu  /* R: 잔여 활성 초, 비활성 0 */
+#define MB_REG_REMOTE_EN_LEFT   0x2Cu  /* 결번 — 구 "잔여 활성 초". 레벨 스위치는
+                                        * 만료가 없다(요구사항 A-3). 항상 0 미러 */
 /* 0x2D reserved — 2단계 승인(원격 요청→LCD 승인) 승격 경로 (spec §2.2). 미러 ✗ */
 
 /* probe 매직. 원격기는 이 주소에 매직도 0도 아닌 값 P를 쓰고 read-back 한다:
@@ -59,10 +60,10 @@
  * test_app_remote_en_fsm의 cross-check가 이 일치를 고정한다. */
 #define MB_REMOTE_EN_DISABLED     0u
 #define MB_REMOTE_EN_ENABLED      1u
-#define MB_REMOTE_EN_DIS_TIMEOUT  2u
+#define MB_REMOTE_EN_DIS_TIMEOUT  2u   /* 결번 — 창 만료(A-3으로 폐기). 생산 안 함 */
 #define MB_REMOTE_EN_DIS_LINK     3u
 #define MB_REMOTE_EN_DIS_ESTOP    4u
-#define MB_REMOTE_EN_DIS_LCD      5u
+#define MB_REMOTE_EN_DIS_LCD      5u   /* 결번 — LCD 수동 해제(T-5 폐기). 생산 안 함 */
 
 /* STATUS bits (samd20 modbus.h). OVLD set by app_overload (슬라이스 C);
  * ESTOP/OVTIME/OUTERR stay 0 (estop/weld machinery deferred — spec §3.1). */
