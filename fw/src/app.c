@@ -19,6 +19,8 @@
 #include "app_buzzer.h"
 #include "app_fault_alarm.h"
 
+static uint8_t s_boot_rst;   /* RCC->CSR[31:24] @boot — SWD 정적 read 진단용 (IWDG=0x20 비트) */
+
 /* FRAM 로드+LCD 부팅 */
 void app_init(void)
 {
@@ -27,7 +29,16 @@ void app_init(void)
     /* sys_tick_init()은 main()으로 hoist됨 — OSC 부팅 초기화(app_init 전 실행)가
      * sys_tick_get_ms()를 필요로 하기 때문. */
     mon_init();
-    mon_writeln("[boot] gds_us_ctrl stage-b ready");
+    /* 리셋 원인 — CSR 플래그는 POR 또는 RMVF 로만 지워지므로 읽은 뒤 즉시 클리어
+     * (안 지우면 이전 부팅의 IWDG 플래그가 다음 부팅에 남는다). 기대값:
+     * 전원 0x0E(BOR|PIN|POR) / NRST 0x04 / IWDG 0x24(IWDG|PIN).
+     * 이 시점은 app_modbus_init() 이전이라 mon_set_enabled(false)가 아직 안 걸려
+     * comm_mode 무관하게 USART6 로 나간다 — 배너를 뒤로 옮기지 말 것.
+     * spec docs/superpowers/specs/2026-09-04-iwdg-watchdog-design.md §2.7 */
+    s_boot_rst = (uint8_t)(RCC->CSR >> 24);
+    __HAL_RCC_CLEAR_RESET_FLAGS();
+    mon_printf("[boot] gds_us_ctrl ready rst=0x%02X%s\r\n", (unsigned)s_boot_rst,
+               (s_boot_rst & (uint8_t)(RCC_CSR_IWDGRSTF >> 24)) ? " IWDG" : "");
 
 #if DGUS_DEMO_RESET_ON_BOOT
     dgus_reset_lcd();
