@@ -102,18 +102,19 @@ make -C fw/test test                                # rsb 16 / main 14 스위트
 
 > **통합 벤치 PASS 2026-09-05** — 실행 41항목 전건, 결함 0. main 머지·태그 완료(`hw-revA_fw-stage-remote-parity` / `-iwdg`). 실측 IWDG T=4.45s / f_LSI≈35.9kHz. 🔴 **벤치 환경 함정 4건은 `plans/2026-09-05-bench-results.md` §4 를 반드시 먼저 읽을 것** — 특히 `nc -z` 금지와 "TCP connect ≠ MCU 생존".
 
-> 브랜치 스택: `main`(**ponytail 머지 완료 2026-08-16**) ← `feat/remote-enable-gate`(**재베이스 완료**, T-5 대기). 양쪽 origin 동기.
+> 브랜치 스택: **`main` 단일** — `refactor/ponytail-cleanup`·`feat/remote-enable-gate`·`feat/remote-status-bits`·`feat/iwdg-watchdog` 전부 머지 완료. origin 동기.
 
 - ~~**★ `refactor/ponytail-cleanup` HW 재검증 → 머지**~~ — ✅ **완료 2026-08-16**. 벤치 전항목 PASS: FC03 미러 30개 `g_cfg` 일치 / FC06 클램프 120→100·30→50 / **직접런 ceiling 실측 [514,578] ms**(기대 560 ms 부합) / OVTIME 무회귀 / LCD 3항목 육안(comm·ether+DATA_SAVE, IP 백스페이스 1자, 모델명). `--no-ff` 머지, 충돌은 docs 2개뿐(코드 0), 머지 결과가 검증된 보드 펌웨어와 byte-identical. **개시 발견: 보드에 이미 이 브랜치 빌드가 올라가 있었다**(문서의 "보드=main `61524c1`"은 오류 — 플래시 덤프 대조로 확정). 상세 = 루트 `HANDOFF.md` §①.
 
-- **★ `refactor/ponytail-cleanup` HW 재검증 → 머지** (main 대비 +12커밋, base `8eaac71`, tip `753778d`, **origin 푸시됨·미머지**). 내용 = 07-19 리팩토링 4스테이지(죽은코드 삭제 / `app_lcd_input.c` 1038→622 분할 + 신규 `app_lcd_comm.c` / `app_reg_tick` 118→57 헬퍼 추출 / 전 269함수 주석 통일 — 앞 2·4스테이지는 바이너리 동일 입증) + 07-25 4커밋(`define.h` 브랜드/버전 분리 5종 · **MAKETECH** `SMT-{H|A|S}{freq}D` · **ether IP 편집 커서 fix** `e8e84fb` · `fw.sh`). 게이트 = 벤치 3항목:
-- **원격 제어 활성화 게이트** — 2026-08-15 **T-1~T-4 CODE-COMPLETE**(브랜치 `feat/remote-enable-gate`, origin 푸시됨, tip `b0c22df` — **base였던 ponytail이 main에 머지됐으므로 재베이스 필요**). 남은 것 = **재베이스 → T-5(LCD 조작/표시) = DGUS 자산 대기** → T-6 리뷰 → T-7 벤치 VR-1~13 → T-8 머지(태그 `hw-revA_fw-stage-remote-gate`).
-  - 산출물: spec `specs/2026-08-15-remote-enable-gate-design.md` + plan `plans/2026-08-15-remote-enable-gate-t1-t4.md` + 코드 4커밋(순수 FSM `app_remote_en_fsm` **host 15번째 스위트** / 레지스터 `0x2A~0x2D` 계약 / `app_modbus.c` 글루 / `apply_writes` 선두 게이트) + `/code-review high` 3건 반영 2커밋.
-  - **⚠ 기본 빌드 플래시 금지** — T-5가 없어 게이트를 켤 수단이 없으므로 원격 명령이 RTU·TCP 양쪽에서 전부 막히고 **mbpoll 벤치 흐름과 `gds_us_hmi` 계약이 죽는다**. 벤치는 반드시 `cmake -S fw -B build -G Ninja -DREMOTE_EN_GATE_BYPASS=ON`(기본 OFF=게이트 유효, ON이면 CMake+부팅 mon 경고). **T-5 없이 main 머지 금지.**
-  - **사용자 작업 = DGUS 자산 3종**: 게이트 버튼 `0x1086`(**down/up 양 이벤트 필수**), 상태 아이콘 `0x1155`, 잔여 초 `0x1211`. 반입 후 `LCD_TRACE_RX` 실물 트레이스 선행(추론 구현 금지).
-  - 확정 상수: 활성 창 **10분** / 링크 침묵 **10초**(파일럿 VR-13으로 확정), probe 매직 `0x5201`(write-back 값은 비영값 — 원격기 spec 역반영 필요).
-  - 진입 = 브랜치 `HANDOFF.md`. 결정 기록 = `docs/superpowers/specs/2026-08-02-remote-enable-gate-decision.md`, 설계 정본 = `~/dev/work/gds_us_remote`.
-  - **(배경, 2026-08-02 결정 기록)** **구 펌웨어에는 원격 제어 권한 게이트가 없다**(Modbus 도달 가능한 누구나 `START(0x1B)` 쓰기 가능, 물리 인터록 없음, 30s 절대 상한이 유일 backstop; `mb_write_reg`가 미사용 영역 write도 "성공" 에코 → 활성화 오판 위험). 필요 = 레지스터 `0x2A~0x2D`(LCD 전용 활성화·비영속·링크 침묵/E-STOP 해제·capability probe) + `0x1E~0x29`(comm/eth 노출, staging+commit·교차 경로만 허용). **착수 전 사용자 협의 2건** = 활성 창 길이/링크 침묵 임계, LCD 활성화 UI 방식(DGUS 자산 변경 여부). 원격기 파일럿(STOP·읽기·파라미터만)은 블로킹되지 않으나 **원격 START의 유일 선행**. 진입 절차 = §3(brainstorming부터).
+- ~~**원격 제어 활성화 게이트 (T-1~T-8 / LCD 활성화 방식)**~~ — 🔴 **이 접근은 폐기됐다.** LCD 터치 활성화(T-5)·**활성 창 10분 만료**·DGUS 자산 3종(`0x1086`/`0x1155`/`0x1211`)은 **전부 무효**다. 대체 = **PC8 물리 인터록**(active-LOW+풀업 fail-safe, **만료 없음**, `DIS_ESTOP` 만 래치·`DIS_LINK` 는 자동 복귀). 게이트는 **REMOTE 모델 전용**. 2026-09-05 벤치에서 가상 PC8 로 A 섹션 15항목 중 14개 PASS, **A-13(단선=불허)만 PC8 실장 PCB 대기**. 정본 = `specs/2026-08-15-remote-enable-gate-design.md` + `plans/2026-09-05-bench-results.md` §3-bis.
+  - (배경 유지) **구 펌웨어에는 원격 제어 권한 게이트가 없었다** — Modbus 도달 가능한 누구나 `START(0x1B)` 쓰기 가능, 물리 인터록 없음, 30 s 절대 상한이 유일 backstop. 결정 기록 = `specs/2026-08-02-remote-enable-gate-decision.md`.
+
+- **[2026-09-05] Modbus 결함 2건 수정 — 벤치 회귀 PASS, main 푸시 완료**
+  - `e569137` **WORK_CNTL 가짜 리셋**: `work_cnt` 가 0 아닌 65536 배수일 때 하위-워드 미러가 만든 0 을 마스터 쓰기로 오인 → 아무 FC06 이나 생산 카운트를 날리고 그 메시지의 staged 쓰기까지 탈락. `last_write_addr` 가드 + host 5케이스(65536 회귀 고정 — **벤치로는 재현 불가**).
+  - `66a2411` **1-iteration stale-미러 레이스**: `mirror_live()` 가 tick 말미라 `apply_writes` 가 직전 iteration 값을 봤다 → 같은 iteration 의 FC06 이 조작자 LCD 편집을 되돌리고 FRAM 에 굳힘(무음·영속). 취약 분기 22개, **최악은 LCD CANCEL**(전 필드 동시 stale). 수정 = 미러를 **디코드 앞**으로 이동(±4줄). 주소-디스패치(≈45줄, 최고 트래픽 경로)는 효과 동일이라 기각.
+  - **벤치 회귀 27항목 전건 PASS**(2026-09-05, 새 펌웨어 플래시 후): S-2·S-4 · CAL-3~7 · MOD-2/3/5 · **B34-1/5/7/8** · **FA-1/2/4/13/14** · NET-4. 미러 순서에 가장 민감한 B34-7(horn 중 START 차단+bit6)·FA-2(dirty 중 미러가 staged 값 미덮음) 포함.
+  - ⚠ 남은 것 = **FA-6/7/12(RTU 방향)** — RS-485 어댑터 게이트. 태그 미부여(스테이지 아닌 fix).
+
 - ~~**[2026-07-06 사용자 신규 등록 3건]**~~ — ✅ **전부 코드-완료 2026-07-08**(`e26e15b`/`60792da`/`78a1e43`, 전건 cpp-review 0 Crit/High, main 직접 커밋): ① 부팅 터치 유령 런 = data=0 물리 토글 fix ② REMOTE icon = samd20 case 9 포팅(1s hold) ③ 전류 EMA α 1/8→1/2(τ≈100ms). **벤치 검증 미실시**(보드 미플래시) — 체크리스트 = 루트 `HANDOFF.md` §Resume (유령 런 소멸/REMOTE 에셋 렌더/반응 체감+energy 타이밍[리뷰 MEDIUM]).
 - **HMI SP1 Task 8 실보드 E2E** — 진입 = `~/dev/work/gds_us_hmi` 폴더 세션 + 그쪽 HANDOFF.md (이 repo 아님). RS-485 어댑터 필요. **병행: RS-485 첫-write 재현 절차 실행** — `docs/superpowers/research/2026-07-05-rs485-first-write.md` §6 (전원사이클→첫 FC06 ×10 기록; 최유력=글리치 병합, V-A/V-B 시나리오 분리).
 - **6b signal calibration 잔여** — ⏸ **사용자 보류(2026-07-05 c)**. 전류 다점/2점 fit(낮은 부하 실측점 — 오프셋 제거로 중간 구간 편차 가능), ch0 도메인, weld energy 절대 E2E + divisor, EMA↔에너지 적분 디커플링(리뷰 MEDIUM), OUTERR(하위 항목).

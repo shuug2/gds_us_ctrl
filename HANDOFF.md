@@ -32,6 +32,17 @@
 
 ---
 
+## ✅ 2026-09-05 추가 완료 — Modbus 결함 2건 (벤치 회귀 PASS)
+
+`e569137` **WORK_CNTL 가짜 리셋** · `66a2411` **1-iteration stale-미러 레이스**. 둘 다 "무음 + FRAM 영속" 부류라 사후 진단이 불가능했다. 상세 = `docs/changelog.md`.
+
+**벤치 회귀 27항목 전건 PASS**(새 펌웨어 플래시 후 실보드): S-2·S-4 · CAL-3~7 · MOD-2/3/5 · **B34-1/5/7/8** · **FA-1/2/4/13/14** · NET-4. 미러 순서에 가장 민감한 두 항목(**B34-7** horn 중 START 차단+bit6, **FA-2** dirty 중 미러가 staged 값 미덮음)을 포함했다.
+
+⚠ 남은 회귀 = **FA-6/7/12(RTU 방향)** — RS-485 어댑터 게이트(열린 항목 3). 태그는 안 걸었다(스테이지가 아니라 fix).
+⚠ `WORK_CNTL` 결함은 **벤치로 재현 불가**(65536 사이클 필요 / Modbus 설정 불가 / SWD 쓰기 금지) — host 5케이스가 유일한 게이트다.
+
+---
+
 ## 🔴 열린 항목
 
 ### 1. ~~RTU baud 9600 원복~~ — ✅ **완료 (2026-09-05)**
@@ -68,9 +79,9 @@ W-1 전원인가 `rst=0x0E` (물리 전원 재인가) · B34-6 SENSOR(배선) ·
 
 ## 보드 상태 (세션 마감)
 
-**STD 빌드**(main `2b9839e` 상당), ETH_STATIC **192.168.1.199**, unit 1.
+**STD 빌드**(main `66a2411` — 2026-09-05 재플래시, Modbus 결함 2건 수정분 포함), ETH_STATIC **192.168.1.199**, unit 1.
 
-`OUT_POWER 77` · `ON_TIME 750` · `ENERGY 3011` · `TIMEOVER 8` · `EN_SAFTY 0` · `MODEL_FREQ 3` · `MODEL_TYPE 2` · `COMM addr 1 / speed 2(9600) / parity 0(EVEN)`  ← 2026-09-05 원복 · `CAL_VAL 16` · `FREQ_CAL_VAL 40` · `HORN_CMD 0` · `CFG_STAT 2(COMMIT_OK, 의도적 잔류 — 열린 항목 1)`
+`OUT_POWER 77` · `ON_TIME 750` · `ENERGY 3011` · `TIMEOVER 8` · `EN_SAFTY 0` · `MODEL_FREQ 3` · `MODEL_TYPE 2` · `COMM addr 1 / speed 2(9600) / parity 0(EVEN)`  ← 2026-09-05 원복 · `CAL_VAL 16` · `FREQ_CAL_VAL 40` · `HORN_CMD 0` · `CFG_STAT 0(IDLE — 재플래시 리셋으로 소멸. 부팅 시 cfg_stage_init 이 항상 0 으로 만든다)`
 
 ⚠ **원격기가 남긴 잔재 = `RUN_MODE 1`(TRIGGER)**, 기준선은 `0`(DELAY). 원격기 다음 세션 첫 항목으로 원복 예정.
 ⚠ **`MODEL_TYPE=2(std)` 라 `ON_TIME 750` 은 효력 없다** — on-time ceiling 은 `HAND(0)` 에서만(`app_reg.c:451`). std/multi 는 **30초 절대 ceiling 만** 남으므로 START 시험 후 **STOP 필수**.
