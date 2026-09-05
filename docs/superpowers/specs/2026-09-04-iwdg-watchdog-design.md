@@ -1,6 +1,6 @@
 # IWDG 워치독 슬라이스 — 설계
 
-> **요약**: `docs/requirements.md` FW3-6 이 요구하고 2026-07-02 감사 D3 가 "H4 + IWDG 는 별도 슬라이스"로 분리한 뒤 로드맵에서 유실됐던 **독립 워치독(IWDG)** 을 넣는다. 실코드 전수 조사 결과 (§2) 슈퍼루프 1회 반복의 **최악 블로킹 ≈ 2.6 s**(FRAM 버스 사망 시 `app_config_save_all` 38 write × 50 ms = 1.90 s + RTU 응답 TX @2400 0.53 s + 잔여)이고 **부팅 체인 최악 ≈ 12.0 s**(DGUS 4.12 s + run-page 재확인 2.28 s + OSC 2.03 s + FRAM 1.95 s + …)이다. 결정: **timeout 공칭 5.0 s**(÷256, RLR=624 → LSI 17~47 kHz 편차 시 **3.40~9.41 s**, 최악 2.6 s 대비 31 % 마진) / **IWDG 기동 = 슈퍼루프 진입 직전**(부팅 체인은 감시 밖 — 전 구간이 타임아웃으로 유계라 무한대기 없음) / **kick = `main.c` `while(1)` 단일 지점** / **DBGMCU freeze 1줄**(`./fw.sh gdb` 보호) / 리셋 원인 = **`RCC->CSR` 를 부팅 `[boot]` mon 배너 1줄 + SWD 정적 read 용 static** 으로만 표면화(Modbus 레지스터·STATUS 비트 ✗ — 계약 변경 없음) / **빌드 플래그 없음**(IWDG 는 소프트웨어 기동이라 플래시 락아웃이 없고, gdb 는 freeze 가 덮는다). HAL 은 `stm32f4xx_hal_iwdg.c` 가 vendor 트리에 있으나 **모듈이 conf 에서 비활성**(`/* #define HAL_IWDG_MODULE_ENABLED */`) → `HSE_VALUE` 선례대로 **CMake 주입 + HAL_SOURCES 1줄**로 켠다(vendor 무편집). **legacy(samd20·ATmega16) 는 둘 다 워치독 비활성** → 이 슬라이스는 **의도적 legacy 이탈**(hang 이 "영구 정지"에서 "≤9.4 s 내 자동 재부팅"으로 바뀜, `Error_Handler`/HardFault 도 재부팅 루프가 됨). host 테스트 가능한 순수 로직은 **없다**(레지스터 설정 + kick 뿐; `_Static_assert` 로 reload 범위만 고정). 검증 = HW 벤치 6항목(의도적 hang 주입 throwaway 빌드 포함, §6.2). 구현 규모 ≈ 5파일 ~20줄.
+> **요약**: `docs/requirements.md` FW3-6 이 요구하고 2026-07-02 감사 D3 가 "H4 + IWDG 는 별도 슬라이스"로 분리한 뒤 로드맵에서 유실됐던 **독립 워치독(IWDG)** 을 넣는다. 실코드 전수 조사 결과 (§2) 슈퍼루프 1회 반복의 **최악 블로킹 ≈ 2.6 s**(FRAM 버스 사망 시 `app_config_save_all` 38 write × 50 ms = 1.90 s + RTU 응답 TX @2400 0.53 s + 잔여)이고 **부팅 체인 최악 ≈ 12.0 s**(DGUS 4.12 s + run-page 재확인 2.28 s + OSC 2.03 s + FRAM 1.95 s + …)이다. 결정: **timeout 공칭 5.0 s**(÷256, RLR=624 → LSI 17~47 kHz 편차 시 **3.40~9.41 s**, 최악 2.6 s 대비 31 % 마진) — ✅ **2026-09-05 벤치 실측 4.45 s**(f_LSI ≈ 35.9 kHz, 명시 범위 내, 최악 2.6 s 대비 마진 71 %) / **IWDG 기동 = 슈퍼루프 진입 직전**(부팅 체인은 감시 밖 — 전 구간이 타임아웃으로 유계라 무한대기 없음) / **kick = `main.c` `while(1)` 단일 지점** / **DBGMCU freeze 1줄**(`./fw.sh gdb` 보호) / 리셋 원인 = **`RCC->CSR` 를 부팅 `[boot]` mon 배너 1줄 + SWD 정적 read 용 static** 으로만 표면화(Modbus 레지스터·STATUS 비트 ✗ — 계약 변경 없음) / **빌드 플래그 없음**(IWDG 는 소프트웨어 기동이라 플래시 락아웃이 없고, gdb 는 freeze 가 덮는다). HAL 은 `stm32f4xx_hal_iwdg.c` 가 vendor 트리에 있으나 **모듈이 conf 에서 비활성**(`/* #define HAL_IWDG_MODULE_ENABLED */`) → `HSE_VALUE` 선례대로 **CMake 주입 + HAL_SOURCES 1줄**로 켠다(vendor 무편집). **legacy(samd20·ATmega16) 는 둘 다 워치독 비활성** → 이 슬라이스는 **의도적 legacy 이탈**(hang 이 "영구 정지"에서 "≤9.4 s 내 자동 재부팅"으로 바뀜, `Error_Handler`/HardFault 도 재부팅 루프가 됨). host 테스트 가능한 순수 로직은 **없다**(레지스터 설정 + kick 뿐; `_Static_assert` 로 reload 범위만 고정). 검증 = HW 벤치 6항목(의도적 hang 주입 throwaway 빌드 포함, §6.2). 구현 규모 ≈ 5파일 ~20줄.
 
 **작성일**: 2026-09-04 / **대상 브랜치**: `feat/remote-status-bits` 위 또는 main 위 독립(다른 작업 비의존, HW 불요) / **구현 세션**: 별도(Opus)
 
@@ -58,6 +58,8 @@ H4 와의 관계: `Error_Handler`(`irq.c:28`, `__disable_irq(); while(1)`)와 fa
 | `app_eth_init` | `main.c:65`, `spi1.c:22-29` | ~70 ms | ~70 ms | `HAL_Delay(2)+HAL_Delay(60)` 고정 + SPI |
 | **합계** | | **≈ 3.3 s** | **≈ 12.0 s** | 전 구간 타임아웃 유계 — 무한대기는 `Error_Handler` 뿐 |
 
+⚠ **실측 "부팅→Modbus 첫 응답 4.00 s"(2026-09-05) 와 위 정상 ≈3.3 s 는 상충이 아니다.** 이 표는 부팅 체인 자체의 블로킹 합계이고, 4.00 s 는 **FC03 이 응답하기까지**라 W5500 PHY 링크 확립(~1.5 s, `app_eth` 비블로킹 폴링이라 위 표에 안 들어감)과 폴링 간격이 뒤에 붙는다. 종점이 다르다.
+
 #### 2.2.2 런타임 (슈퍼루프 1회 반복 안에서 발생 가능한 블로킹)
 
 | 구간 | 위치 | 정상 | **최악** | 상한 근거 |
@@ -100,7 +102,9 @@ H4 와의 관계: `Error_Handler`(`irq.c:28`, `__disable_irq(); while(1)`)와 fa
 
 ### 2.5 LSI 특성과 timeout 범위
 
-- STM32F410 데이터시트(DS10557) "LSI oscillator characteristics" — **f_LSI min 17 / typ 32 / max 47 kHz**(F4 패밀리 공통 보증 대역; 상온·정상 전압에서는 32 kHz ±수 %). 구현자는 데이터시트 표 번호를 spec 커밋 시 재확인할 것 — 검색으로 표의 존재만 확인했고 수치는 F4 공통값이다.
+- STM32F410 데이터시트(DS10557) "LSI oscillator characteristics" — **f_LSI min 17 / typ 32 / max 47 kHz**(F4 패밀리 공통 보증 대역). 구현자는 데이터시트 표 번호를 spec 커밋 시 재확인할 것 — 검색으로 표의 존재만 확인했고 수치는 F4 공통값이다.
+- 🔴 **"상온·정상 전압에서는 32 kHz ±수 %" 라는 원 서술은 2026-09-05 벤치로 반증됐다.** 이 유닛 실측 **f_LSI ≈ 35.9 kHz (+12 %)** — typ 보다 **max 47 kHz 쪽으로 치우친다**. 역산 근거: 무응답 8.45 s − 부팅지연 4.00 s = T 4.45 s → `256×625/4.45 = 35.96 kHz`, `main.c` 의 PR=÷256 / RLR=624 와 일치. **설계 영향은 없다**(4.45 s 는 3.40~9.41 s 안이고 마진 논리도 최악 47 kHz 기준이라 그대로 유효) — 반증된 것은 정량 서술 하나뿐이다.
+- ⚠ **측정 신뢰도**: 단일 유닛, **표본 수 불명**(리셋 원인 `0x24` 는 3회 확인, 8.45 s 는 n 미기록), 오차는 폴링 주기만큼. 온도·전압 변동 하 재측정은 안 했다.
 - `T = 4 · 2^PR · (RLR+1) / f_LSI` (PR 코드 0~6 = ÷4~÷256, RLR ≤ 0xFFF).
 
 | 프리스케일러 | 최소(RLR=0) | 최대(RLR=4095) @32k | 최대 @47k | 최대 @17k |
@@ -112,10 +116,10 @@ H4 와의 관계: `Error_Handler`(`irq.c:28`, `__disable_irq(); while(1)`)와 fa
 
 **후보 2개**(§3.1 결정):
 
-| 후보 | PR / RLR | 공칭 | @47 kHz(최단) | @17 kHz(최장) | 최악 2.6 s 대비 마진 |
-|---|---|---|---|---|---|
-| **A (권장)** | ÷256 / 624 | **5.00 s** | **3.40 s** | 9.41 s | **31 %** |
-| B | ÷128 / 999 | 4.00 s | 2.72 s | 7.53 s | 5 % — 너무 얇다 |
+| 후보 | PR / RLR | 공칭 | @47 kHz(최단) | @17 kHz(최장) | 최악 2.6 s 대비 마진 | **실측(2026-09-05)** |
+|---|---|---|---|---|---|---|
+| **A (권장·채택)** | ÷256 / 624 | **5.00 s** | **3.40 s** | 9.41 s | **31 %** | **4.45 s** — 마진 **71 %**(이 유닛) |
+| B | ÷128 / 999 | 4.00 s | 2.72 s | 7.53 s | 5 % — 너무 얇다 | (미채택) |
 
 ### 2.6 디버그 정합 (DBGMCU)
 
@@ -128,7 +132,14 @@ H4 와의 관계: `Error_Handler`(`irq.c:28`, `__disable_irq(); while(1)`)와 fa
 - `RCC->CSR[31:24]` = LPWRRSTF·WWDGRSTF·**IWDGRSTF**·SFTRSTF·PORRSTF·PINRSTF·BORRSTF·RMVF(`stm32f410rx.h:4815-4842`, HAL `RCC_FLAG_*` `stm32f4xx_hal_rcc.h:357-363`, 클리어 `__HAL_RCC_CLEAR_RESET_FLAGS()` `:1205`).
 - **플래그는 POR 또는 RMVF 로만 지워진다** → 매 부팅 읽은 뒤 반드시 클리어해야 "이전 부팅의 IWDG" 가 다음 부팅에 남지 않는다.
 - **현재 코드는 CSR 을 어디서도 읽거나 지우지 않는다**(grep `RCC->CSR|__HAL_RCC_GET_FLAG|RSTF|DBGMCU` = 0건; `clock.c` 의 `HAL_RCC_OscConfig` 도 RMVF 미접촉). 즉 지금은 모든 부팅이 POR 로 보인다.
-- 기대 관측값(`CSR>>24`, 벤치 V-4 에서 실측 기록): 전원 투입 ≈ `0x0E`(BOR\|PIN\|POR), NRST/openocd reset ≈ `0x04`(PIN), **IWDG ≈ `0x24`**(IWDG\|PIN), `NVIC_SystemReset` ≈ `0x14`(미사용).
+- 기대 관측값(`CSR>>24`) 과 **2026-09-05 벤치 실측**:
+
+| 사건 | 기대 | 실측 |
+|---|---|---|
+| NRST / openocd reset | `0x04`(PIN) | ✅ **`0x04` 일치**(V-4 ②) |
+| IWDG | `0x24`(IWDG\|PIN) | ✅ **`0x24` 일치**, 3회 연속(W-3) |
+| 전원 투입 | `0x0E`(BOR\|PIN\|POR) | ⛔ **미관측** — 물리 전원 재인가가 필요해 벤치에서 미실행(V-4 ①) |
+| `NVIC_SystemReset` | `0x14` | (미사용 경로, 미검증) |
 - **배너 위치와 가시 조건**: `app.c:29-30` `mon_init(); mon_writeln("[boot] …")`. 이 시점은 `app_modbus_init()`(`main.c:64`) **이전**이라 `apply_config` 의 `mon_set_enabled(false)`(RTU 점유) 가 아직 안 걸려 있다 → **comm_mode 와 무관하게 부팅 배너는 항상 USART6 115200 8N1 로 1회 나간다.** 이후 런타임 mon 은 `comm_mode` 가 ETH_* 일 때만 보인다(RESUME 2026-08-17: RS-485 어댑터 청취 가능, auto-DE).
 
 ### 2.8 표면화 경로 후보
@@ -158,7 +169,7 @@ IWDG 리셋은 소비 측에 이미 **간접 가시**다: TCP 연결 단절(W550
 ### 3.1 timeout = 공칭 5.0 s (÷256, RLR 624)
 
 - 근거: 런타임 단일 반복 최악 2.6 s(§2.2.2) × LSI 최속 47 kHz 보정 → 필요 공칭 ≥ 2.6/0.68 = 3.8 s. 4 s 는 마진 5 % 로 얇고, 5 s 는 31 %. 6 s 이상은 hang 중 출력 ON 창(§4 ②)만 늘린다.
-- **hang 시 최장 무응답 = 9.41 s**(LSI 17 kHz). legacy 는 무한이었으므로 개선이며, 그 창 동안 소프트웨어 E-stop(PC11 폴링) 도 죽어 있다는 점은 §4 에 명시.
+- **hang 시 최장 무응답 = 9.41 s**(LSI 17 kHz). ✅ **이 유닛 실측 8.45 s**(= T 4.45 + 부팅 4.00) — hang 발생부터 Modbus 첫 응답까지. **원격기 재접속 타임아웃 설계의 입력값**이다. legacy 는 무한이었으므로 개선이며, 그 창 동안 소프트웨어 E-stop(PC11 폴링) 도 죽어 있다는 점은 §4 에 명시.
 - 상수는 `main.c` 매크로 2개(`IWDG_PRESCALER_256`, `IWDG_RELOAD 624u`) + `_Static_assert(IWDG_RELOAD <= IWDG_RLR_RL)`. 설정 레이어·런타임 변경 ✗.
 
 ### 3.2 kick = `main.c` `while(1)` 안 단일 지점
@@ -206,7 +217,7 @@ A 의 잔여 리스크(부팅 중 무한대기) 는 §2.3 대로 `Error_Handler`
 | ② | hang 중 **초음파 출력 ON 상태** | 무한 지속 | 최장 9.4 s 후 리셋 — 리셋 시 GPIO 전부 Hi-Z → OSC 3선 open-drain 외부 풀업 HIGH = **OFF**(`board.c:4-8`), SOL_DN PB5 Hi-Z(회로상 idle 확인 = 벤치 V-3b). ⚠ 그 창 동안 **소프트웨어 E-stop(PC11 폴링) 도 죽어 있다** — legacy 와 동일한 한계, 창 길이만 유한화 |
 | ③ | `Error_Handler`/HardFault 계열 | 영구 정지(H4 "ADC 영구 lock" 포함) | **≤9.4 s 마다 재부팅 루프**. 원인은 배너 `IWDG` 로만 보이고 fault 종류는 남지 않음(§7) |
 | ④ | 부팅 배너 | `[boot] gds_us_ctrl stage-b ready` | `[boot] gds_us_ctrl ready rst=0xNN[ IWDG]` |
-| ⑤ | IWDG 리셋 후 부팅 | (해당 없음) | POR 과 동일 경로. 단 OSC 보드는 전원 유지라 PB12 펄스 없음 → WAIT_H 900 ms 폴백 후 RESET 40/SEEK 20 ms 펄스 재송출(NRST 리셋과 같은 거동). W5500 하드리셋 → TCP 클라이언트 단절(원격기 재접속 로직 의존, 앱 유휴 12 s 와 별개). STATUS/명령/`REMOTE_EN` 0-리셋(PC8 레벨 스위치라 자동 재평가) |
+| ⑤ | IWDG 리셋 후 부팅 | (해당 없음) | POR 과 동일 경로. 단 OSC 보드는 전원 유지라 PB12 펄스 없음 → WAIT_H 900 ms 폴백 후 RESET 40/SEEK 20 ms 펄스 재송출(NRST 리셋과 같은 거동). W5500 하드리셋 → TCP 클라이언트 단절(원격기 재접속 로직 의존, 앱 유휴 12 s 와 별개). **실측 단절 길이**: 정상 부팅 후 첫 FC03 응답까지 **4.00 s**, hang 부터 세면 **≈8.5 s**. STATUS/명령/`REMOTE_EN` 0-리셋(PC8 레벨 스위치라 자동 재평가) |
 | ⑥ | `save_all` 도중 리셋 | (해당 없음) | FRAM 맵 부분 갱신(전원 차단과 동일 클래스, CRC 없음) — 정상 버스에서는 save_all 5 ms 라 확률 극소, 죽은 버스에서는 어차피 write 실패 |
 | ⑦ | 부팅 시간 | — | `HAL_IWDG_Init` PVU/RVU 대기 ≤49 ms 추가(정상 <1 ms) |
 
@@ -229,19 +240,24 @@ A 의 잔여 리스크(부팅 중 무한대기) 는 §2.3 대로 `Error_Handler`
 
 **없음.** 순수 로직이 없다(레지스터 설정 2값 + kick 1줄). 억지 스위트를 만들지 않는다. 컴파일 타임 체크 1개만: `_Static_assert(IWDG_RELOAD <= IWDG_RLR_RL, "IWDG reload > 12-bit")`. 기존 16스위트 무회귀 + 우리 코드 0-warning 이 게이트.
 
-### 6.2 HW 벤치 (구현 세션 후, 보드 확보 시)
+### 6.2 HW 벤치 — ✅ **2026-09-05 실행** (4/7 PASS, 3 미실행)
+
+> **실행 결과 요약**: **V-3·V-4②·V-5·V-6 PASS**, 펌웨어 결함 0건. 미실행 3건은 전부 **수단 게이트**이지 결과 미상이 아니다 —
+> **V-1**(전원 재인가 `rst=0x0E` 관측이 물리 조작 필요) · **V-2**(10분×2 장기 무오작동, RTU 구간은 RS-485 어댑터 부재) · **V-4①**(V-1 과 동일 사유).
+> 상세 = `docs/superpowers/plans/2026-09-05-bench-results.md`. 아래 표의 판정란에 항목별 결과를 붙였다.
+
 
 리셋 지표 = **부팅 beep(100 ms) + LCD 로고 재스플래시(1 s)** — mon 이 안 보이는 RTU 모드에서도 관측 가능. mon 은 ETH_* 모드에서 RS-485 어댑터 115200 8N1 청취(부팅 배너는 모든 모드에서 1회 나감, §2.7).
 
 | # | 항목 | 절차 | 판정 |
 |---|---|---|---|
-| V-1 | 정상 부팅 무회귀 | 전원 투입 | 배너 `rst=0x0E`(IWDG 없음), LCD run 페이지, 이후 1분간 beep/로고 재출현 0회 |
-| V-2 | 장기 무오작동 (false-trip 없음) | ① ETH_STATIC + mbpoll FC03 50칸 연속 폴링 + LCD DATA_SAVE 3회 + START/STOP 3회 ≥10분 ② **RTU 2400 baud** 로 전환(LCD) 후 FC03 50칸 연속 폴링 + DATA_SAVE 3회 ≥10분(최장 TX 스톨 481 ms 조합) | 두 구간 모두 beep/로고 재출현 0회, ②는 종료 후 LCD 에서 원래 baud 복원 |
-| V-3 | **의도적 hang → 리셋** | **throwaway 빌드(커밋 금지)**: `app_loop_iter()` 말미에 `if (sys_tick_get_ms() > 20000u) { mon_writeln("[wd] hang"); __disable_irq(); for(;;){} }` 추가 → 플래시 → 전원 투입 | 20 s 시점부터 **3.4~9.4 s 내**(공칭 5 s) beep+로고 → 배너 `rst=0x24 IWDG`. `[wd] hang`~`[boot]` 간격을 타임스탬프 캡처로 재어 **실측 LSI 를 이 spec 에 기록**. 20 s 마다 반복되는 재부팅 루프 = 정상(throwaway 제거로 종료) |
-| V-3b | hang 시 출력 fail-safe | V-3 변형: hang 직전에 `app_reg_command(US_CMD_START, US_COMM)` 호출 → 출력 ON 상태로 hang | 리셋 순간 PB14(RUN, active-LOW) HIGH 복귀 + ICON_RUN 소등 + STATUS 0. ⚠ **안전**: OSC 보드 부하(혼) 미연결 또는 무부하 상태에서만. hang 창(≤9.4 s) 동안 E-stop 소프트웨어 경로가 죽어 있으므로 **전원 스위치를 손에 두고** 진행 |
-| V-4 | 플래그 클리어 검증 | V-3 뒤 ① 전원 재투입 ② openocd `reset` | ① `rst=0x0E`(IWDG 잔류 없음 = RMVF 동작) ② `rst=0x04`. 실측값이 기대와 다르면 **값만 spec 에 기록**(비트 조합은 실리콘 관측치가 정본) |
-| V-5 (선택) | DBGMCU freeze | `./fw.sh gdb` → `break main` 통과 후 임의 지점 `Ctrl-C` → 30 s 대기 → `continue` | 리셋 없음(배너 재출현 ✗). ⚠ SWD halt 금지 규칙의 **1회 예외** — 이 항목은 "리셋 안 남" 만 보고, halt 중 sys_tick 정지로 인한 표시/FSM 오동작은 판정에서 제외 |
-| V-6 | 타이밍 무회귀 | mbpoll START → STATUS `1×N→0` | ceiling 실측 [514,617] ms 대역 유지 |
+| V-1 | 정상 부팅 무회귀 | 전원 투입 | ⛔ **미실행** — 물리 전원 재인가 필요(수단 게이트) — 기대판정: 배너 `rst=0x0E`(IWDG 없음), LCD run 페이지, 이후 1분간 beep/로고 재출현 0회 |
+| V-2 | 장기 무오작동 (false-trip 없음) | ① ETH_STATIC + mbpoll FC03 50칸 연속 폴링 + LCD DATA_SAVE 3회 + START/STOP 3회 ≥10분 ② **RTU 2400 baud** 로 전환(LCD) 후 FC03 50칸 연속 폴링 + DATA_SAVE 3회 ≥10분(최장 TX 스톨 481 ms 조합) | ⛔ **미실행** — 10분×2 장기 + ② 구간은 RS-485 어댑터 게이트 — 기대판정: 두 구간 모두 beep/로고 재출현 0회, ②는 종료 후 LCD 에서 원래 baud 복원 |
+| V-3 | **의도적 hang → 리셋** | **throwaway 빌드(커밋 금지)**: `app_loop_iter()` 말미에 `if (sys_tick_get_ms() > 20000u) { mon_writeln("[wd] hang"); __disable_irq(); for(;;){} }` 추가 → 플래시 → 전원 투입 | 20 s 시점부터 **3.4~9.4 s 내**(공칭 5 s) beep+로고 → 배너 `rst=0x24 IWDG`. `[wd] hang`~`[boot]` 간격을 타임스탬프 캡처로 재어 **실측 LSI 를 이 spec 에 기록**. 20 s 마다 반복되는 재부팅 루프 = 정상(throwaway 제거로 종료) — ✅ **PASS 2026-09-05**: 무응답 **8.45 s**, `BOOT_RST=0x24` 3회 연속, 역산 **T=4.45 s / f_LSI≈35.9 kHz**(§2.5 에 기입) |
+| V-3b | hang 시 출력 fail-safe | V-3 변형: hang 직전에 `app_reg_command(US_CMD_START, US_COMM)` 호출 → 출력 ON 상태로 hang | ⛔ **미실행** — 출력 라인 관측 수단(스코프/실배선) 게이트 — 기대판정: 리셋 순간 PB14(RUN, active-LOW) HIGH 복귀 + ICON_RUN 소등 + STATUS 0. ⚠ **안전**: OSC 보드 부하(혼) 미연결 또는 무부하 상태에서만. hang 창(≤9.4 s) 동안 E-stop 소프트웨어 경로가 죽어 있으므로 **전원 스위치를 손에 두고** 진행 |
+| V-4 | 플래그 클리어 검증 | V-3 뒤 ① 전원 재투입 ② openocd `reset` | ✅ **② NRST `0x04` PASS** / ⛔ ① 전원인가 `0x0E` 미실행(V-1 과 동일 사유) — 기대판정: ① `rst=0x0E`(IWDG 잔류 없음 = RMVF 동작) ② `rst=0x04`. 실측값이 기대와 다르면 **값만 spec 에 기록**(비트 조합은 실리콘 관측치가 정본) |
+| V-5 (선택) | DBGMCU freeze | `./fw.sh gdb` → `break main` 통과 후 임의 지점 `Ctrl-C` → 30 s 대기 → `continue` | ✅ **PASS** — 30 s halt 동안 리셋 0회, `BOOT_RST` 불변, 정상 재개 = freeze 동작 실증 — 기대판정: 리셋 없음(배너 재출현 ✗). ⚠ SWD halt 금지 규칙의 **1회 예외** — 이 항목은 "리셋 안 남" 만 보고, halt 중 sys_tick 정지로 인한 표시/FSM 오동작은 판정에서 제외 |
+| V-6 | 타이밍 무회귀 | mbpoll START → STATUS `1×N→0` | ✅ **PASS** — 559 / 558 / 556 ms — 기대판정: ceiling 실측 [514,617] ms 대역 유지 |
 
 ## 7. 범위 밖 (이연)
 
