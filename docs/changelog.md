@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+### 2026-09-05 — fix(modbus): 1-iteration stale-미러 레이스 (미러를 디코드 앞으로)
+
+- **증상**: LCD 조작자의 편집이 **무음으로 되돌아가고 FRAM 에 굳는다.** cfg 를 바꾸는 주체(LCD 입력 · `app_weld` `work_cnt++` · DHCP)는 전부 `app_modbus_tick` **앞**에 있는데 `mirror_live()` 는 tick **말미**에 있었다 → `apply_writes` 가 보는 `holding[]` 이 직전 iteration 값이라, 같은 iteration 에 도착한 FC06 이 옛값을 "마스터가 쓴 값"으로 오인해 되돌리고 `app_config_save_all` 로 영속시켰다. 쓴 주소의 분기가 체인에서 뒤에 있으면 **마스터 쓰기도 함께 유실**된다.
+- **취약 분기 22개**: DELAY1/2/3 · TRIGGER2/3 · OUT_POWER · ON_TIME · ENERGY · MULTI_T1/T2·O1/O2 · TIMEOVER · RUN_MODE · EN_ENERGY/MULTI/SAFTY · HORN_CMD · MODEL_FREQ/TYPE · CAL_VAL/FREQ_CAL_VAL. (`WORK_CNTL`·staged 9종은 `last_write_addr` 가드로 이미 안전했다.)
+- 🔴 **최악은 LCD CANCEL**: `app_config_load()` 가 편집 필드 **전부**를 한꺼번에 되돌리므로 그 iteration 에 여러 필드가 동시에 stale 이고, FC06 이 오면 **체인 첫 필드 하나가 "취소한 편집값"으로 되살아나 FRAM 에 저장**된다. 창도 `load`(≈5 ms) + `change_page` 다중 DGUS TX 로 일반 편집(수십 µs)의 100배 이상.
+- **수정**: `app_modbus_tick` 의 `mirror_live()` 를 **디코드 앞**으로 이동(RTU·TCP 각 1곳). TCP 첫 연결 baseline 미러는 중복이 되어 제거. **창이 0 이 된다.**
+- **왜 주소-디스패치가 아닌가**: 22 분기를 `last_write_addr` 게이팅으로 바꾸는 안(≈45줄, no-op 저장 가드 포함)과 **효과가 동일**한데 여기는 모든 Modbus 쓰기가 지나가는 최고 트래픽 경로다. 이동 안은 비-레이스 케이스에서 `holding[]` 내용이 **byte-동일**임을 논증할 수 있다 — 미러~apply 사이에 cfg 를 쓰는 코드가 없기 때문(`remote_en_step`·`cfg_stage_tick`·`apply_config`·`tcp_poll` 전수 확인). 유일한 차이는 measure 값이 1 iteration 신선해지는 것으로 외부 관측 불가.
+- **거동 변화**: 위 레이스 케이스뿐. 타이밍·호출 횟수 무변경(ceiling 무관), 계약·레지스터 맵 무변경.
+- **레거시 이탈(사용자 승인 2026-09-05)**: samd20 은 비-FC06 메시지 뒤에만 미러해 창이 ≈50 ms(`ref/samd20/main.c:5054/5098`), 이 포트가 매 tick 으로 좁혔고(Deviations 6), 이번에 0 으로 만든다. 방향은 `e569137` 과 같은 "조용한 손상 → 정상".
+- **게이트**: `app_modbus.c` 는 글루라 host 로 못 잡는다 → 동일성 논증 + **벤치 회귀**가 게이트. 재확인 대상 = S-2 · S-4 · CAL-1~7 · MOD-2/3/5 · B34-1/5/7/8 · FA-1/2/4/11/13/14 · NET-4. 특히 **FA-2**(dirty 중 미러가 staged 값을 안 덮음)와 **B34-7**(HORN 중 START 차단 + bit6)이 미러 순서에 가장 민감.
+- ⚠ **불변식 주석 추가**: 이동한 `mirror_live()` 옆에 "이 지점부터 `apply_writes` 사이에 cfg 를 쓰는 코드를 넣지 말 것" 을 박았다. 넣는 순간 창이 다시 열린다.
+- staged 스캔의 `last_write_addr` 가드는 **방어선으로 유지**(창은 닫혔으나 순서는 tick 의 불변식이고 그 자리에서 재확인할 수단이 없다). 낡아진 주석 5곳 정정.
+- 게이트: our-code 0-warning, host 16스위트 PASS, FLASH 50.55→**50.54 %**(−8 B).
+
 ### 2026-09-05 — fix(modbus): WORK_CNTL 가짜 리셋 (2026-09-04 `0ab2608` 회귀)
 
 - **증상**: `work_cnt` 가 **0 이 아닌 65536 의 배수**일 때, 앞 분기에 안 걸린 **아무 FC06 이나**(staged 쓰기 `0x1E`/`0x1F`/IP, 같은 값 재쓰기, 분기 없는 주소) 생산 카운트를 0 으로 날리고 FRAM 에 저장한다. else-if 체인이라 **그 메시지의 staged 쓰기까지 탈락**한다. 복구 불가.

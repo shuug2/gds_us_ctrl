@@ -561,11 +561,13 @@ void app_modbus_apply_writes(mb_link_t link)
         /* staged 스캔 — 예약 영역 쓰기를 staging 으로 흡수한다.
          *
          * 🔴 전수 비교(holding != 기대값)로 하면 **stale 미러를 staged 편집으로
-         * 오인한다**: mirror_live()는 tick 말미에 돌므로, LCD 나 DHCP 가
-         * cfg->ether_* 를 바꾼 직후 한 iteration 동안 holding 은 옛값이다. 그때
-         * 아무 FC06 이나 도착하면 스캔이 **옛값**을 staged 로 잡고, 이후 커밋이
-         * 그것을 cfg·FRAM 에 되써서 조작자의 LCD 변경을 조용히 되돌린다.
-         * 그래서 "마스터가 이번에 실제로 쓴 주소"만 본다 — 코어가 기록해 준다.
+         * 오인한다**: 예전엔 mirror_live()가 tick 말미에 돌아 LCD 나 DHCP 가
+         * cfg->ether_* 를 바꾼 직후 한 iteration 동안 holding 이 옛값이었고,
+         * 그때 아무 FC06 이나 도착하면 스캔이 **옛값**을 staged 로 잡아 이후
+         * 커밋이 그것을 cfg·FRAM 에 되썼다. 미러를 디코드 앞으로 옮겨(2026-09-05)
+         * 그 창 자체는 닫혔지만, **이 가드는 방어선으로 남긴다** — 미러 순서는
+         * app_modbus_tick 의 불변식이고 여기서 재확인할 수단이 없다.
+         * "마스터가 이번에 실제로 쓴 주소"만 본다 — 코어가 기록해 준다.
          * mb_core_decode/mb_write_reg 의 거동은 그대로다(관측값 1개 추가). */
         for (uint8_t i = 0u; i < (uint8_t)CFG_STG_COUNT; i++) {
             if ((uint16_t)k_stg_reg[i] == g_mb.last_write_addr) {
@@ -582,9 +584,9 @@ void app_modbus_apply_writes(mb_link_t link)
          * worst case (bus hang). Same budget as the LCD DATA_SAVE path. */
         app_config_save_all(cfg);
     }
-    /* mirror_live() runs right after in app_modbus_tick(): the next read
-     * returns the clamped/applied value, and a clamped write can't re-fire
-     * this chain on the next message. */
+    /* 다음 tick 시작의 mirror_live()(디코드 앞)가 holding 을 cfg 로 재동기한다:
+     * 다음 read 는 클램프·정규화된 값을 보고, 클램프 잔여가 다음 메시지에서
+     * 이 체인을 재발화시키지 못한다. 순서는 app_modbus_tick 참조. */
 }
 
 /* 점유/라인설정 전이 */
@@ -692,6 +694,16 @@ void app_modbus_tick(void)
         /* RTU owns USART6 (comm_mode==SERIAL && addr!=0). Behavior-identical
          * to the hardware-verified slice-1 path. */
         tcp_leave();
+        mirror_live();   /* 🔴 디코드 **앞**에서 미러한다 — 이 순서가 계약이다.
+                          * cfg 를 바꾸는 주체(LCD 입력·app_weld work_cnt++·DHCP)는
+                          * 전부 app_modbus_tick 보다 앞에 있다. 미러를 tick 말미에
+                          * 두면 apply_writes 가 보는 holding[] 이 **직전 iteration**
+                          * 값이라, 같은 iteration 에 도착한 FC06 이 조작자의 LCD
+                          * 편집을 "마스터가 쓴 값"으로 오인해 되돌리고 FRAM 에
+                          * 굳혔다(무음 + 영속). LCD CANCEL 은 전 필드를 한꺼번에
+                          * stale 로 만들어 최악이었다.
+                          * ⚠ 불변식: 이 지점부터 apply_writes 사이에 cfg 를 쓰는
+                          * 코드를 넣지 말 것 — 넣는 순간 창이 다시 열린다. */
         uint8_t frame[MB_FRAME_MAX];
         uint8_t len = usart6_mb_rx_frame(frame, sizeof frame);
         if (len != 0u) {
@@ -706,7 +718,6 @@ void app_modbus_tick(void)
                 app_modbus_apply_writes(MB_LINK_RTU); /* samd20: update_holding_reg(1) on FC06 */
             }
         }
-        mirror_live();
         return;
     }
 
@@ -717,13 +728,11 @@ void app_modbus_tick(void)
         if (g_tcp_active == 0u) {
             cfg_stage_discard(&s_stg);  /* 링크 전이 = staging 무조건 폐기 */
             mb_core_init(&g_mb, cfg->comm_address);  /* seed addr + zero tables */
-            mirror_live();   /* baseline before first poll (matches apply_config
-                              * RTU-acquisition): avoids a zeroed-holding[] read
-                              * window on a SERIAL->ETH switch with a held socket */
-            g_tcp_active = 1u;
+            g_tcp_active = 1u;   /* baseline 미러는 아래 poll 앞 mirror_live() 가
+                                  * 겸한다 — zeroed-holding[] read 창은 그대로 없다 */
         }
+        mirror_live();           /* 🔴 poll(=decode+apply) **앞**. 사유는 RTU 분기 주석 */
         app_modbus_tcp_poll();   /* decode(MB_MODE_TCP) + apply on FC06 + respond */
-        mirror_live();           /* keep holding[] fresh for reads (closes the gap) */
     } else {
         tcp_leave();
     }

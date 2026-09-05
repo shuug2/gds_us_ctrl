@@ -161,10 +161,10 @@ void app_modbus_tcp_poll(void)
      * 바운드. FC06을 만나면 그 프레임까지 처리(응답 append + apply_writes)
      * 하고 워크를 즉시 종료한다 — apply_writes는 holding[] vs cfg 1-change
      * -per-call else-if 체인이라, 클램프된 write는 holding에 raw 잔여를
-     * 남기고 그 잔여는 poll 뒤 mirror_live()만 재동기함. 같은 poll에서
+     * 남기고 그 잔여는 다음 tick 시작의 mirror_live()만 재동기함. 같은 poll에서
      * 두 번째 FC06까지 처리하면 잔여를 먼저 재발견해 반환 → 뒤 write가
      * 조용히 유실(whole-branch review HIGH). 잔여 프레임은 누적 버퍼로
-     * 다음 poll에 이월되고, 그 사이 mirror_live()가 holding을 cfg와
+     * 다음 poll에 이월되고, 그 앞에서 mirror_live()가 holding을 cfg와
      * 재동기하므로 RTU와 동일한 "poll당 최대 1 write-apply" 불변식이 됨. */
     uint16_t tx_len = 0u;
     uint16_t off = 0u;
@@ -202,7 +202,7 @@ void app_modbus_tcp_poll(void)
         if (wrote) {
             /* FC06 뒤는 이번 poll에서 처리하지 않음: apply_writes는
              * one-change-per-call 체인 + 클램프 잔여(holding=raw vs
-             * cfg=클램프) 재동기가 poll 뒤 mirror_live()뿐이라, 같은
+             * cfg=클램프) 재동기가 다음 tick 시작의 mirror_live()뿐이라, 같은
              * poll에서 두 번째 FC06을 apply하면 잔여 재발견으로 굶겨
              * write가 조용히 유실됨(whole-branch review HIGH). 잔여
              * 프레임은 누적 버퍼로 다음 poll 이월 — mirror가 사이에
