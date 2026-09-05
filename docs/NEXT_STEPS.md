@@ -132,14 +132,14 @@ make -C fw/test test                                # rsb 16 / main 14 스위트
 | 게이트 빌드가 필요할 때 | 브랜치 체크아웃 후 — 벤치용(강제 OFF): `cmake -S fw -B fw/build -G Ninja -DREMOTE_EN_GATE_BYPASS=ON` / VR 판정용(강제 ON): `-DREMOTE_EN_GATE_BYPASS=OFF`. ⚠ 강제 ON 빌드는 T-5가 없어 **원격 명령이 전부 막힌다**(STOP·읽기만 통과) |
 | **comm_mode** | **1 = ETH_STATIC** ⚠ — **RS-485는 Modbus에 응답하지 않는다.** `mbpoll -m tcp -a 1 ... 192.168.1.199` 사용. **대신 RS-485로 mon 청취 가능**(§아래) |
 | ether | IP **192.168.1.199** / NM 255.255.255.0 / GW 192.168.1.1 (ping 0% loss 확인) |
-| comm (serial 파라미터) | addr=1 / **38400** / EVEN (`speed_idx=4`) — SERIAL 복원 시 상대 장비도 38400/EVEN으로 |
+| comm (serial 파라미터) | addr=1 / **9600** / EVEN (`speed_idx=2`) — 2026-09-05 38400→9600 원복. SERIAL 복원 시 상대 장비도 9600/EVEN으로 |
 | model_type | **1 = multi** (ceiling 시험용 hand 전환 후 사용자가 복원) |
 | model_freq | 3 (35 kHz) / run_mode 1(trigger) / f_safty 0 |
 | output_power 56 · on_time 56 · out_time 8 | energy_ctrl off · multi_ctrl off |
 | cal_val **16** / freq_cal_val **40** | 둘 다 **사용자 의도 트림 — 원복 금지**. freq_cal_val이 0이 아닌 것은 버그가 아니다(2026-08-16 사용자 확인) |
 | STATUS | 0 (무런·무fault), work_cnt 0 |
 
-⚠ **serial 파라미터가 38400으로 바뀌었다**(구 9600 아님). HMI Task 8은 RTU가 필요하므로 진입 시 LCD에서 `comm_mode`를 SERIAL로 되돌리고, 상대 장비도 **38400/EVEN**으로 맞출 것.
+✅ **serial 파라미터는 9600/EVEN 이다** — 2026-08-17 의 미기록 38400 변경을 **2026-09-05 에 9600 으로 원복**했다(소비자 `gds_us_hmi`·`gds_us_remote` 가 9600 전제). HMI Task 8은 RTU가 필요하므로 진입 시 LCD에서 `comm_mode`를 SERIAL로 되돌릴 것 — 상대 장비는 **9600/EVEN**. ⚠ 원복은 cfg·FRAM 까지만 반영됐고 **물리 UART 실측은 SERIAL 전환 후에야 가능**하다.
 
 **⚡ RS-485로 mon을 볼 수 있다 (2026-08-17 발견 — 기존 "DE 미제어로 불가" 기록은 원인 오진)**
 

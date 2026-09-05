@@ -18,6 +18,8 @@
 🔴 `nc -z` 류 무-데이터 프로브 금지 — 구 펌웨어에서는 소켓을 영구 고착시킨다.
    상세 = docs/superpowers/plans/2026-09-05-bench-results.md §4
 """
+import socket, struct, time
+
 
 class MB:
     def __init__(self, host='192.168.1.199', port=502, unit=1, timeout=3.0, retries=15):
