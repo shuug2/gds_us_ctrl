@@ -217,7 +217,22 @@ A 의 잔여 리스크(부팅 중 무한대기) 는 §2.3 대로 `Error_Handler`
 | ② | hang 중 **초음파 출력 ON 상태** | 무한 지속 | 최장 9.4 s 후 리셋 — 리셋 시 GPIO 전부 Hi-Z → OSC 3선 open-drain 외부 풀업 HIGH = **OFF**(`board.c:4-8`), SOL_DN PB5 Hi-Z(회로상 idle 확인 = 벤치 V-3b). ⚠ 그 창 동안 **소프트웨어 E-stop(PC11 폴링) 도 죽어 있다** — legacy 와 동일한 한계, 창 길이만 유한화 |
 | ③ | `Error_Handler`/HardFault 계열 | 영구 정지(H4 "ADC 영구 lock" 포함) | **≤9.4 s 마다 재부팅 루프**. 원인은 배너 `IWDG` 로만 보이고 fault 종류는 남지 않음(§7) |
 | ④ | 부팅 배너 | `[boot] gds_us_ctrl stage-b ready` | `[boot] gds_us_ctrl ready rst=0xNN[ IWDG]` |
-| ⑤ | IWDG 리셋 후 부팅 | (해당 없음) | POR 과 동일 경로. 단 OSC 보드는 전원 유지라 PB12 펄스 없음 → WAIT_H 900 ms 폴백 후 RESET 40/SEEK 20 ms 펄스 재송출(NRST 리셋과 같은 거동). W5500 하드리셋 → TCP 클라이언트 단절(원격기 재접속 로직 의존, 앱 유휴 12 s 와 별개). **실측 단절 길이**: 정상 부팅 후 첫 FC03 응답까지 **4.00 s**, hang 부터 세면 **≈8.5 s**. STATUS/명령/`REMOTE_EN` 0-리셋(PC8 레벨 스위치라 자동 재평가) |
+| ⑤ | IWDG 리셋 후 부팅 | (해당 없음) | POR 과 동일 경로. 단 OSC 보드는 전원 유지라 PB12 펄스 없음 → WAIT_H 900 ms 폴백 후 RESET 40/SEEK 20 ms 펄스 재송출(NRST 리셋과 같은 거동). W5500 하드리셋 → TCP 클라이언트 단절(원격기 재접속 로직 의존, 앱 유휴 12 s 와 별개). **실측 단절 길이**: 정상 부팅 후 첫 FC03 응답까지 **4.00 s**, hang 부터 세면 **≈8.5 s**.
+
+🔴 **마스터 측에서 IWDG 리셋은 `ConnectionRefused` 로 보인다** (2026-09-05 `gds_us_remote` 실측). 리셋 원인을 `BOOT_RST` mon 배너 + SWD static 으로만 표면화하기로 한 결정(§2.8, 계약 무변경)의 필연적 귀결이다 — **마스터에게는 IWDG 를 식별할 경로가 없다.** 증상은 이렇게 갈린다:
+
+| 사건 | 마스터가 보는 것 | 이유 |
+|---|---|---|
+| **IWDG / NRST / 전원 재인가** | **`ConnectionRefused`** | W5500 은 살아 RST 를 보내는데 **MCU 만 재부팅 중**이라 서버 소켓이 안 열려 있다 |
+| 케이블 분리 · 링크 down | 도달 실패(`absent`/타임아웃) | ARP·ping 부터 실패 |
+| 다른 마스터가 점유 | **`ConnectionRefused`** | Modbus TCP 소켓이 **1개**뿐 |
+| `comm_mode` = SERIAL | **`ConnectionRefused`** | TCP 서버 자체가 안 뜬다 |
+
+⚠ **`refused` 하나에 원인이 최소 셋이고 마스터가 구분할 수단이 없다.** IWDG 가 main 에 들어오면서 "컨트롤러 재부팅"이 **필드에서 흔한 원인**이 됐으므로, 소비 측 오류 문구는 재부팅을 원인 목록에 **추가**하되 **단정하지는 말아야** 한다.
+
+⚠ **복귀 판정은 `connect()` 성공이 아니라 FC03 트랜잭션 성공으로.** 부팅 초반에 W5500 이 먼저 올라와(`[eth] chip up` → PHY 링크 ~1.5 s) **SYN 은 받지만 Modbus 응답은 아직 못 하는 창**이 실재한다. 원격기 실측이 이 창을 그대로 잡았다 — 재연결 직후 폴 `1.8/s 실패 2` → 다음 창 `18.5/s 실패 0`.
+
+**실측 복구 시간**(NRST 기준, 원격기 로그): 리셋 **0.8 s** 뒤 첫 폴 실패 → **5.5 s** 만에 세션 복구, **사람 개입 0**. IWDG 경로는 hang 시간이 더해져 그만큼 길어진다. STATUS/명령/`REMOTE_EN` 0-리셋(PC8 레벨 스위치라 자동 재평가) |
 | ⑥ | `save_all` 도중 리셋 | (해당 없음) | FRAM 맵 부분 갱신(전원 차단과 동일 클래스, CRC 없음) — 정상 버스에서는 save_all 5 ms 라 확률 극소, 죽은 버스에서는 어차피 write 실패 |
 | ⑦ | 부팅 시간 | — | `HAL_IWDG_Init` PVU/RVU 대기 ≤49 ms 추가(정상 <1 ms) |
 
