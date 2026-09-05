@@ -126,7 +126,7 @@ static void remote_en_step(void)
     remote_en_in_t in;
 
     in.now_ms      = sys_tick_get_ms();
-    /* 🔴 PC8 극성 **반전 상태** — 인터록 회로 미실장 구간의 한시 조치.
+    /* 🔴 PC8 극성은 define.h 의 REMOTE_EN_INTERLOCK_INVERTED 가 고른다.
      *
      * 설계 원안은 active-LOW fail-safe 다: 스위치 닫힘=LOW=허용 / 열림·단선·
      * 커넥터 탈락=HIGH=불허. 그런데 인터록 회로가 아직 PCB 에 없어 풀업만 걸린
@@ -134,14 +134,19 @@ static void remote_en_step(void)
      * 그래서 판정을 뒤집어 미실장(HIGH)을 "허용" 으로 읽는다 — 추가 회로 없이
      * 원격 제어가 동작하게 하려는 것이다 (사용자 결정 2026-09-05).
      *
-     * ⚠ **이 상태에서는 fail-safe 가 반대다** — 단선·커넥터 탈락이 불허가 아니라
+     * ⚠ **반전 상태에서는 fail-safe 가 반대다** — 단선·커넥터 탈락이 불허가 아니라
      * 허용이 된다. 인터록으로서의 보호는 지금 없다.
      *
-     * 🔴 **PC8 실장 PCB 가 오면 이 줄을 `== 0u` 로 되돌릴 것.** 실장 후에는
-     * A-1(스위치 OFF=불허) · A-5(ON=허용) · A-13(단선=불허) 재시험이 어차피
-     * 필요하므로, 그 시험 전에 원복하면 된다.
-     * 극성은 이 한 곳에서만 뒤집는다 — 하류 FSM·강제 로직은 손대지 않았다. */
-    in.sw          = (io_read_remote_en() != 0u) ? 1u : 0u;
+     * 🔴 **PC8 실장 PCB 가 오면 define.h 의 매크로를 0 으로 되돌릴 것** — 여기가 아니다.
+     * LCD 버전 문자열의 ! 표식이 같은 매크로를 따라가므로 둘이 어긋날 수 없다.
+     * 실장 후에는 A-1(스위치 OFF=불허) · A-5(ON=허용) · A-13(단선=불허) 재시험이
+     * 어차피 필요하므로, 그 시험 전에 원복하면 된다.
+     * 극성은 이 한 곳에서만 갈린다 — 하류 FSM·강제 로직은 손대지 않았다. */
+#if REMOTE_EN_INTERLOCK_INVERTED
+    in.sw          = (io_read_remote_en() != 0u) ? 1u : 0u;  /* 미실장 HIGH = 허용 (한시) */
+#else
+    in.sw          = (io_read_remote_en() == 0u) ? 1u : 0u;  /* 원안 active-LOW fail-safe */
+#endif
     /* 침묵 입력 = REMOTE 아이콘과 같은 스탬프. note_remote가 유효 디코드 전부에
      * 찍히므로 읽기 요청도 링크 생존 신호다. 진입 이전 값일 수 있으나 FSM의
      * 무장 규칙이 걸러낸다. MB_REMOTE_HOLD_MS와는 무관. */

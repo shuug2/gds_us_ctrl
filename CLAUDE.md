@@ -104,7 +104,21 @@ env -u STM32_TOOLCHAIN cmake --build build --target flash     # 플래시
 
 ## 태깅 규칙
 
-`hw-revA_fw-1.0.0` 형식 — H/W rev + F/W 버전 함께 관리.
+`hw-revA_fw-<버전>` 형식 — H/W rev + F/W 버전 함께 관리. 두 종류를 쓴다:
+
+| 종류 | 형식 | 뜻 |
+|---|---|---|
+| 릴리즈 | `hw-revA_fw-3.1.0` | 소스 트리 릴리즈. `docs/changelog.md` 의 `## [x.y.z]` 섹션과 1:1 |
+| 스테이지 | `hw-revA_fw-stage-<이름>` | HW 검증을 통과한 중간 스택의 안정 레퍼런스. 릴리즈 아님 |
+
+**버전 번호 = 기능 티어, 날짜 접미어 = 그 빌드** (`fw/include/define.h`):
+
+- `3.0.x` = **STD** (레거시-동등 기능셋) — 번호를 동결하고 날짜만 진행한다. `V3.0.0_260905`
+- `3.1.x` = **REMOTE** (원격기 연동) — `V3.1.0R_260905`, 접미어 `R` 이 모델 표식
+- 접미어 `!` = PC8 인터록 극성 반전판. `REMOTE_EN_INTERLOCK_INVERTED` 를 따라가므로 원복을 잊어도 LCD 가 어긋나지 않는다
+
+⚠ Modbus 소비자의 capability 판별은 버전 문자열이 아니다(버전 레지스터 없음, LCD 전용) —
+`0x31 CFG_CAP` / `0x2A REMOTE_CAP` 이 그 일을 한다. 그래서 STD 번호 동결이 소비자를 오도하지 않는다.
 
 ---
 
@@ -125,7 +139,7 @@ env -u STM32_TOOLCHAIN cmake --build build --target flash     # 플래시
 
 **먼저 `docs/NEXT_STEPS.md`를 읽고 진행 상황과 다음 작업을 확인.**
 
-🔴🔴 **배포 금지 (2026-09-05~)**: `8f33c5f` 이후 **PC8 인터록 극성이 반전**돼 있다(미실장 HIGH=허용). **단선·커넥터 탈락이 "허용" 이 되어 인터록 보호가 없다.** `gds_us_remote` 의 "STD 에도 원격 기동 / 확인 없이 탭" 결정과 합쳐지면 **원격 START = 탭 한 번 + 물리 인터록 없음**이다. 해제 조건 = **PC8 실장 PCB + 극성 원복(`app_modbus.c` `in.sw` → `== 0u`) + A-1·A-5·A-13 재시험 PASS**. 상세 = `HANDOFF.md` 최상단.
+🔴🔴 **배포 금지 (2026-09-05~)**: `8f33c5f` 이후 **PC8 인터록 극성이 반전**돼 있다(미실장 HIGH=허용). **단선·커넥터 탈락이 "허용" 이 되어 인터록 보호가 없다.** `gds_us_remote` 의 "STD 에도 원격 기동 / 확인 없이 탭" 결정과 합쳐지면 **원격 START = 탭 한 번 + 물리 인터록 없음**이다. 해제 조건 = **PC8 실장 PCB + 극성 원복(`fw/include/define.h` `REMOTE_EN_INTERLOCK_INVERTED` → `0`) + A-1·A-5·A-13 재시험 PASS**. 상세 = `HANDOFF.md` 최상단.
 
 **현재 진행 (2026-09-05, 벤치 세션 마감)**: **통합 벤치 PASS — 원격기 동등성 스택 + IWDG 둘 다 main 머지·태그 완료.** main `a9d844a`, 브랜치·태그 전부 origin 동기(미푸시 0). 🔴 **보드를 건드리기 전에 `docs/superpowers/plans/2026-09-05-bench-results.md` §4(벤치 환경 함정)를 먼저 읽을 것** — `nc -z` 금지 / TCP connect ≠ MCU 생존 / mbpoll 동작 불가(대체 = `docs/superpowers/tools/mb_tcp.py`). ✅ **RTU baud 9600 원복 완료(2026-09-05)** — `speed_idx 4→2`, 교차 커밋 TCP→serial, FRAM 영속. 단 실반영은 다음 SERIAL 전환 시(상세 = `HANDOFF.md` 열린 항목 1). ★ 남은 최우선 = **RS-485 어댑터 게이트 항목**(FA-6/7/12 · mon 캡처 · RTU 무회귀). ✅ **2026-09-05 추가: Modbus 결함 2건 수정 + 벤치 회귀 27항목 PASS** — `e569137` WORK_CNTL 가짜 리셋(host 가 유일한 게이트, 벤치 재현 불가) · `66a2411` stale-미러 레이스(`mirror_live()` 를 **디코드 앞**으로 이동; ⚠ 그 지점부터 `apply_writes` 사이에 cfg 쓰기를 넣으면 창이 다시 열린다). 보드 = `66a2411` 재플래시됨. 실행 41항목 전건 PASS, 펌웨어 결함 0건. 태그 `hw-revA_fw-stage-remote-parity` / `hw-revA_fw-stage-iwdg`. 결과·환경 함정 = `docs/superpowers/plans/2026-09-05-bench-results.md`. **남은 검증은 전부 배선·PCB·육안 게이트** — ★ **A 섹션(게이트 강제) 전체가 PC8 실장 PCB 대기**. 아래 블록은 벤치 전 기록.
 

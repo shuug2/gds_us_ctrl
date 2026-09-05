@@ -68,7 +68,8 @@
 
 **해제 조건 (전부 충족해야 함)**:
 1. **PC8 인터록 실장 PCB**
-2. **극성 원복** — `fw/src/app_modbus.c` 의 `in.sw` 를 `(io_read_remote_en() == 0u)` 로
+2. **극성 원복** — `fw/include/define.h` 의 `REMOTE_EN_INTERLOCK_INVERTED` 를 `0` 으로
+   (3.1.0 부터 매크로 한 곳. LCD 버전 문자열의 `!` 표식도 같이 사라진다)
 3. **A-1**(스위치 OFF=불허) · **A-5**(ON=허용) · **A-13**(단선=불허) 재시험 PASS
 
 ⚠ 양쪽 저장소가 이 금지를 기록으로 묶었다 — `gds_us_remote` HANDOFF·CLAUDE.md 에도 같은 내용이 있다.
