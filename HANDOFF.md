@@ -66,11 +66,13 @@
 ⚠ RTU 와 mon 은 **USART6 공유로 배타적**이다 — `ETH_*` 면 mon, `SERIAL` 이면 RTU. `comm_mode`(`0x21`)는 R-only 라 전환은 **LCD 조작(사람)** 이 필요하다.
 🔴 도구 = `docs/superpowers/tools/mb_rtu.py`(신설, `mb_tcp.py` 와 같은 API). mon 캡처용 `cat` 이 포트를 잡으면 안 열리니 `pkill -x cat` 먼저.
 
-### 4. LCD 육안 항목
-S-5 · M-1 · M-2 · MOD-1 · MOD-4 · MOD-7 · B34-2/3/4/9 — 자동화 불가.
+### 4. ~~LCD 육안 항목~~ — ✅ **해소 (2026-09-05 후반 II)**
+S-5 · M-1 · MOD-1 · MOD-4 · MOD-7 · B34-2/3/4/7/9 **전건 PASS**(사용자 육안). 상세 = `plans/2026-09-05-bench-results.md` §7.
+남은 것: **M-2**(REMOTE 버전 문자열) — REMOTE 빌드 플래시가 필요해 열린 항목 6(S6)에 합침.
 
 ### 5. 기타
-W-1 전원인가 `rst=0x0E` (물리 전원 재인가) · B34-6 SENSOR(배선) · weld 사이클/`work_cnt`(양손·센서·f_safty 배선) · 전류 0.60A 실측 · 6b·B-SEAM(사용자 보류)
+~~W-1 전원인가 `rst=0x0E`~~ ✅ **PASS 2026-09-05**(§7) · **MOD-6 E-stop** ✅ PASS · **NET-1 mon 로그** ✅ PASS
+남은 것: **B34-6 SENSOR**(PA11→GND 점퍼 — 사용자 "없음") · **weld 사이클/`work_cnt`**(양손·센서·f_safty 배선. ⚠ 증가 지점은 `app_weld.c:222` 단 하나라 **구조적으로 증가 불가**) · **전류 0.60A 실측**(전류계 없음) · **6b·B-SEAM**(사용자 보류) · **`FREQ_CAL_VAL` 음수 표시 확인**(다음 CAL 항목 때 육안 1회 — `gds_us_remote` 요청)
 
 ### 6. REMOTE 빌드 요청 예약 — `gds_us_remote` S6 단계 (오늘 아님)
 원격기 R2-07 이 게이트 사유 표시(`0x2B` 의 0/3/4)를 화면에 넣는데, 그 검증은 **REMOTE 빌드**가 있어야 한다(STD 는 `REMOTE_CAP(0x2A)` 미러가 없어 게이트 경로를 못 탄다). 그쪽 S6 이 아직 5커밋 뒤라 **요청 시점에 다시 조율**한다.
