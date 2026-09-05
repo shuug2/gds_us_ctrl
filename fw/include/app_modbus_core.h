@@ -155,6 +155,20 @@
 #define MB_STATUS_SENSOR  0x20u   /* B-3: SENSE_DN 감지 중 (STD TRIGGER RUN 의 "SENSOR ON") */
 #define MB_STATUS_HORN    0x40u   /* B-4: horn-down 모드 — 서 있으면 모든 소스의 START 가 차단된다.
                                    * 이 비트가 없으면 원격기는 거부를 성공한 전송과 구분할 수 없다. */
+/* SEEK/RESET 진행 비트 (2026-09-05, `gds_us_remote` 요청). RESET 은 600ms 후 SEEK 으로
+ * 자동 체인하므로 두 비트는 순차로 뜬다 — 동시 점등은 없다(FSM 이 단일 상태다).
+ *
+ * 없는 동안의 대가가 실측됐다: ⑴ 소비자가 체인 길이를 **숫자로 베껴** 방어할 수밖에
+ * 없었고(원격기 hold 1000/500ms 가 실측 무음 창 1200/600ms 보다 짧아 버튼을 먼저 열고
+ * 있었다), ⑵ 명령 4종 중 RESET·SEEK 만 "전송됨 · 확인 불가" 로 남았으며, ⑶ 체인 어느
+ * 단계인지 그릴 수 없었다.
+ *
+ * ⚠ **capability 판별자는 두지 않았다**(사용자 결정 2026-09-05). 구 펌웨어에서 이 비트는
+ * 영영 0 이고 소비자는 그것을 미지원과 구분할 수 없다 — 그러니 **비트 0 을 "미진행" 의
+ * 근거로 삼는 방어 로직을 짜면 안 된다.** 비트=1 만 정보다(진행 확정). 무음 창 방어는
+ * 소비자 쪽 시간 hold 로 남긴다. 상태 기반 hold 가 필요해지면 그때 capability 를 신설한다. */
+#define MB_STATUS_SEEK    0x80u   /* SEEK leg 진행 중 (단발 SEEK · 체인 후반 공통) */
+#define MB_STATUS_RESET   0x100u  /* RESET leg 진행 중 (자동 체인 전반) */
 
 /* STATUS 합성 입력. 극성 변환(SENSE_DN active-LOW 등)은 글루가 끝내고 넣는다 —
  * 이 모듈은 "무엇이 참인가"만 받고 비트 배치만 책임진다. */
@@ -165,6 +179,8 @@ typedef struct {
     uint8_t ovtime;
     uint8_t sensor;    /* 1 = 감지 중 */
     uint8_t horn;      /* 1 = horn-down 모드 */
+    uint8_t seek;      /* 1 = SEEK leg 진행 중 */
+    uint8_t reset;     /* 1 = RESET leg 진행 중 */
 } mb_status_in_t;
 
 /* 0 이 아닌 입력은 정확히 해당 비트 1개로 정규화된다. */

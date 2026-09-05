@@ -277,6 +277,10 @@ static void test_status_bits(void) {
     CHECK_EQ(mb_status_bits(&in), MB_STATUS_SENSOR);
     memset(&in, 0, sizeof in); in.horn = 1;
     CHECK_EQ(mb_status_bits(&in), MB_STATUS_HORN);
+    memset(&in, 0, sizeof in); in.seek = 1;
+    CHECK_EQ(mb_status_bits(&in), MB_STATUS_SEEK);
+    memset(&in, 0, sizeof in); in.reset = 1;
+    CHECK_EQ(mb_status_bits(&in), MB_STATUS_RESET);
 
     /* 신규 2비트가 기존 5비트와 겹치지 않는다 (주소 여유 계산의 전제) */
     CHECK_EQ(MB_STATUS_SENSOR & (MB_STATUS_US | MB_STATUS_ESTOP | MB_STATUS_OVLD
@@ -284,6 +288,17 @@ static void test_status_bits(void) {
     CHECK_EQ(MB_STATUS_HORN   & (MB_STATUS_US | MB_STATUS_ESTOP | MB_STATUS_OVLD
                                  | MB_STATUS_OVTIME | MB_STATUS_OUTERR), 0);
     CHECK_EQ(MB_STATUS_SENSOR & MB_STATUS_HORN, 0);
+
+    /* SEEK/RESET 진행 비트도 기존 전부와 직교 (2026-09-05) */
+    CHECK_EQ(MB_STATUS_SEEK  & (MB_STATUS_US | MB_STATUS_ESTOP | MB_STATUS_OVLD
+                                | MB_STATUS_OVTIME | MB_STATUS_OUTERR
+                                | MB_STATUS_SENSOR | MB_STATUS_HORN), 0);
+    CHECK_EQ(MB_STATUS_RESET & (MB_STATUS_US | MB_STATUS_ESTOP | MB_STATUS_OVLD
+                                | MB_STATUS_OVTIME | MB_STATUS_OUTERR
+                                | MB_STATUS_SENSOR | MB_STATUS_HORN), 0);
+    CHECK_EQ(MB_STATUS_SEEK & MB_STATUS_RESET, 0);
+    /* uint16 안에 들어간다 — holding[] 이 uint16 이라 bit8 이 상한이 아님을 고정 */
+    CHECK_EQ(MB_STATUS_RESET & 0xFFFFu, MB_STATUS_RESET);
 
     /* 조합 — horn 모드에서 원격 START 가 막힌 채 센서가 눌린 상태.
      * 원격기가 "왜 안 먹는지" 를 읽어내야 하는 바로 그 조합이다. */
@@ -295,6 +310,13 @@ static void test_status_bits(void) {
     /* 0/1 이 아닌 truthy 입력도 정확히 1비트로 정규화된다 (C-2 와 같은 사고 방지) */
     memset(&in, 0, sizeof in); in.horn = 5; in.sensor = 200;
     CHECK_EQ(mb_status_bits(&in), MB_STATUS_SENSOR | MB_STATUS_HORN);
+    memset(&in, 0, sizeof in); in.seek = 9; in.reset = 3;
+    CHECK_EQ(mb_status_bits(&in), MB_STATUS_SEEK | MB_STATUS_RESET);
+
+    /* 체인 중 과부하 자동 RESET 조합 — 원격기가 "왜 지금 명령이 안 먹나" 를
+     * 읽어내야 하는 자리다(과부하 해제 직후 1.2s 자동 RESET→SEEK). */
+    memset(&in, 0, sizeof in); in.ovld = 1; in.reset = 1;
+    CHECK_EQ(mb_status_bits(&in), MB_STATUS_OVLD | MB_STATUS_RESET);
 }
 
 /* work counter 리셋 술어 — 65536 배수에서의 가짜 리셋 회귀를 고정한다.

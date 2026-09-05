@@ -233,6 +233,8 @@ uint16_t mb_status_bits(const mb_status_in_t *in)
     if (in->ovtime)  { s |= MB_STATUS_OVTIME; }
     if (in->sensor)  { s |= MB_STATUS_SENSOR; }
     if (in->horn)    { s |= MB_STATUS_HORN; }
+    if (in->seek)    { s |= MB_STATUS_SEEK; }
+    if (in->reset)   { s |= MB_STATUS_RESET; }
     return s;
 }
 

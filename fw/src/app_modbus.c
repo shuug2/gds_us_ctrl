@@ -21,6 +21,7 @@
 #include "app_weld.h"       /* app_weld_sensor_active (STATUS SENSOR 비트, B-3) */
 #include "app_horn.h"       /* app_horn_mode_active (STATUS HORN 비트, B-4) */
 #include "app_remote_en_fsm.h"   /* 원격 활성화 게이트 (요구사항 A) */
+#include "app_seek_reset_fsm.h"   /* seek_reset_fsm_state (STATUS SEEK/RESET 비트) */
 #include "app_cfg_stage.h"  /* comm/eth staging + commit (F-A) */
 #include "io.h"             /* io_read_remote_en (PC8 물리 인터록) */
 #include "define.h"         /* MODEL_REMOTE — 게이트는 REMOTE 모델 전용 */
@@ -220,6 +221,11 @@ static void mirror_live(void)
      * (슬라이스 C). ESTOP = app_estop_active() (슬라이스 D). OUTERR는 6b.
      * SENSOR/HORN = 원격 관측용 신규 비트 (요구사항 B-3/B-4). 비트 배치는
      * mb_status_bits()가 소유 — host 스위트가 겹침·극성까지 고정한다. */
+    /* SEEK/RESET 은 FSM 단일 상태라 두 비트가 동시에 서지 않는다. 글루
+     * (app_seek_reset.c)를 거치지 않고 순수 FSM 상태를 직접 읽는다 — 글루가
+     * 노출하는 것은 active(직교 판정용) 뿐이고 leg 구분이 없다. app_remote_en_fsm
+     * 을 같은 방식으로 읽는 선례가 위에 있다. */
+    const uint8_t sr = seek_reset_fsm_state();
     const mb_status_in_t sin = {
         .running = running,
         .estop   = app_estop_active(),
@@ -227,6 +233,8 @@ static void mirror_live(void)
         .ovtime  = (m->error_status & ERR_OVTIME) ? 1u : 0u,
         .sensor  = app_weld_sensor_active(),
         .horn    = app_horn_mode_active(),
+        .seek    = (sr == (uint8_t)SR_SEEK)  ? 1u : 0u,
+        .reset   = (sr == (uint8_t)SR_RESET) ? 1u : 0u,
     };
     g_mb.holding[MB_REG_STATUS]      = mb_status_bits(&sin);
 
