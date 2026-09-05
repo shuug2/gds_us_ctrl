@@ -297,6 +297,37 @@ static void test_status_bits(void) {
     CHECK_EQ(mb_status_bits(&in), MB_STATUS_SENSOR | MB_STATUS_HORN);
 }
 
+/* work counter 리셋 술어 — 65536 배수에서의 가짜 리셋 회귀를 고정한다.
+ * 이 결함은 벤치로 재현할 수 없다(work_cnt=65536 도달에 65536 사이클 필요,
+ * Modbus 로 설정 불가, SWD 쓰기는 규율상 금지) → host 가 유일한 게이트다. */
+static void test_work_cnt_reset_req(void) {
+    mb_core_t mb;
+
+    /* 마스터가 CNTL 에 0 을 썼지만 카운터가 이미 0 = no-op (레거시·LCD 와 동일) */
+    mb_core_init(&mb, 1);
+    mb.last_write_addr = MB_REG_WORK_CNTL; mb.holding[MB_REG_WORK_CNTL] = 0u;
+    CHECK_EQ(mb_work_cnt_reset_req(&mb, 0u), 0);
+
+    /* 통상 리셋 */
+    CHECK_EQ(mb_work_cnt_reset_req(&mb, 5u), 1);
+
+    /* 🔴 회귀 고정: work_cnt = 65536 이면 하위-워드 미러가 holding 에 0 을 싣는다.
+     * 이때 마스터가 건드린 칸은 COMM_SPEED(staged 쓰기)다 — 리셋이 아니다.
+     * 가드가 없으면 여기서 생산 카운트가 날아가고 staged 쓰기까지 탈락한다. */
+    mb_core_init(&mb, 1);
+    mb.last_write_addr = MB_REG_COMM_SPEED; mb.holding[MB_REG_WORK_CNTL] = 0u;
+    CHECK_EQ(mb_work_cnt_reset_req(&mb, 65536u), 0);
+
+    /* 같은 65536 에서 마스터가 진짜로 CNTL=0 을 쓰면 리셋된다
+     * (2026-09-04 승인된 samd20 이탈 — 하위 워드만 봤다면 무시됐을 자리) */
+    mb.last_write_addr = MB_REG_WORK_CNTL;
+    CHECK_EQ(mb_work_cnt_reset_req(&mb, 65536u), 1);
+
+    /* CNTL 에 0 이 아닌 값을 쓰면 리셋 아님 (레거시 거동) */
+    mb.holding[MB_REG_WORK_CNTL] = 7u;
+    CHECK_EQ(mb_work_cnt_reset_req(&mb, 5u), 0);
+}
+
 int main(void) {
     test_crc16();
     test_core_init();
@@ -307,6 +338,7 @@ int main(void) {
     test_write_coil();
     test_read_coils();
     test_status_bits();
+    test_work_cnt_reset_req();
     if (failures) { printf("%d check(s) FAILED\n", failures); return 1; }
     printf("all checks PASSED\n");
     return 0;

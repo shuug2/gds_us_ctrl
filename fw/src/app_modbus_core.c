@@ -235,3 +235,11 @@ uint16_t mb_status_bits(const mb_status_in_t *in)
     if (in->horn)    { s |= MB_STATUS_HORN; }
     return s;
 }
+
+/* work counter 리셋 요청 판정 — 근거는 헤더 주석. 세 조건 AND. */
+uint8_t mb_work_cnt_reset_req(const mb_core_t *mb, uint32_t work_cnt)
+{
+    return (uint8_t)(((mb->last_write_addr == MB_REG_WORK_CNTL) &&
+                      (mb->holding[MB_REG_WORK_CNTL] == 0u) &&
+                      (work_cnt != 0u)) ? 1u : 0u);
+}

@@ -187,6 +187,21 @@ typedef struct {
 
 #define MB_REG_NONE  0xFFFFu
 
+/* work counter 리셋 요청 판정 — "마스터가 이번 FC06 으로 WORK_CNTL 에 0 을 썼는가".
+ *
+ * 🔴 미러가 만든 0 과 마스터가 쓴 0 을 반드시 구분해야 한다. mirror_live() 는
+ * holding[WORK_CNTL] 에 (uint16_t)work_cnt 를 싣는 하위-워드 미러라, work_cnt 가
+ * **0 이 아닌 65536 의 배수**이면 미러 자체가 0 을 만든다. 그 상태에서 값 비교만
+ * 하면 앞 분기에 안 걸린 **아무 FC06 이나**(staged 쓰기·같은 값 재쓰기 등) 리셋으로
+ * 읽혀 생산 카운트가 FRAM 째로 날아가고(복구 불가), else-if 체인이라 그 메시지의
+ * staged 쓰기까지 함께 탈락한다. last_write_addr 로 "이번 메시지가 실제로 건드린
+ * 칸"을 확인해 가른다 — 같은 글루의 staged 스캔이 쓰는 기법과 같다.
+ *
+ * work_cnt 는 32비트 전체를 본다(하위 워드가 아니라): samd20 은 하위 워드만 비교해
+ * 65536 배수에서 리셋을 조용히 무시했고, 2026-09-04 에 그 이탈이 승인됐다. LCD
+ * 경로(app_lcd_input.c:385)도 32비트를 본다. */
+uint8_t mb_work_cnt_reset_req(const mb_core_t *mb, uint32_t work_cnt);
+
 /* Zero both tables + set the slave address (samd20 init_modbus tail). */
 void mb_core_init(mb_core_t *mb, uint8_t device_addr);
 

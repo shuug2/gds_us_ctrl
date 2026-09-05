@@ -535,8 +535,7 @@ void app_modbus_apply_writes(mb_link_t link)
     } else if (g_mb.holding[MB_REG_FREQ_CAL_VAL] != (uint16_t)cfg->freq_cal_val) {
         cfg->freq_cal_val = cfg_cal_from_wire(g_mb.holding[MB_REG_FREQ_CAL_VAL]);
         save = true;
-    } else if ((g_mb.holding[MB_REG_WORK_CNTL] == 0u) &&
-               (cfg->work_cnt != 0u)) {
+    } else if (mb_work_cnt_reset_req(&g_mb, cfg->work_cnt) != 0u) {
         /* CNTL=0 write = work counter reset (samd20 main.c:4539: cfg + FRAM +
          * LCD refresh).
          *
@@ -548,7 +547,13 @@ void app_modbus_apply_writes(mb_link_t link)
          * LCD 경로는 원래부터 32비트 전체를 비교한다(app_lcd_input.c:385) —
          * 여기서도 그렇게 맞춘다. 거동 차이는 **65536 의 배수라는 한 점에서만**
          * 생기고(다른 모든 값에서 두 비교는 일치한다), 그 변화는
-         * "조용히 실패 → 정상 동작" 방향이다. */
+         * "조용히 실패 → 정상 동작" 방향이다.
+         *
+         * 🔴 판정은 mb_work_cnt_reset_req() 로 옮겼다. 32비트 비교만 하면
+         * **미러가 만든 0**(work_cnt 가 0 아닌 65536 배수일 때 하위-워드 미러가
+         * 정당하게 싣는 0)과 마스터가 쓴 0 이 구분되지 않아, 앞 분기에 안 걸린
+         * 아무 FC06 이나 카운터를 날리고 그 메시지의 staged 쓰기까지 탈락시켰다
+         * (2026-09-04 캐스트 제거가 만든 회귀). 술어가 last_write_addr 로 가른다. */
         cfg->work_cnt = 0u;
         app_lcd_set_work_cnt(0u);
         save = true;
