@@ -72,6 +72,8 @@
 
 | 항목 | 막은 것 |
 |---|---|
+> ✅ **2026-09-05 후반 추가 — RS-485 어댑터 확보로 아래 4행이 해소됐다** (§6 참조): **FA-6/7/12** · **S-1** · **S-P** · **RTU 링크 무회귀**. 남은 mon 항목(NET-1 로그 · A-2/A-4 로그)은 각각 저가치·REMOTE/PC8 게이트다.
+
 | **A-13 (단선 fail-safe)** · PC8 전기적 동작 | **PC8 인터록 미실장.** A 섹션 나머지 14항목은 **가상 PC8 로 실행 완료 → §3-bis** |
 | S-1 부팅 배너 · S-P pot write · NET-1 로그 · A-2/A-4 로그 | **mon(USART6) 캡처 불가** — USB 시리얼 어댑터 미인식. 리셋 원인만 **SWD 정적 read 로 대체**(`s_boot_rst`, `volatile` 수정 덕분) |
 | S-5 · M-1 · M-2 · MOD-1 · MOD-4 · MOD-7 · B34-2/3/4/9 | **LCD 화면 육안** — 자동화 불가, 사용자 확인 필요 |
@@ -147,3 +149,48 @@ STD 빌드 재플래시 완료. 잔재 전부 원복:
 `OUT_POWER 77` · `ON_TIME 750` · `EN_SAFTY 0` · `MODEL_FREQ 3` · `MODEL_TYPE 2` · `COMM addr 1 / speed 4 / parity 0` · `comm_mode ETH_STATIC 192.168.1.199` · `CAL_VAL 16` · `FREQ_CAL_VAL 40` · `HORN_CMD 0` · `CFG_STAT IDLE` · `STATUS 0x00`
 
 throwaway hang 주입은 원복됨(`git status` clean).
+
+---
+
+## 6. RS-485 어댑터 확보 후 추가 실행 (2026-09-05 후반)
+
+어댑터 = `/dev/cu.usbserial-AB0MLYXA`. **RTU 와 mon 이 USART6 를 공유**하므로 둘은 배타적이다 — `comm_mode=ETH_*` 면 mon 청취, `SERIAL` 이면 RTU. `comm_mode`(`0x21`)는 설계상 R-only 라 전환은 **LCD 조작(사용자)** 이 필요했다.
+
+### 6.1 mon 캡처 (comm_mode = ETH_STATIC)
+
+```
+[boot] gds_us_ctrl ready rst=0x04          ← S-1 PASS (리셋 원인 배너)
+[lcd] ready=1
+[lcd-hook] set_pot power=77 dac=68         ← S-P PASS (pot write 실제 발생)
+[lcd] run_page_confirmed=1
+[cfg] freq=3 type=2 work=1 energy=3011 en_e=0 en_m=0
+[cfg] fram_fail=0 unstick=0 i2c_err=0
+[eth] chip up / waiting for PHY link... / [eth] up ip=192.168.1.199
+```
+
+⚠ `work=1` — `work_cnt` 는 0 이 아니라 **1** 이다(이전 기록의 "0" 은 부정확). `WORK_CNTL` 결함 판정(0 아닌 65536 배수)에는 영향 없다.
+
+### 6.2 RTU (comm_mode = SERIAL, 9600 8E1, unit 1) — 전건 PASS
+
+| # | 항목 | 결과 |
+|---|---|---|
+| — | RTU 무회귀 | PASS — FC03 50칸 + FC06 클램프 30→50 / 120→100 |
+| **FA-7** | same-link 거부 (RTU→serial) | PASS — `CFG_STAT`=**4** + cfg 불변 + **RTU 생존**, DISCARD 후 IDLE |
+| **FA-6** ⭐ | **교차 커밋 RTU→ether** | PASS — staged `.198` 미러=staged 값 → 커밋 `CFG_STAT`=**2** + **RTU 링크 생존** + cfg 반영. `.199` 재커밋으로 원복까지 같은 경로 확인 |
+| **FA-12** | 링크 전이 = staging 폐기 | PASS — staged(`CFG_STAT`=1) 남긴 채 LCD 로 SERIAL→ETH 전환 → **`0`(IDLE) + 미러 복귀** |
+| FA-6 (나머지 다리) | 새 IP 로 TCP 접속 | PASS — ETH 복귀 후 `.199` 로 TCP 트랜잭션 성공 = RTU 커밋분이 실계에 유효 |
+
+⭐ **DG-12 전제가 이제 양방향 실측이다** — TCP→serial(FA-5, 오전) + RTU→ether(FA-6, 후반). 교차 경로 커밋은 링크를 끊지 않는다.
+
+### 6.3 도구 신설
+
+`docs/superpowers/tools/mb_rtu.py` — 최소 Modbus RTU 마스터(mbpoll 대체). `mb_tcp.py` 와 **같은 API**(`read`/`r1`/`write`)라 스크립트 재사용 가능. 🔴 mon 캡처용 `cat` 이 포트를 잡고 있으면 안 열린다 → `pkill -x cat` 먼저.
+
+### 6.4 🔴 발견 — `fw/build/` 가 BYPASS 빌드였다
+
+`fw/build/CMakeCache.txt` 에 벤치 세션 잔재 **`REMOTE_EN_GATE_BYPASS:BOOL=ON`** 이 남아 있었고, `./fw.sh` 는 캐시를 재사용하므로 **"STD 빌드"라 부르며 BYPASS 빌드를 만들고 있었다.** 부팅 mon 의 `*** REMOTE ENABLE GATE BYPASSED ***` 로 발각.
+
+- **STD 에서는 기능적으로 no-op** — `remote_en_step()` 이 STD 에서 `s_ren.state = REN_ENABLED` 고정(`app_modbus.c:139`)이라 BYPASS 가 지우는 검사는 어차피 항상 통과한다. 따라서 **과거 STD 결과는 무효가 아니다.**
+- 다만 §실행 헤더의 "STD `build/`(FLASH 50.53 %)" 는 **BYPASS 판 수치**다. 깨끗한 STD = **50.62 %**(+104 B).
+- 조치: `rm -rf fw/build` 후 재구성·재플래시, 배너에 BYPASS 문구 0건 확인, 회귀 27항목 재실행 전건 PASS.
+- ⚠ **교훈**: `./fw.sh` 는 기존 CMake 캐시의 옵션을 물려받는다. 벤치용 옵션을 켠 뒤에는 캐시를 지울 것. "보드에 무엇이 올라갔나"를 문서로 믿지 말라는 기존 교훈(2026-07-05 · 2026-08-16)의 빌드-옵션 판이다.

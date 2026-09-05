@@ -98,7 +98,7 @@ make -C fw/test test                                # rsb 16 / main 14 스위트
 
 ### 2.2 다음 작업 후보
 
-**2026-09-05 현재 우선순위**: ① **★ PC8 실장 PCB → A 섹션(게이트 강제) 벤치** — 통합 벤치에서 유일하게 통째로 미실행된 섹션. ② **RS-485 어댑터 확보 → FA-6/7/12 교차 커밋 RTU 측** + mon 캡처(S-P·S-1). ③ LCD 육안 항목(M-1/M-2·B34-2/3/4/9·MOD-4/7). ④ HMI Task 8. ⑤ 전류 0.60A 실측. ⑥ 6b·B-SEAM(보류).
+**2026-09-05 현재 우선순위**: ① **★ PC8 실장 PCB → A 섹션(게이트 강제) 벤치** — 통합 벤치에서 유일하게 통째로 미실행된 섹션. ~~② RS-485 어댑터~~ ✅ **해소 2026-09-05 후반** — FA-6⭐/7/12 · S-1 · S-P · RTU 무회귀 전건 PASS(`plans/2026-09-05-bench-results.md` §6). 도구 `tools/mb_rtu.py` 신설. ③ LCD 육안 항목(M-1/M-2·B34-2/3/4/9·MOD-4/7). ④ HMI Task 8. ⑤ 전류 0.60A 실측. ⑥ 6b·B-SEAM(보류).
 
 > **통합 벤치 PASS 2026-09-05** — 실행 41항목 전건, 결함 0. main 머지·태그 완료(`hw-revA_fw-stage-remote-parity` / `-iwdg`). 실측 IWDG T=4.45s / f_LSI≈35.9kHz. 🔴 **벤치 환경 함정 4건은 `plans/2026-09-05-bench-results.md` §4 를 반드시 먼저 읽을 것** — 특히 `nc -z` 금지와 "TCP connect ≠ MCU 생존".
 
