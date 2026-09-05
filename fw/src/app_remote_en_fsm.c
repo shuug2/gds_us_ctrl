@@ -18,9 +18,8 @@ void remote_en_fsm_init(void)
 /* 한 step 진행 */
 void remote_en_fsm_step(const remote_en_in_t *in, remote_en_out_t *out)
 {
-    /* (1) 스위치 OFF = 불허 + 래치 해제. 사람이 스위치를 내린 것이 곧 "재무장
-     * 준비"라, 이 한 줄이 E-STOP 래치의 유일한 청소 경로다 — 덕분에 스위치
-     * 엣지를 따로 기억할 상태가 필요 없다. */
+    /* (1) 스위치 OFF = 불허. 인터록의 본래 역할(스위치가 켜져야 원격 가능)은
+     * 여기 그대로다. */
     if (in->sw == 0u) {
         s_state         = (uint8_t)REN_DISABLED;
         s_silence_armed = 0u;
@@ -28,28 +27,30 @@ void remote_en_fsm_step(const remote_en_in_t *in, remote_en_out_t *out)
         return;
     }
 
-    /* (2) E-STOP 은 레벨로 본다 (엣지 ✗). 엣지로 잡으면 "E-STOP 이 이미 눌린 채
-     * 스위치를 켜는" 순서에서 엣지가 영영 안 와 게이트가 열린다. */
+    /* (2) E-STOP 은 **레벨로만** 본다 — 래치하지 않는다 (2026-09-05 결정).
+     * 래치는 스위치를 껐다 켜야만 풀렸는데, PC8 인터록이 미실장이라 그 동작을
+     * 할 수단이 없어 E-STOP 한 번이면 재부팅 전까지 원격 제어가 죽었다
+     * (원격기 벤치 실측: `remote_en 1 -> 4` 이후 8분간 전이 없음).
+     *
+     * 래치를 빼도 E-STOP 차단 자체는 남는다 — 이 게이트는 세 층 중 하나일 뿐이다:
+     *   · app_reg.c START 가드 = app_estop_active() 레벨, 소스 무관(US_COMM 포함)
+     *   · app_input.c = E-STOP 활성 중 매 tick RUN_RELEASE 강제 + SOL OFF
+     *   · 원격기 gds_safety = STATUS bit1 로 물리 명령 전체 차단
+     * 잃는 것은 "E-STOP 해제 후 사람이 스위치로 한 번 더 재확인" 의식뿐이고,
+     * E-STOP 스위치 자체가 기계 앞 사람의 의도적 조작이라 사용자가 수용했다. */
     if (in->estop != 0u) {
         s_state    = (uint8_t)REN_DIS_ESTOP;
         out->state = s_state;
         return;
     }
 
-    /* (3) 🔴 E-STOP 해제 사유만 래치한다. E-STOP 이 풀려도 스위치를 껐다 켜기
-     * 전까지 닫힌 채다 — 안전 이벤트는 사람의 재확인을 요구하는 것이 정석이다. */
-    if (s_state == (uint8_t)REN_DIS_ESTOP) {
-        out->state = s_state;
-        return;
-    }
-
-    /* (4) 링크 생존 판정. 요청 스탬프는 유효 디코드 전부에 찍히므로 읽기도
+    /* (3) 링크 생존 판정. 요청 스탬프는 유효 디코드 전부에 찍히므로 읽기도
      * 생존 신호다. */
     uint8_t link_alive = ((in->req_valid != 0u) &&
                           ((uint32_t)(in->now_ms - in->last_req_ms) < SILENCE_MS))
                        ? 1u : 0u;
 
-    /* (5) 🔴 DIS_LINK 는 **래치하지 않는다** — 링크가 살아나면 스스로 복귀한다.
+    /* (4) 🔴 DIS_LINK 는 **래치하지 않는다** — 링크가 살아나면 스스로 복귀한다.
      * 래치했더니 자기교착이 생겼다: 이 보드의 Modbus TCP 소켓은 1개이고 피어가
      * 사라진 뒤 stale ESTABLISHED 가 자가치유되는 데 실측 ~20초가 걸린다(침묵
      * 임계 10초보다 길다). 즉 원격기가 재접속할 때마다 게이트가 잠기고, 사람이
@@ -65,11 +66,11 @@ void remote_en_fsm_step(const remote_en_in_t *in, remote_en_out_t *out)
         s_state    = (uint8_t)REN_ENABLED;
         s_enter_ms = in->now_ms;
         /* 살아있는 링크로 복귀한 것이면 이미 무장 상태다. 스위치를 방금 켠
-         * 경우(트래픽 없음)는 미무장 — 아래 (6) 규칙이 그것을 처리한다. */
+         * 경우(트래픽 없음)는 미무장 — 아래 (5) 규칙이 그것을 처리한다. */
         s_silence_armed = link_alive;
     }
 
-    /* (6) 링크 침묵 감시. 무장은 진입 이후 도착한 첫 유효 요청부터 — 진입 이전
+    /* (5) 링크 침묵 감시. 무장은 진입 이후 도착한 첫 유효 요청부터 — 진입 이전
      * 스탬프로 무장하면 "스위치는 켰는데 원격기가 아직 안 붙음"이 임계 만에
      * DIS_LINK 가 된다. 무장 판정은 랩 안전: 진입 이전 요청이면 좌변이
      * 언더플로로 거대값이 되어 elapsed 보다 커진다. */

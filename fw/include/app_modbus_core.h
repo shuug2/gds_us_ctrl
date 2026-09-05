@@ -124,7 +124,7 @@
 #define MB_REG_FREQ_CAL_VAL     0x2Fu  /* R/W int16 — 표시 전용 */
 
 #define MB_REG_REMOTE_CAP       0x2Au  /* R: capability probe — 미러가 매 tick 매직 복원 */
-#define MB_REG_REMOTE_EN        0x2Bu  /* R: 게이트 상태 0~5 (사유는 다음 활성화까지 래치) */
+#define MB_REG_REMOTE_EN        0x2Bu  /* R: 게이트 상태 0~5. 래치 없음 — 사유가 사라지면 스스로 복귀 */
 #define MB_REG_REMOTE_EN_LEFT   0x2Cu  /* 결번 — 구 "잔여 활성 초". 레벨 스위치는
                                         * 만료가 없다(요구사항 A-3). 항상 0 미러 */
 /* 0x2D reserved — 2단계 승인(원격 요청→LCD 승인) 승격 경로 (spec §2.2). 미러 ✗ */

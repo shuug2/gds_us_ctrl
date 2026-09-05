@@ -98,9 +98,11 @@ static void test_estop_level_blocks_enable(void)
     CHECK_EQ(out.state, REN_DIS_ESTOP);
 }
 
-/* E-STOP 해제 사유는 래치된다 — E-STOP이 풀려도 스위치가 계속 ON이면 닫힌 채다.
- * 자동 복귀를 허용하면 사람 없이 원격 기동이 되살아난다. */
-static void test_estop_latches_after_clear(void)
+/* E-STOP 해제 사유는 래치되지 않는다 — 풀리면 스스로 복귀한다 (2026-09-05).
+ * 래치는 스위치 재무장이 유일한 청소 경로였는데 PC8 미실장이라 그 동작이
+ * 불가능해, E-STOP 한 번이면 재부팅 전까지 원격 제어가 죽었다. E-STOP 차단
+ * 자체는 app_reg START 가드 + app_input force-release 가 계속 담당한다. */
+static void test_estop_clears_when_released(void)
 {
     remote_en_in_t in; remote_en_out_t out;
     remote_en_fsm_init();
@@ -114,7 +116,7 @@ static void test_estop_latches_after_clear(void)
 
     mk(&in, 3000u, 1u, 0u);            /* E-STOP 풀림, 스위치는 그대로 ON */
     remote_en_fsm_step(&in, &out);
-    CHECK_EQ(out.state, REN_DIS_ESTOP);
+    CHECK_EQ(out.state, REN_ENABLED);   /* 스위치 조작 없이 복귀 */
 }
 
 /* 재무장은 스위치를 껐다 켜는 것뿐 — 그것이 "사람이 기기 앞에 있다"의 갱신이다 */
@@ -126,7 +128,7 @@ static void test_switch_cycle_rearms(void)
     remote_en_fsm_step(&in, &out);
     CHECK_EQ(out.state, REN_DIS_ESTOP);
 
-    mk(&in, 2000u, 0u, 0u);            /* 스위치 OFF = 래치 해제 */
+    mk(&in, 2000u, 0u, 0u);            /* 스위치 OFF */              
     remote_en_fsm_step(&in, &out);
     CHECK_EQ(out.state, REN_DISABLED);
 
@@ -218,23 +220,24 @@ static void test_link_loss_auto_recovers(void)
     CHECK_EQ(out.state, REN_DIS_LINK);
 }
 
-/* E-STOP 래치는 링크와 달리 유지된다 — 트래픽이 계속 와도 안 열린다.
- * 이 대비가 무너지면 안전 이벤트가 통신 재개만으로 지워진다. */
-static void test_estop_latch_survives_traffic(void)
+/* E-STOP 이 눌린 채로는 트래픽이 아무리 와도 열리지 않는다 (레벨이 이긴다).
+ * 래치를 뺀 뒤 남는 불변식은 이것 하나 — 레벨이 곧 게이트다. */
+static void test_estop_level_beats_traffic(void)
 {
     remote_en_in_t in; remote_en_out_t out;
     remote_en_fsm_init();
     mk(&in, 1000u, 1u, 0u);
     remote_en_fsm_step(&in, &out);
-    mk(&in, 2000u, 1u, 1u);            /* E-STOP */
-    remote_en_fsm_step(&in, &out);
-    CHECK_EQ(out.state, REN_DIS_ESTOP);
 
-    for (uint32_t t = 3000u; t <= 30000u; t += 1000u) {
-        mk(&in, t, 1u, 0u);            /* 트래픽 정상, E-STOP 해제됨 */
+    for (uint32_t t = 2000u; t <= 30000u; t += 1000u) {
+        mk(&in, t, 1u, 1u);            /* 트래픽 정상, E-STOP 계속 눌림 */
         remote_en_fsm_step(&in, &out);
+        CHECK_EQ(out.state, REN_DIS_ESTOP);
     }
-    CHECK_EQ(out.state, REN_DIS_ESTOP);   /* 그래도 닫힌 채 */
+
+    mk(&in, 31000u, 1u, 0u);           /* 해제 → 다음 step 에 복귀 */
+    remote_en_fsm_step(&in, &out);
+    CHECK_EQ(out.state, REN_ENABLED);
 }
 
 /* u32 랩 근처에서도 침묵 판정이 정상 (elapsed 형태 비교) */
@@ -272,13 +275,13 @@ int main(void) {
     test_switch_off_disables();
     test_no_window_expiry();
     test_estop_level_blocks_enable();
-    test_estop_latches_after_clear();
+    test_estop_clears_when_released();
     test_switch_cycle_rearms();
     test_silence_unarmed_stale_req();
     test_silence_armed_link_loss();
     test_silence_brief_gap_survives();
     test_link_loss_auto_recovers();
-    test_estop_latch_survives_traffic();
+    test_estop_level_beats_traffic();
     test_wrap_safe_silence();
     test_wire_values_match_contract();
     if (failures) { printf("%d check(s) FAILED\n", failures); return 1; }

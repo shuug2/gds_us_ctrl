@@ -31,7 +31,7 @@ enum {
     REN_ENABLED     = 1,
     /* 2 = 결번 (구 REN_DIS_TIMEOUT — 창 만료, A-3으로 폐기) */
     REN_DIS_LINK    = 3,   /* 링크 침묵 — 래치 */
-    REN_DIS_ESTOP   = 4,   /* E-STOP — 래치 */
+    REN_DIS_ESTOP   = 4,   /* E-STOP — 레벨 추종 (래치 ✗, 2026-09-05) */
     /* 5 = 결번 (구 REN_DIS_LCD — LCD 수동 해제, T-5 폐기) */
 };
 
