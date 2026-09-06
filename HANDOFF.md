@@ -1,17 +1,15 @@
-# Handoff: 원격기 요청 2건 반영 — E-STOP 래치 폐기 + STATUS 진행 비트, 둘 다 실기 PASS
+# Handoff: 원격 hold-to-run 워치독 — 설계·구현·HW 벤치·머지 하루 완료 + 릴리즈 3.1.0 컷
 
-**Generated**: 2026-09-05 c (보드 세션, `gds_us_remote` 병행)
-**Branch**: `main` `da6f081` — origin 동기, **미푸시 브랜치·태그 0**
-**Board**: `405f95e` — REMOTE 빌드 / 게이트 열림(극성 반전) / 설정 무변경
-**Status**: 원격기 요청 2건이 **요청 → 구현 → 실기 확인까지 같은 세션 안에서** 닫혔다.
+**Generated**: 2026-09-06 (보드 세션, `gds_us_remote` 병행 — 원격기 실기 통과까지)
+**Branch**: `main` `b8d33ee` — 머지 `9b8e53b`(`--no-ff`), 태그 `hw-revA_fw-stage-hold-wdt` · `hw-revA_fw-3.1.0`, origin 동기, **미푸시 0**, feature 브랜치 삭제
+**Board**: **REMOTE `V3.1.0R!_260906`**(`96dc7d5` 빌드) — 게이트 열림(극성 반전) / cfg 무변경(OUT_POWER 77) / horn down OFF(LCD 저장)
+**Status**: 실행 16항목 PASS + 소크 6000 keep 이상 0. 벤치가 **기존 결함 1건(horn 모드가 진행 런을 안 세움)** 을 찾아 같은 브랜치에서 수정. 원격기 계약 확정 통보·실기 통과.
 
 > **★ 다음 세션 진입 순서**
-> 1. `docs/superpowers/plans/2026-09-05-bench-results.md` **§4 (벤치 환경 함정)** — 보드를 건드리기 전에 반드시. 여기 안 읽으면 세션 초반을 통째로 날린다
-> 2. 같은 문서 §3 (미실행 항목과 사유) — "실패"로 오판 방지
-> 3. 아래 §열린 항목
-
-- ✅ **hold-to-run 벤치 PASS + 머지**(2026-09-06, main `9b8e53b`, 태그 `hw-revA_fw-stage-hold-wdt`) — `plans/2026-09-06-hold-to-run-bench-results.md`. 원격기 계약 확정 통보 완료. ⬜ **`gds_us_hmi` 통보**: `MB_REG_COUNT` 51 · `0x32 FEAT_CAP` · START 값 1/2/3 · STATUS bit7/8 (정본 = `app_modbus_core.h`; 소비 측 서술 참조 = 원격기 `docs/reference/modbus-contract.md` §3.3b·§3.3c). 원격기 실기 통과 2026-09-06(hold ×14 · 30 s 상한 · E-STOP · 패널 탭 · 자연 링크 끊김을 워치독이 덮음). ⚠ 부수 수정 `96dc7d5`(horn 모드 중 진행 런 강제 정지) 포함.
-
+> 1. `docs/superpowers/RESUME.md` 최상단(2026-09-06) — 한 화면 요약
+> 2. `docs/superpowers/plans/2026-09-06-hold-to-run-bench-results.md` **§4** — 새 벤치 함정 3건(LCD 오염 / 침묵 뒤 첫 프레임 거부 / warm-up 무음 거부). 보드 만지기 전에
+> 3. `plans/2026-09-05-bench-results.md` §4 — 기존 함정(`nc -z` 금지 / connect≠생존 / mbpoll 불가)
+> 4. 아래 열린 항목 — `gds_us_hmi` 통보 · PC8 실장 PCB
 ---
 
 ## 2026-09-05 c — 원격기 요청 2건 (실기 PASS)
