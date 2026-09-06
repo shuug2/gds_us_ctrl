@@ -21,12 +21,14 @@ with MB(host) as mb:
     if start_val:
         mb.write(0x1B, start_val)
         print(f"{0.000:7.3f}s START={start_val}", flush=True)
+    next_t = time.monotonic()
     try:
         while True:
             mb.write(0x1B, 3)
             us = mb.r1(0x1D) & 1
             print(f"{time.monotonic()-t0:7.3f}s keep  US={us}", flush=True)
-            time.sleep(period)
+            next_t += period
+            time.sleep(max(0.0, next_t - time.monotonic()))
     except KeyboardInterrupt:
         print("--- keep 중단 (손 뗌) ---", flush=True)
     t_rel = time.monotonic()
@@ -36,3 +38,6 @@ with MB(host) as mb:
         if us == 0:
             break
         time.sleep(0.1)
+    else:
+        mb.write(0x1C, 1)                     # 워치독 FAIL — 마스터가 직접 STOP
+        print("!!! 워치독 미트립 — STOP 송신 (H-3 FAIL)", flush=True)

@@ -91,7 +91,7 @@ ATSAMD20 + ATmega16 두 MCU로 분리되어 있던 초음파 컨트롤러를 **S
 5. **Stage D — mega16 기능 흡수**: ADC 평균화, 21단계 룩업, 출력 레벨 + CTRL_OSC + TIM5 PWM, `do_control()`, I2C EEPROM, I2C 디지털 POT
 6. ✅ **전항목 완료 (2026-09-05)** — **워치독**(IWDG 공칭 5 s / 실측 T = **4.45 s**, 슈퍼루프 단일 kick;
    설계 `docs/superpowers/specs/2026-09-04-iwdg-watchdog-design.md`, 벤치 W-3 = hang → 자동 리셋 실증 `BOOT_RST=0x24`) ·
-   **단위 테스트**(host 16 스위트, `fw/test`, `./fw.sh test`) ·
+   **단위 테스트**(host 17 스위트, `fw/test`, `./fw.sh test`) ·
    **통합 테스트**(실보드 벤치 실행 41 + 회귀 27 항목 전건 PASS, `docs/superpowers/plans/2026-09-05-bench-results.md`) ·
    **릴리즈 태그**(기준선 `hw-revA_fw-3.0.0` → **`hw-revA_fw-3.1.0`**; STD `V3.0.0_260905` / REMOTE `V3.1.0R!_260905`).
    🔴 단 3.1.0 은 **배포 금지** — PC8 인터록 극성 반전 상태다(`define.h` `REMOTE_EN_INTERLOCK_INVERTED`).

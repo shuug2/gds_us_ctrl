@@ -677,7 +677,8 @@ static void apply_config(void)
         g_applied.owned = 0u;
         /* NOTE: a US_COMM run active at this point keeps running until the
          * on-time ceiling stops it (samd20-faithful link-loss behavior;
-         * ceiling=0 disables that net — power cycle is then the only stop). */
+         * ceiling=0 disables that net — power cycle is then the only stop).
+         * hold 런(워치독 무장, spec 2026-09-06)은 예외 — keep 이 굶어 ≤HOLD_WDT_MS 에 선다. */
         mon_printf("[mb] release usart6 (mode=%u addr=%u)\r\n",
                    (unsigned)cfg->comm_mode, (unsigned)cfg->comm_address);
     }
@@ -749,7 +750,9 @@ void app_modbus_tick(void)
      * 바꿀 수 있는 것은 같은 tick 의 apply_writes **1건**뿐이다(RTU = tick 당 1
      * 프레임, TCP = poll 당 FC06 1건 — app_modbus_tcp.c 의 break). tick 당 FC06
      * apply 를 2건으로 늘리면 "정지+재시작" 이 한 관측 구간에 들어가 다른 마스터의
-     * 탭 런이 hold 세션을 상속받는다 — 그 변경은 이 워치독을 함께 고쳐야 한다. */
+     * 탭 런이 hold 세션을 상속받는다 — 그 변경은 이 워치독을 함께 고쳐야 한다.
+     * step 은 반드시 apply_writes 보다 **앞**이어야 한다 — 뒤집히면 같은 tick 의
+     * keep 이 now_hwd 보다 늦은 시각을 남겨 unsigned 뺄셈이 ≈4.29e9 가 되고 즉시 오트립한다. */
     {
         uint32_t now_hwd = sys_tick_get_ms();
         uint8_t  run_is_comm = (app_reg_run_src() == (uint8_t)US_COMM) ? 1u : 0u;

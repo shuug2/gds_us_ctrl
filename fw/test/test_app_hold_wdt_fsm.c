@@ -98,6 +98,10 @@ static void test_foreign_stop_ends_session_silently(void)
     CHECK_EQ(hold_wdt_step(&w, 1400u, 1u), 0);   /* 다른 마스터의 새 탭 런이어도 무관 */
     CHECK_EQ(hold_wdt_armed(&w), 0);
     CHECK_EQ(hold_wdt_step(&w, 9000u, 1u), 0);   /* 절대 트립 안 함 */
+    /* 정당한 새 press(arm)는 정상 동작 — 세션 종료가 arm 경로를 막지 않는다 */
+    hold_wdt_arm(&w, 20000u);
+    CHECK_EQ(hold_wdt_step(&w, 20000u + HOLD_WDT_MS - 1u, 1u), 0);
+    CHECK_EQ(hold_wdt_step(&w, 20000u + HOLD_WDT_MS, 1u), 1);
 }
 
 /* 7. 트립 후 keep 계속 → 두 번째 트립 없음 */

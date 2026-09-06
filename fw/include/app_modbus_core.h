@@ -17,7 +17,7 @@
  *    (2026-09-04 gds_us_remote 와 상호 확인) */
 #define MB_COIL_COUNT   50u    /* samd20 coils[50] */
 #define MB_FRAME_MAX    125u   /* samd20 received[125] */
-#define MB_RESP_MAX     125u   /* samd20 response[125]; FC03 all-50-regs = 105 B */
+#define MB_RESP_MAX     125u   /* samd20 response[125]; FC03 all-51-regs = 107 B */
 
 /* H_REG register map (samd20 modbus.h verbatim) */
 #define MB_REG_WORK_CNTH    0x00u
