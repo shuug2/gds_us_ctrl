@@ -277,6 +277,12 @@ const lcd_measure_t *app_reg_measure(void)
     return &g_measure;
 }
 
+/* 런 소스 즉시 읽기 (hold 워치독 전용) */
+uint8_t app_reg_run_src(void)
+{
+    return g_reg.us_run_status;
+}
+
 static uint32_t s_ch1_filt_x16;   /* ch1 표시 EMA 상태 (×16 고정소수 — acquire 노트) */
 
 /* ADC 2채널 샘플 누산 */

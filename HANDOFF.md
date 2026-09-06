@@ -10,6 +10,8 @@
 > 2. 같은 문서 §3 (미실행 항목과 사유) — "실패"로 오판 방지
 > 3. 아래 §열린 항목
 
+- ⬜ **hold-to-run 벤치** — 코드 완료(host 17 PASS). `docs/superpowers/specs/2026-09-06-remote-hold-to-run-design.md` §8 H-0~H-16. **H-0 은 새 빌드 플래시 전 현 보드(405f95e)로**. **플래시 직전 `fw/include/define.h` `VERSION_MSG` 날짜 갱신 필수**(안 하면 LCD 로 구/신 빌드를 구분 못 한다). 도구 `docs/superpowers/tools/mb_hold.py`. PASS 후 `app_modbus_core.h` 값을 계약 확정으로 원격기·HMI 에 통보.
+
 ---
 
 ## 2026-09-05 c — 원격기 요청 2건 (실기 PASS)

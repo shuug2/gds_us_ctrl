@@ -70,12 +70,12 @@
  */
 #if defined(MODEL_REMOTE)
 #  if REMOTE_EN_INTERLOCK_INVERTED
-#define VERSION_MSG "V3.1.0R!_260905     "
+#define VERSION_MSG "V3.1.0R!_260906     "
 #  else
-#define VERSION_MSG "V3.1.0R_260905      "
+#define VERSION_MSG "V3.1.0R_260906      "
 #  endif
 #else
-#define VERSION_MSG "V3.0.0_260905       "
+#define VERSION_MSG "V3.0.0_260906       "
 #endif
 
 #endif /* DEFINE_H */

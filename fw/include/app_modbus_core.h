@@ -6,10 +6,10 @@
 #pragma once
 #include <stdint.h>
 
-#define MB_REG_COUNT    50u    /* samd20 holdingReg[50] */
+#define MB_REG_COUNT    51u    /* samd20 holdingReg[50] + 0x32 FEAT_CAP (2026-09-06) */
 /* 🔴 확장 한계 — 다음에 레지스터를 늘리려는 사람이 먼저 읽을 것.
  * ① **프레임 상한 57 레지스터.** FC03 응답 = 3 + N*2 + CRC2 이고 MB_RESP_MAX=125
- *    이므로 N<=57 이다(현재 50칸 = 105 B). 여유는 **7칸**뿐이다.
+ *    이므로 N<=57 이다(현재 51칸 = 107 B). 여유는 **6칸**뿐이다.
  * ② 그 이상이 필요해지면 소비 측이 **폴링 블록을 쪼개 두 번 읽어야 하고, 두 읽기
  *    사이의 원자성이 깨진다.** 원격기(gds_us_remote)·gds_us_hmi 의 화면 판정은
  *    "스냅샷 하나가 진실"을 전제로 설계돼 있어, 이건 우리만의 제약이 아니다.
@@ -17,7 +17,7 @@
  *    (2026-09-04 gds_us_remote 와 상호 확인) */
 #define MB_COIL_COUNT   50u    /* samd20 coils[50] */
 #define MB_FRAME_MAX    125u   /* samd20 received[125] */
-#define MB_RESP_MAX     125u   /* samd20 response[125]; FC03 all-50-regs = 105 B */
+#define MB_RESP_MAX     125u   /* samd20 response[125]; FC03 all-51-regs = 107 B */
 
 /* H_REG register map (samd20 modbus.h verbatim) */
 #define MB_REG_WORK_CNTH    0x00u
@@ -56,11 +56,18 @@
 #define MB_REG_RESET        0x19u   /* command: consume-and-clear */
 #define MB_REG_SEEK         0x1Au   /* command: consume-and-clear */
 #define MB_REG_START        0x1Bu   /* command: consume-and-clear */
+/* START(0x1B) 의 값 — hold-to-run (spec 2026-09-06 §2.1). 값 1 이외는 **구 펌웨어
+ * 전부**(hw-revA_fw-stage-c1 ~ 3.1.0)에서 어느 분기에도 안 걸린다 = fail-safe 가
+ * 추가 코드 없이 성립. 소거는 값 불문. 유지 신호는 기동 권한이 없다 — 무장 중에만
+ * 시각을 갱신하고, IDLE·트립 후·타 경로 정지 후에 도착하면 no-op. */
+#define MB_START_TAP        1u   /* 탭 START — 기존 의미 그대로 (STOP·상한까지 가동) */
+#define MB_START_HOLD       2u   /* hold 시작 — START + hold 워치독 무장 */
+#define MB_START_KEEP       3u   /* 유지 신호 — 무장 중에만 last_keep 갱신 */
 #define MB_REG_STOP         0x1Cu   /* command: consume-and-clear */
 #define MB_REG_STATUS       0x1Du
 
 /* 원격 제어 활성화 게이트 (2026-08-15 spec §4) — samd20 대응물 없는 신규.
- * 0x1E~0x29 = F-A(comm/eth 확장). MB_REG_COUNT(50) 불변. */
+ * 0x1E~0x29 = F-A(comm/eth 확장). MB_REG_COUNT 는 0x32 FEAT_CAP 신설로 51(2026-09-06). */
 /* --- F-A: comm/ethernet 확장 (0x1E~0x29) ---
  * 값 레지스터가 아니라 **staging + commit** 이다. 통신 설정은 그 값을 쓰는 데
  * 쓰이는 링크 자체를 제어하므로, 즉시 반영하면 반쪽 IP 가 FRAM 에 영속되고 첫
@@ -120,6 +127,15 @@
 #define MB_REG_CFG_CAP          0x31u
 #define MB_REG_CFG_CAP_MAGIC    0xFA01u
 
+/* 기능 비트맵 (spec 2026-09-06 §2). **모델 무관 무조건 미러** — 미래 기능은 비트만
+ * 추가한다(기능당 매직 1칸씩 늘리지 않는다). 소비 측 판정(연결당 1회 프로브):
+ *   0x31 != 0xFA01                 -> 구 펌웨어, 전부 미지원
+ *   0x31 == 0xFA01, 0x32×1 무응답   -> 비트맵 이전 신 펌웨어(3.1.0 포함), 미지원
+ *   0x31 == 0xFA01, 0x32 응답       -> 비트별 확정 (bit=0 은 **확정적 미지원**)
+ * 구 펌웨어는 51칸 읽기에 무응답이므로 지원 확인 전에는 50칸으로 폴링할 것. */
+#define MB_REG_FEAT_CAP         0x32u
+#define MB_FEAT_HOLD_WDT        0x0001u   /* bit0: START=2/3 hold 워치독 (T=HOLD_WDT_MS) */
+
 #define MB_REG_CAL_VAL          0x2Eu  /* R/W int16 — ⚠ 표시 보정이 아니라 제어 루프 입력 */
 #define MB_REG_FREQ_CAL_VAL     0x2Fu  /* R/W int16 — 표시 전용 */
 
@@ -166,7 +182,9 @@
  * ⚠ **capability 판별자는 두지 않았다**(사용자 결정 2026-09-05). 구 펌웨어에서 이 비트는
  * 영영 0 이고 소비자는 그것을 미지원과 구분할 수 없다 — 그러니 **비트 0 을 "미진행" 의
  * 근거로 삼는 방어 로직을 짜면 안 된다.** 비트=1 만 정보다(진행 확정). 무음 창 방어는
- * 소비자 쪽 시간 hold 로 남긴다. 상태 기반 hold 가 필요해지면 그때 capability 를 신설한다.
+ * 소비자 쪽 시간 hold 로 남긴다. 상태 기반 hold(원격 hold-to-run)는 0x32 FEAT_CAP
+ * 비트맵으로 판별자를 갖고 신설됐다(2026-09-06) — 단 **이 SEEK/RESET 비트에는 여전히
+ * 판별자가 없다.**
  *
  * 그 대가의 실례(원격기, 2026-09-05): 탭 직후 아직 비트를 한 번도 못 본 ~60ms 동안
  * 원격기는 **두 leg 를 모두 점등**한다 — "어느 단계인지 모른다" 의 표시다. "RESET 부터"

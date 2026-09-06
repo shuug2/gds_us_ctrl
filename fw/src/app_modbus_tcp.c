@@ -207,7 +207,10 @@ void app_modbus_tcp_poll(void)
              * write가 조용히 유실됨(whole-branch review HIGH). 잔여
              * 프레임은 누적 버퍼로 다음 poll 이월 — mirror가 사이에
              * 돌아 RTU와 동일한 1-write-per-mirror 사이클. read-
-             * after-write stale도 함께 차단. */
+             * after-write stale도 함께 차단. ⚠ hold 워치독(app_modbus.c 의
+             * hold_wdt_step 불변식 "관측 사이 US_COMM mutator ≤1")도 이
+             * break 에 의존한다 — poll 당 FC06 2건으로 바꾸려면 그 워치독을
+             * 함께 고칠 것. */
             break;
         }
     }
