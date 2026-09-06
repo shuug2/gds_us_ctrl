@@ -67,7 +67,7 @@
 #define MB_REG_STATUS       0x1Du
 
 /* 원격 제어 활성화 게이트 (2026-08-15 spec §4) — samd20 대응물 없는 신규.
- * 0x1E~0x29 = F-A(comm/eth 확장). MB_REG_COUNT(50) 불변. */
+ * 0x1E~0x29 = F-A(comm/eth 확장). MB_REG_COUNT 는 0x32 FEAT_CAP 신설로 51(2026-09-06). */
 /* --- F-A: comm/ethernet 확장 (0x1E~0x29) ---
  * 값 레지스터가 아니라 **staging + commit** 이다. 통신 설정은 그 값을 쓰는 데
  * 쓰이는 링크 자체를 제어하므로, 즉시 반영하면 반쪽 IP 가 FRAM 에 영속되고 첫
