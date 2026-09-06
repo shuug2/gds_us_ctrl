@@ -24,6 +24,7 @@
 #include "app_seek_reset_fsm.h"   /* seek_reset_fsm_state (STATUS SEEK/RESET 비트) */
 #include "app_cfg_stage.h"  /* comm/eth staging + commit (F-A) */
 #include "io.h"             /* io_read_remote_en (PC8 물리 인터록) */
+#include "app_hold_wdt_fsm.h"   /* 원격 hold-to-run 워치독 (spec 2026-09-06) */
 #include "define.h"         /* MODEL_REMOTE — 게이트는 REMOTE 모델 전용 */
 #include "app_config.h"
 #include "dgus_lcd.h"     /* DISP_*_EN echo (samd20 send_lcd_data_var) */
@@ -55,6 +56,9 @@ static remote_en_out_t s_ren;
 
 /* comm/eth staging 버퍼 (F-A). 비영속 — 링크 전이에서 무조건 폐기한다. */
 static cfg_stage_t s_stg;
+
+/* hold 워치독 세션 (비영속). 무장 지점은 apply_writes 의 START=2 분기 한 곳뿐이다. */
+static hold_wdt_t s_hwd;
 
 /* staged 인덱스 → 레지스터 주소. 미러와 스캔이 같은 표를 쓴다. */
 static const uint8_t k_stg_reg[CFG_STG_COUNT] = {
@@ -252,6 +256,9 @@ static void mirror_live(void)
      * 실어야 한다: F-A 는 두 모델 모두에 있으므로, 안 실으면 소비 측이 F-A 를
      * 지원하는 STD 유닛을 구 펌웨어로 오판한다. */
     g_mb.holding[MB_REG_CFG_CAP]   = MB_REG_CFG_CAP_MAGIC;
+    /* 기능 비트맵 — **모델 무관 무조건**(spec §0 A: STD 도 hold 워치독을 갖는다).
+     * 0x31 매직과 조합해 "신 펌웨어인데 비트 0" 이 확정적 미지원으로 읽힌다. */
+    g_mb.holding[MB_REG_FEAT_CAP]  = MB_FEAT_HOLD_WDT;
     /* B-4 조작 미러 — 실제 모드 상태를 되비춘다(0/1 정규화는 접근자가 보장). */
     g_mb.holding[MB_REG_HORN_CMD]  = app_horn_mode_active();
     for (uint8_t i = 0u; i < (uint8_t)CFG_STG_COUNT; i++) {
@@ -321,7 +328,10 @@ void app_modbus_apply_writes(mb_link_t link)
         uint8_t blocked = 0u;
         if      (g_mb.holding[MB_REG_RESET] != 0u) { blocked = MB_REG_RESET; }
         else if (g_mb.holding[MB_REG_SEEK]  != 0u) { blocked = MB_REG_SEEK;  }
-        else if (g_mb.holding[MB_REG_START] != 0u) { blocked = MB_REG_START; }
+        else if ((g_mb.holding[MB_REG_START] != 0u) &&
+                 (g_mb.holding[MB_REG_START] != MB_START_KEEP)) { blocked = MB_REG_START; }
+        /* START=KEEP 은 로그에서 제외 — 닫힌 게이트에 초당 ~7건 오면 mon 을 덮는다.
+         * 소거는 아래에서 값 불문 그대로(유지 신호가 굶어 ≤T 트립 = R-11 부수 효과). */
 
         g_mb.holding[MB_REG_RESET] = 0u;
         g_mb.holding[MB_REG_SEEK]  = 0u;
@@ -360,17 +370,37 @@ void app_modbus_apply_writes(mb_link_t link)
     } else if (g_mb.holding[MB_REG_SEEK] == 1u) {
         app_reg_command(US_CMD_SEEK, (uint8_t)US_COMM);   /* SEEK 단발 → app_seek_reset 위임 */
         g_mb.holding[MB_REG_SEEK] = 0u;
-    } else if (g_mb.holding[MB_REG_START] == 1u) {
-        app_reg_command(US_CMD_START, (uint8_t)US_COMM);
-        /* samd20 comm START 는 같은 자리에서 진폭 pot 을 쓴다(main.c:4400-4401).
-         * LCD RUN-press 경로(app_lcd_input.c:217/242)와 동형 — 무조건 write.
-         * 거부된 START 여도 출력이 없어 무해(멱등 1바이트).
-         * 구 가드 `app_lcd_measure()->us_run_status == US_COMM` 는 g_measure 가
-         * app_reg_tick(app_modbus_tick 앞)에서만 게시돼 START 를 수락한 그 iter 에
-         * 항상 FALSE 였다 — 2026-06-12 리뷰 NOTE 가 "set_pot 이 log stub 이라 무해"
-         * 로 남겼으나 2026-06-28 I2C_POT 실구동 이후 전제가 깨졌다(2026-09-04 fix). */
-        app_lcd_hook_set_pot(cfg->output_power);
+    } else if (g_mb.holding[MB_REG_START] != 0u) {
+        /* hold-to-run (spec 2026-09-06 §2.1·§4). 소거는 **값 불문** — CFG_CTRL 과 동형.
+         * 값 1 = 탭 START(기존 그대로) / 2 = hold 시작 + 워치독 무장 / 3 = 유지 신호 /
+         * 그 외 = 무시. 🔴 무장 지점은 이 START=2 분기 하나뿐이고 start_allowed 일
+         * 때만이다 — "무장됐다 ⇒ 방금 시작된 런은 우리 hold 런" 이 세션 경계의 첫 겹. */
+        uint16_t sv  = g_mb.holding[MB_REG_START];
+        uint32_t now = sys_tick_get_ms();
         g_mb.holding[MB_REG_START] = 0u;
+        if (sv == MB_START_TAP) {
+            app_reg_command(US_CMD_START, (uint8_t)US_COMM);
+            /* samd20 comm START 는 같은 자리에서 진폭 pot 을 쓴다(main.c:4400-4401).
+             * LCD RUN-press 경로(app_lcd_input.c:217/242)와 동형 — 무조건 write.
+             * 거부된 START 여도 출력이 없어 무해(멱등 1바이트).
+             * 구 가드 `app_lcd_measure()->us_run_status == US_COMM` 는 g_measure 가
+             * app_reg_tick(app_modbus_tick 앞)에서만 게시돼 START 를 수락한 그 iter 에
+             * 항상 FALSE 였다 — 2026-06-12 리뷰 NOTE 가 "set_pot 이 log stub 이라 무해"
+             * 로 남겼으나 2026-06-28 I2C_POT 실구동 이후 전제가 깨졌다(2026-09-04 fix). */
+            app_lcd_hook_set_pot(cfg->output_power);
+        } else if (sv == MB_START_HOLD) {
+            if (app_reg_start_allowed()) {
+                app_reg_command(US_CMD_START, (uint8_t)US_COMM);
+                app_lcd_hook_set_pot(cfg->output_power);   /* 탭과 동형, 1회 */
+                hold_wdt_arm(&s_hwd, now);
+            } else if (hold_wdt_armed(&s_hwd) != 0u) {
+                hold_wdt_keep(&s_hwd, now);   /* START=2 응답 유실 재시도 흡수 */
+            }
+            /* start_allowed 거짓 + 미무장 = 다른 마스터의 탭 런이 도는 중 — 무시.
+             * 그 런은 워치독 대상이 아니다(§3.1 무변경의 근거). */
+        } else if (sv == MB_START_KEEP) {
+            hold_wdt_keep(&s_hwd, now);       /* armed 아니면 no-op = 기동 권한 없음 */
+        }
     } else if (g_mb.holding[MB_REG_STOP] == 1u) {
         app_reg_command(US_CMD_RUN_RELEASE, (uint8_t)US_COMM);
         g_mb.holding[MB_REG_STOP] = 0u;
@@ -688,6 +718,7 @@ void app_modbus_init(void)
      * 통째로 버린다(호스트 테스트는 모델과 무관하게 계속 돈다). */
     s_ren.state = (uint8_t)REN_ENABLED;
 #endif
+    hold_wdt_init(&s_hwd);
     cfg_stage_init(&s_stg);
     mb_core_init(&g_mb, 0u);
     apply_config();
@@ -712,6 +743,21 @@ void app_modbus_tick(void)
     /* 게이트는 분기 밖 첫 문장 — RTU 점유/TCP/미점유 어디로 빠지든 시간이 흐르고
      * 만료돼야 한다 (spec §6). 이후 같은 tick의 mirror_live()가 최신 상태를 싣는다. */
     remote_en_step();
+    /* hold 워치독 — 분기 밖 첫머리. RTU 점유/TCP/미점유 어디로 빠져도 시간이 흘러야
+     * 한다: apply_config 가 링크를 해제해도 hold 런은 T 안에 서야 한다.
+     * 🔴 불변식(spec §4 ②): 연속한 두 step 사이에 us_run_status 를 US_COMM 으로
+     * 바꿀 수 있는 것은 같은 tick 의 apply_writes **1건**뿐이다(RTU = tick 당 1
+     * 프레임, TCP = poll 당 FC06 1건 — app_modbus_tcp.c 의 break). tick 당 FC06
+     * apply 를 2건으로 늘리면 "정지+재시작" 이 한 관측 구간에 들어가 다른 마스터의
+     * 탭 런이 hold 세션을 상속받는다 — 그 변경은 이 워치독을 함께 고쳐야 한다. */
+    {
+        uint32_t now_hwd = sys_tick_get_ms();
+        uint8_t  run_is_comm = (app_reg_run_src() == (uint8_t)US_COMM) ? 1u : 0u;
+        if (hold_wdt_step(&s_hwd, now_hwd, run_is_comm) != 0u) {
+            app_reg_command(US_CMD_RUN_RELEASE, (uint8_t)US_COMM);   /* STOP 과 동일 */
+            mon_printf("[mb] hold wdt trip\r\n");
+        }
+    }
     /* staging 타임아웃 — 분기 밖. 어느 경로로 빠지든 만료돼야 한다. */
     cfg_stage_tick(&s_stg, sys_tick_get_ms());
     apply_config();
