@@ -10,7 +10,7 @@
 > 2. 같은 문서 §3 (미실행 항목과 사유) — "실패"로 오판 방지
 > 3. 아래 §열린 항목
 
-- ✅ **hold-to-run 벤치 PASS + 머지**(2026-09-06, main `9b8e53b`, 태그 `hw-revA_fw-stage-hold-wdt`) — `plans/2026-09-06-hold-to-run-bench-results.md`. 원격기 계약 확정 통보 완료. ⬜ **`gds_us_hmi` 통보**: `MB_REG_COUNT` 51 · `0x32 FEAT_CAP` · START 값 1/2/3 · STATUS bit7/8. ⚠ 부수 수정 `96dc7d5`(horn 모드 중 진행 런 강제 정지) 포함.
+- ✅ **hold-to-run 벤치 PASS + 머지**(2026-09-06, main `9b8e53b`, 태그 `hw-revA_fw-stage-hold-wdt`) — `plans/2026-09-06-hold-to-run-bench-results.md`. 원격기 계약 확정 통보 완료. ⬜ **`gds_us_hmi` 통보**: `MB_REG_COUNT` 51 · `0x32 FEAT_CAP` · START 값 1/2/3 · STATUS bit7/8 (정본 = `app_modbus_core.h`; 소비 측 서술 참조 = 원격기 `docs/reference/modbus-contract.md` §3.3b·§3.3c). 원격기 실기 통과 2026-09-06(hold ×14 · 30 s 상한 · E-STOP · 패널 탭 · 자연 링크 끊김을 워치독이 덮음). ⚠ 부수 수정 `96dc7d5`(horn 모드 중 진행 런 강제 정지) 포함.
 
 ---
 
