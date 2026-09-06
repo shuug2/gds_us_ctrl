@@ -2,7 +2,7 @@
 # Suites: reg_calc / modbus_core / tcp_frame / weld_fsm / seek_reset_fsm /
 #         i2c_pot / app_config(mock-fram) / freq_fsm / buzzer_fsm / overload_fsm /
 #         input_fsm / osc_init_fsm / weld_trigger_fsm / horn_fsm / cfg_stage /
-#         remote_en_fsm.   (총 16 = grep -c '^BIN_')
+#         remote_en_fsm / hold_wdt_fsm.   (총 17 = grep -c '^BIN_')
 # Usage: make -C fw/test test
 CC     ?= cc
 CFLAGS := -std=c11 -Wall -Wextra -Wundef -Wshadow -O0 -g
@@ -23,8 +23,9 @@ BIN_WTR := /tmp/gds_test_app_weld_trigger_fsm
 BIN_HORN := /tmp/gds_test_app_horn_fsm
 BIN_STG := /tmp/gds_test_app_cfg_stage
 BIN_REN := /tmp/gds_test_app_remote_en_fsm
+BIN_HWD := /tmp/gds_test_app_hold_wdt_fsm
 
-test: $(BIN_REG) $(BIN_MB) $(BIN_TCP) $(BIN_WELD) $(BIN_SR) $(BIN_POT) $(BIN_CFG) $(BIN_FQ) $(BIN_BZ) $(BIN_OL) $(BIN_IN) $(BIN_OSC) $(BIN_WTR) $(BIN_HORN) $(BIN_REN) $(BIN_STG)
+test: $(BIN_REG) $(BIN_MB) $(BIN_TCP) $(BIN_WELD) $(BIN_SR) $(BIN_POT) $(BIN_CFG) $(BIN_FQ) $(BIN_BZ) $(BIN_OL) $(BIN_IN) $(BIN_OSC) $(BIN_WTR) $(BIN_HORN) $(BIN_REN) $(BIN_STG) $(BIN_HWD)
 	$(BIN_REG)
 	$(BIN_MB)
 	$(BIN_TCP)
@@ -41,6 +42,7 @@ test: $(BIN_REG) $(BIN_MB) $(BIN_TCP) $(BIN_WELD) $(BIN_SR) $(BIN_POT) $(BIN_CFG
 	$(BIN_HORN)
 	$(BIN_STG)
 	$(BIN_REN)
+	$(BIN_HWD)
 
 $(BIN_HORN): test_app_horn_fsm.c ../src/app_horn_fsm.c ../include/app_horn_fsm.h
 	$(CC) $(CFLAGS) $(INC) -o $@ test_app_horn_fsm.c ../src/app_horn_fsm.c
@@ -93,7 +95,10 @@ $(BIN_WTR): test_app_weld_trigger_fsm.c ../src/app_weld_trigger_fsm.c ../include
 $(BIN_STG): test_app_cfg_stage.c ../src/app_cfg_stage.c ../include/app_cfg_stage.h
 	$(CC) $(CFLAGS) $(INC) -o $@ test_app_cfg_stage.c ../src/app_cfg_stage.c
 
+$(BIN_HWD): test_app_hold_wdt_fsm.c ../src/app_hold_wdt_fsm.c ../include/app_hold_wdt_fsm.h ../include/app_modbus_core.h
+	$(CC) $(CFLAGS) $(INC) -o $@ test_app_hold_wdt_fsm.c ../src/app_hold_wdt_fsm.c
+
 clean:
-	rm -f $(BIN_REG) $(BIN_MB) $(BIN_TCP) $(BIN_WELD) $(BIN_SR) $(BIN_POT) $(BIN_CFG) $(BIN_FQ) $(BIN_BZ) $(BIN_OL) $(BIN_IN) $(BIN_OSC) $(BIN_WTR) $(BIN_HORN) $(BIN_REN) $(BIN_STG)
+	rm -f $(BIN_REG) $(BIN_MB) $(BIN_TCP) $(BIN_WELD) $(BIN_SR) $(BIN_POT) $(BIN_CFG) $(BIN_FQ) $(BIN_BZ) $(BIN_OL) $(BIN_IN) $(BIN_OSC) $(BIN_WTR) $(BIN_HORN) $(BIN_REN) $(BIN_STG) $(BIN_HWD)
 
 .PHONY: test clean
