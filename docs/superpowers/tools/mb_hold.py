@@ -17,11 +17,12 @@ period    = (float(sys.argv[2]) if len(sys.argv) > 2 else 150.0) / 1000.0
 start_val = int(sys.argv[3]) if len(sys.argv) > 3 else 2
 
 with MB(host) as mb:
+    mb.r1(0x1D); time.sleep(0.05)       # 링크 프라임 — 침묵(>10 s) 뒤 첫 프레임은 게이트가 거부한다(벤치 §4-1)
     t0 = time.monotonic()
-    if start_val:
+    next_t = t0                          # 🔴 데드라인 기준 = START 송신 순간. 기동 확인 뒤에 잡으면
+    if start_val:                        #    첫 keep 이 arm 후 ~615 ms 에 가서 550 ms 케이스를 오판한다(벤치 §4)
         mb.write(0x1B, start_val)
         print(f"{0.000:7.3f}s START={start_val}", flush=True)
-    next_t = time.monotonic()
     try:
         while True:
             mb.write(0x1B, 3)
