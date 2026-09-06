@@ -153,7 +153,7 @@ env -u STM32_TOOLCHAIN cmake --build build --target flash     # 플래시
 3. **F-A comm/eth staging+commit** `0x1E~0x29` · **calibration** `0x2E/0x2F` · **HORN_CMD** `0x30` · **CFG_CAP** `0x31`
 4. **TCP 연결 자동 복구** (앱 유휴 타임아웃 12s)
 
-⚠ **레지스터 여유 7칸** — FC03 응답 상한 57칸(현재 50칸). 그 이상은 소비 측 스냅샷 원자성이 깨진다 (`app_modbus_core.h` `MB_REG_COUNT` 주석).
+⚠ **레지스터 여유 6칸** — FC03 응답 상한 57칸(현재 51칸, `0x32 FEAT_CAP` 2026-09-06). 그 이상은 소비 측 스냅샷 원자성이 깨진다 (`app_modbus_core.h` `MB_REG_COUNT` 주석).
 
 열린 항목:
 1. **★ HW 벤치** — 보드 + **PC8 실장 PCB**(회로 수정 진행 중) + 패널 배선 필요. PC8 없이도 **STD 빌드로 S·M·B34·MOD·CAL·NET·FA 는 가능**

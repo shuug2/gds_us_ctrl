@@ -95,3 +95,4 @@ ATSAMD20 + ATmega16 두 MCU로 분리되어 있던 초음파 컨트롤러를 **S
    **통합 테스트**(실보드 벤치 실행 41 + 회귀 27 항목 전건 PASS, `docs/superpowers/plans/2026-09-05-bench-results.md`) ·
    **릴리즈 태그**(기준선 `hw-revA_fw-3.0.0` → **`hw-revA_fw-3.1.0`**; STD `V3.0.0_260905` / REMOTE `V3.1.0R!_260905`).
    🔴 단 3.1.0 은 **배포 금지** — PC8 인터록 극성 반전 상태다(`define.h` `REMOTE_EN_INTERLOCK_INVERTED`).
+7. **원격 hold-to-run 워치독** (2026-09-06, 원격기 요구 R-1~R-11) — START(0x1B) 값 2=hold 시작/3=유지, 유지 신호 600 ms 소실 → 자동 정지. 판별 `0x32 FEAT_CAP` bit0. 설계 `docs/superpowers/specs/2026-09-06-remote-hold-to-run-design.md`. **HW 벤치 대기**(spec §8 H-0~H-16, TCP 전용).
