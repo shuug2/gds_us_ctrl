@@ -42,6 +42,12 @@ void app_reg_tick(const reg_run_limits_t *lim);
 /* Live measured values for the LCD display machine (single owner). */
 const lcd_measure_t *app_reg_measure(void);
 
+/* 런 소스 즉시 읽기 — g_measure 게시(2 ms 게이트)를 거치지 않는 **지연 0** 값.
+ * hold 워치독 세션 경계(spec 2026-09-06 §4 ②)가 "관측 사이 mutator ≤1" 불변식에
+ * 의존하므로 stale 미러(app_lcd_measure()->us_run_status)로는 안 된다 — 상한 정지
+ * 직후의 탭 START 가 세션을 상속받는 구멍이 생긴다. 읽기 전용, 거동 0. */
+uint8_t app_reg_run_src(void);
+
 /* Route an ultrasonic command into the run FSM. src = command source
  * (US_TOUCH from the panel hook, US_COMM from Modbus — samd20 us_run_status
  * taxonomy). START arms only from US_IDLE; RUN_RELEASE stops only the run its
