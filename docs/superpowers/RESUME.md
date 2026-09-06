@@ -2,6 +2,15 @@
 
 > 🔴🔴 **먼저 읽을 것 — 배포 금지 상태다.** `8f33c5f` 이후 **PC8 인터록 극성이 반전**돼 있다(미실장 HIGH=허용). **단선·커넥터 탈락이 "허용" 이 되어 인터록 보호가 없다.** `gds_us_remote` 의 "STD 에도 원격 기동 / 확인 없이 탭" 결정과 합쳐지면 **원격 START = 탭 한 번 + 물리 인터록 없음**이다. 해제 조건 = **PC8 실장 PCB + 극성 원복(`fw/include/define.h` `REMOTE_EN_INTERLOCK_INVERTED` → `0`, 3.1.0 부터) + A-1·A-5·A-13 재시험 PASS**. 상세 = `HANDOFF.md` 최상단.
 
+> **상태 (2026-09-06, 마감 — 원격 hold-to-run 워치독: 설계→구현→HW 벤치→머지까지 하루)**: main **`9b8e53b`**(`--no-ff` 머지, 태그 `hw-revA_fw-stage-hold-wdt`, origin 동기). 보드 = **REMOTE `V3.1.0R!_260906`**(`96dc7d5` 빌드, LCD 에 `!` 표식 보임), cfg 무변경, horn down OFF. 배포 금지(PC8 극성 반전)는 그대로.
+>
+> **⑴ 릴리즈 3.1.0 컷**(`0820a47`, 태그 `hw-revA_fw-3.1.0`) — 번호 = 기능 티어(3.0.x STD 동결 / 3.1.x REMOTE), 날짜 = 빌드. `define.h` `REMOTE_EN_INTERLOCK_INVERTED` 매크로가 `in.sw` 극성과 버전 표식 `!` 를 함께 정한다 — **극성 원복 지점이 여기로 옮겨졌다.**
+> **⑵ hold 워치독**(spec `2026-09-06-remote-hold-to-run-design.md`, 벤치 `plans/2026-09-06-hold-to-run-bench-results.md`) — `0x32 FEAT_CAP` bit0 · START 1/2/3 · T=600 ms(실측 603~608) · `MB_REG_COUNT` 51(여유 6). `app_reg` 열거 3곳·게이트 분기·`2026-08-02` §3.1 **무변경**. 실행 16항목 PASS, 소크 6000 keep 이상 0. 원격기에 계약 확정 통보 완료(그쪽 S5 착수 가능).
+> **⑶ 벤치가 찾은 기존 결함 — horn 모드가 진행 런을 안 세웠다**(`96dc7d5` 수정, 사용자 승인). legacy SYS_HORN 은 RUN 분기 자체 배제인데 포트는 새 START 만 막았다. 이제 horn ON → 진행 런 ≤16 ms 정지.
+> · 관측(bench §4): 침묵 >10 s 뒤 첫 프레임 게이트 거부 / warm-up 중 START 무음 거부 / START 거부는 전부 무음 → STATUS 전체로 원인 판독 / **벤치 중 LCD 를 만지면 오염된다**(SETUP 저장이 horn down 을 재전송).
+>
+> **★ 열린 항목**: ① `gds_us_hmi` 통보 — 51칸·`0x32`·START 값 확장·STATUS bit7/8 (그쪽 오프라인) ② PC8 실장 PCB → 극성 원복(`define.h` 매크로 0) + A-1/A-5/A-13 ③ 결정 범위 밖 확장 추론 금지(메모리 `feedback_decision_scope_no_extrapolation`).
+
 > **상태 (2026-09-05 c, 마감 — 원격기 요청 2건 처리·실기 확인까지 같은 날 닫힘)**: **보드 세션(원격기 병행).** main `da6f081`, origin 동기(미푸시 0). 보드 = `405f95e` REMOTE 빌드 / 게이트 열림(극성 반전) / 설정 무변경. `gds_us_remote` 와 **6회 교신**, 요청 → 구현 → 실기 확인이 세션 안에서 두 번 닫혔다.
 >
 > **⑴ `23ee66c` E-STOP 래치 폐기** (`app_remote_en_fsm.c`, 사용자 결정) — `REMOTE_EN` 이 `DIS_ESTOP(4)` 를 래치하지 않는다. E-STOP 은 **레벨 추종**이라 풀리면 게이트가 스스로 `1` 로 복귀한다.

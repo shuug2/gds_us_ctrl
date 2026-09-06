@@ -59,7 +59,7 @@ horn 수정(`96dc7d5`) 플래시 후, LCD horn down OFF 저장 상태에서 **61
 | 트립 | 24/24, 루프 종료 기준 502/510/517 ms (min/avg/max) = 마지막 keep 기준 ≈610 ms |
 | 기동 실패 | 0 |
 | 종료 STATUS | `0x0000`, OUT_POWER 77 |
-| I2C | STATUS 에 fault 비트 0; mon `[i2c] err` 0 (소크 구간 mon 은 `set_pot` 1줄만 잡혀 캡처 결손 의심 — FC03 STATUS 가 1차 증거) |
+| I2C | STATUS 에 fault 비트 0; mon 은 소크 도중 캡처 프로세스(`cat`)가 죽어 `set_pot` 1줄 뒤 결손(USB 시리얼) — **FC03 STATUS(fault 비트 0)가 1차 증거** |
 
 1차 소크(수정 전)는 사이클 1 뒤 LCD 가 `horn down=1` 을 다시 보내 2~15 가 무효였다(§4-5). 그 사이클 1 도 horn ON 뒤 25 s 완주 = H-12 결함의 재현.
 
