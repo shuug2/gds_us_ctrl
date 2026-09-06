@@ -91,6 +91,14 @@ static void test_read_regs(void) {
     n = mb_core_decode(&mb, req, 8, MB_MODE_RTU, resp, &fc);
     CHECK_EQ(n, 105);
 
+    /* 2026-09-06: 51 regs from 0 -> 3 + 102 + 2 = 107; 52 -> silence */
+    mk_req(req, 5, 0x03, 0x0000, 0x0033);
+    n = mb_core_decode(&mb, req, 8, MB_MODE_RTU, resp, &fc);
+    CHECK_EQ(n, 107);
+    mk_req(req, 5, 0x03, 0x0000, 0x0034);
+    n = mb_core_decode(&mb, req, 8, MB_MODE_RTU, resp, &fc);
+    CHECK_EQ(n, 0);
+
     /* FC 04 mirrors FC 03 with its own echo */
     mk_req(req, 5, 0x04, 0x0002, 0x0001);
     n = mb_core_decode(&mb, req, 8, MB_MODE_RTU, resp, &fc);
@@ -106,19 +114,19 @@ static void test_read_regs_bounds(void) {
     uint8_t fc = 0xEE;
     mb_core_init(&mb, 5);
 
-    mk_req(req, 5, 0x03, 0x0031, 0x0002);   /* 49 + 2 > 50 */
+    mk_req(req, 5, 0x03, 0x0032, 0x0002);   /* 50 + 2 = 52 > 51 */
     CHECK_EQ(mb_core_decode(&mb, req, 8, MB_MODE_RTU, resp, &fc), 0);
     CHECK_EQ(fc, 0);
     mk_req(req, 5, 0x03, 0x0000, 0x0000);   /* zero count */
     CHECK_EQ(mb_core_decode(&mb, req, 8, MB_MODE_RTU, resp, &fc), 0);
-    mk_req(req, 5, 0x03, 0x0000, 0x0033);   /* count 51 > 50 */
+    mk_req(req, 5, 0x03, 0x0000, 0x0034);   /* count 52 > 51 */
     CHECK_EQ(mb_core_decode(&mb, req, 8, MB_MODE_RTU, resp, &fc), 0);
 
-    /* fence-posts: last valid register reads fine; one past = silence */
-    mk_req(req, 5, 0x03, 0x0031, 0x0001);   /* addr 49, num 1 -> ok */
+    /* fence-posts: last valid register (0x32 = FEAT_CAP) reads fine; one past = silence */
+    mk_req(req, 5, 0x03, 0x0032, 0x0001);   /* addr 50, num 1 -> ok (2026-09-06: 51칸) */
     CHECK_EQ(mb_core_decode(&mb, req, 8, MB_MODE_RTU, resp, &fc), 7);
     CHECK_EQ(fc, 0x03);
-    mk_req(req, 5, 0x03, 0x0032, 0x0001);   /* addr 50, num 1 -> silence */
+    mk_req(req, 5, 0x03, 0x0033, 0x0001);   /* addr 51, num 1 -> silence */
     CHECK_EQ(mb_core_decode(&mb, req, 8, MB_MODE_RTU, resp, &fc), 0);
 }
 
@@ -170,8 +178,9 @@ static void test_write_reg(void) {
     CHECK_EQ(memcmp(resp, req, 8), 0);      /* FC06 echo == request */
 
     /* port safety fix: out-of-range write = silence + no state change
-     * (samd20 wrote holdingReg[addr] UNBOUNDED = arbitrary memory write). */
-    mk_req(req, 5, 0x06, 50, 1);
+     * (samd20 wrote holdingReg[addr] UNBOUNDED = arbitrary memory write).
+     * addr 51 (2026-09-06: pushed from 50 now that 0x32 FEAT_CAP is in-range). */
+    mk_req(req, 5, 0x06, 51, 1);
     CHECK_EQ(mb_core_decode(&mb, req, 8, MB_MODE_RTU, resp, &fc), 0);
     CHECK_EQ(fc, 0);
 
@@ -350,6 +359,28 @@ static void test_work_cnt_reset_req(void) {
     CHECK_EQ(mb_work_cnt_reset_req(&mb, 5u), 0);
 }
 
+/* hold-to-run wire 계약 (spec 2026-09-06 §2.1): FEAT_CAP 주소·비트, START 값 3종,
+ * FC06 이 0x32 에는 저장되고(미러가 되돌리는 건 글루) 0x33 은 범위 밖. */
+static void test_feat_cap_contract(void) {
+    mb_core_t mb;
+    uint8_t req[8], resp[MB_RESP_MAX];
+    uint8_t fc = 0xEE;
+    mb_core_init(&mb, 5);
+
+    CHECK_EQ(MB_REG_FEAT_CAP, 0x32);
+    CHECK_EQ(MB_REG_FEAT_CAP < MB_REG_COUNT, 1);
+    CHECK_EQ(MB_FEAT_HOLD_WDT, 0x0001);
+    CHECK_EQ(MB_START_TAP, 1);
+    CHECK_EQ(MB_START_HOLD, 2);
+    CHECK_EQ(MB_START_KEEP, 3);
+
+    mk_req(req, 5, 0x06, MB_REG_FEAT_CAP, 0x1234);   /* in range: stored + echoed */
+    CHECK_EQ(mb_core_decode(&mb, req, 8, MB_MODE_RTU, resp, &fc), 8);
+    CHECK_EQ(mb.holding[MB_REG_FEAT_CAP], 0x1234);
+    mk_req(req, 5, 0x06, 0x0033, 0x0001);            /* out of range: silence */
+    CHECK_EQ(mb_core_decode(&mb, req, 8, MB_MODE_RTU, resp, &fc), 0);
+}
+
 int main(void) {
     test_crc16();
     test_core_init();
@@ -361,6 +392,7 @@ int main(void) {
     test_read_coils();
     test_status_bits();
     test_work_cnt_reset_req();
+    test_feat_cap_contract();
     if (failures) { printf("%d check(s) FAILED\n", failures); return 1; }
     printf("all checks PASSED\n");
     return 0;
