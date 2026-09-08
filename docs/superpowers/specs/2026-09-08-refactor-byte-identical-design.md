@@ -82,11 +82,15 @@
 | H6 | 헬퍼 안 `return` 은 **미실측** → 쓰지 않는다. early-return 이 있는 블록은 추출 대상에서 제외 | (추측) |
 | H7 | 슬라이스마다 두 모델 `.bin` sha256 대조가 **게이트**다. 규칙을 지켜도 리터럴 풀·레지스터 할당이 어긋날 수 있다 → 다르면 **되돌리고 보류**, 우회 시도 금지 | 감사 B-3 5 |
 
+> **H3 각주(구현 판정 R9)**: H3 의 "판정 구조" 는 **호출자 측 라우팅**(if/else-if 분기 진입·`case`·`break`·`return`)을 뜻한다.
+> 옮겨진 블록 **안에 원래 있던** 내부 if 체인(예: `gate_reject_body` 의 blocked 선택, `start_cmd_body` 의 `sv` 체인)은
+> 함께 옮겨도 된다 — 감사 b-2 실증 ○ 패턴이며 슬라이스 4 에서 `.bin` SAME 으로 재확인.
+
 주석 이동 규칙(슬라이스 1):
 
 | # | 규칙 |
 |---|---|
-| C1 | 함수 본문 안의 **5줄 이상** 주석 블록을 함수 선언 바로 위(기존 함수 헤더 주석과 합쳐 한 블록)로 옮긴다. 옮긴 자리에는 필요하면 한 줄 포인터(`/* 게이트 닫힘 분기 — 함수 헤더 §2 */`)만 남긴다. 그래도 50줄을 넘으면 2~4줄 블록 → 1줄 독립 주석 순으로 더 옮기고, 옮긴 블록 바로 위의 빈 줄도 함께 제거한다(plan D6 — 감사 산식이 빈 줄과 짧은 블록을 빼먹었다). 코드 줄 사이의 구분용 빈 줄 삭제도 허용(`parser_step`·`energy2str`) |
+| C1 | 함수 본문 안의 **5줄 이상** 주석 블록을 함수 선언 바로 위(기존 함수 헤더 주석과 합쳐 한 블록)로 옮긴다. 옮긴 자리에는 필요하면 한 줄 포인터(`/* 게이트 닫힘 분기 — 함수 헤더 §2 */`)만 남긴다. 그래도 50줄을 넘으면 2~4줄 블록 → 1줄 독립 주석 순으로 더 옮기고, 옮긴 블록 바로 위의 빈 줄도 함께 제거한다(plan D6 — 감사 산식이 빈 줄과 짧은 블록을 빼먹었다). 코드 줄 사이의 구분용 빈 줄 삭제도 허용(`parser_step`·`energy2str`·`app_modbus_tick`) |
 | C2 | 문장은 **삭제하지 않는다.** 예외 = `app_modbus.c` 의 이력 서술(날짜·커밋 해시·"구 주석은 ~라고 했는데" 류)로, changelog·spec 에 이미 있는 내용만 16줄 이상 압축한다. 압축한 문장은 커밋 메시지에 어느 문서에 있는지 적는다 |
 | C3 | 코드 줄은 **한 글자도** 바꾸지 않는다(들여쓰기 포함). 판정은 **주석·빈 줄 제거 스트림 diff** — 파일마다 `arm-none-eabi-gcc -fpreprocessed -dD -E -P -x c -` 로 주석을 벗기고 빈 줄을 지운 전후 스트림이 동일해야 한다(plan Task 1 Step 3 루프, 기대 `SAME_CODE` × 파일 수). `git diff -w --ignore-blank-lines` 는 큰 주석 블록이 시그니처 근처로 이동하면 hunk 오정렬로 동일 코드 줄을 −/+ 로 보여 **판정에 쓰지 않는다**(참고용) |
 | C4 | `.bin` 대조는 그대로 한다(라인 이동은 무영향이 실증됐지만 게이트는 유지) |
@@ -99,7 +103,7 @@
 
 | # | 슬라이스 | 대상 (`파일:라인`) | 헬퍼 (이름 — 담는 블록) | 예상 결과 |
 |---|---|---|---|---|
-| **1** | 주석 재배치 | `app_modbus.c` 전체(815→≤799) + 코드 ≤50줄인 **21개 함수**: `app_reg_command`(:168-272) `app_loop_iter`(:99-186) `app_modbus_tick`(:742-815) `remote_en_fsm_step` `app_init` `app_input_tick` `parser_step` `app_reg_tick` `app_overload_tick` `handle_key_multi` `usart1_init` `main` `apply_config` `data_save_commit` `commit_comm_mode_and_ether` `cfg_stage_commit` `spi1_init` `i2c1_bus_unstick` `app_lcd_init_mode` `app_lcd_disp_step`(코드 55 — 주석만으로는 근접, 슬라이스 7 후보) `energy2str`/`mb_core_decode`/`process_ip_char` 는 이미 코드 ≤50·주석 적음 → 확인만 | 0 | plan 실측(Task 1): 23함수 검토 · 22함수 편집 · **21함수 ≤50**(`app_lcd_disp_step` 은 코드 55 라 57 잔존 → §6). `app_modbus.c` 815→**753**(이력 압축 39줄 + 리플로 19줄 — 슬라이스 2·4 헬퍼 +39줄을 미리 상쇄해 최종 792). 바이너리 무영향 **보장** |
+| **1** | 주석 재배치 | `app_modbus.c` 전체(815→≤799) + 코드 ≤50줄인 **21개 함수**: `app_reg_command`(:168-272) `app_loop_iter`(:99-186) `app_modbus_tick`(:742-815) `remote_en_fsm_step` `app_init` `app_input_tick` `parser_step` `app_reg_tick` `app_overload_tick` `handle_key_multi` `usart1_init` `main` `apply_config` `data_save_commit` `commit_comm_mode_and_ether` `cfg_stage_commit` `spi1_init` `i2c1_bus_unstick` `app_lcd_init_mode` `app_lcd_disp_step`(코드 55 — 주석만으로는 근접, 슬라이스 7 후보) `energy2str`/`mb_core_decode`/`process_ip_char` 는 이미 코드 ≤50·주석 적음 → 확인만 | 0 | plan 실측(Task 1): 23함수 검토 · 22함수 편집 · **21함수 ≤50**(`app_lcd_disp_step` 은 코드 55 라 57 잔존 → §6). `app_modbus.c` 815→**753**(이력 압축 39줄 + 리플로 19줄 — 슬라이스 2·4 헬퍼 +39줄을 미리 상쇄해 최종 792). 실측: 커밋 `4e15dfe` 시점 **752**, fix 라운드 `7430310` 의 K12 안전 근거 복원 +1 = **753** — 커밋 `4e15dfe` 메시지의 "815→753" 은 brief 산술 오차(그 커밋 실제값 752)이므로 이 행이 정정본이다. 바이너리 무영향 **보장** |
 | **2** | `mirror_live` 3분할 | `app_modbus.c:180-287` (108, 코드 62) | `mirror_cfg_fields(cfg)` — WORK_CNT~TIMEOVER 15개 대입(연속 블록) / `mirror_disp_status(cfg, m, running)` — DISP_* 4개 + B-5 cfg 6개 + CAL 2개 + `mb_status_in_t` 합성 + STATUS / `mirror_stage_and_gate(cfg)` — COMM_MODE·CFG_STAT·CAP·FEAT·HORN·staged 루프·`#if MODEL_REMOTE` 블록. (plan: 초안의 "WORK_CNT~EN_SAFTY·CAL" 은 DISP_* 4줄이 사이에 끼어 연속 블록이 아니라 문장 순서를 지키기 위해 연속 범위로 재절단) | 본체 13줄(plan 실측). 가장 깨끗한 실증 패턴(정적 변수만 접근, 기존 포인터) |
 | **3** | 순차 함수 2개 | `app_reg.c:324-404` `reg_publish_measure`(81, 코드 54) / `usart6_mb.c:46-113` `usart6_mb_open`(68, 코드 53) | `publish_sr_edge(sr)` / `publish_amp_power(live)` / `publish_copy_out(now, active, live, freq_cal_val)` — 3개(plan D3: 본체 마지막 줄이 `live` 를 써서 값 인자 추가) · `mb_uart_reinit(speed_idx, parity_idx)` / `mb_dma_init()` — 2개 | 두 함수 ≤50 |
 | **4** | `apply_writes` 본체 추출 | `app_modbus.c:290-647` (358, 코드 191) | `gate_reject_body()` — `#ifndef REMOTE_EN_GATE_BYPASS` 블록의 소거·STOP 통과·로그·CFG_CTRL 소거(`return` 은 호출자) **실증 ○** / `start_cmd_body(cfg, sv, now)` — START 값 if-체인 본체 / `cfg_ctrl_commit_body(cfg, d)` — 커밋 통과분 반영(`stg_apply_to_cfg` + ether 훅). `if (cfg_stage_commit(...) != 0u)` 판정과 `save = true` 는 호출자에 남긴다(H3/H4). plan D2: 본체가 `link` 를 안 쓰고 dirty 스냅샷 `d` 를 써서 `(cfg, d)` | 코드 191 → **157**(plan 실측, 358→255줄). **≤50 불가 → §6 예외**. 13개 클램프 분기는 **한 글자도 건드리지 않는다** |
@@ -151,7 +155,23 @@ base=fw/.bin-baseline
 
 - 브랜치 tip 에서 `rm -rf fw/build fw/build-remote` 후 클린 빌드 → `.bin` sha256 == §5.1
 - `git diff b61ef0f..HEAD --stat` 에 `fw/vendor/`·`ref/`·`fw/test/` 변경 0
-- 50줄 초과 함수 재집계: 38 → **11** (plan Task 8 표 — 슬라이스 7 이 전부 SAME 인 경우). 초안의 "≤6" 은 plan 실측(D9)으로 정정: §6 의 4개 + `send_model_str`(미분할 결정) + `app_config_load` 에, spec 수단으로는 못 내리는 `app_weld_tick`(지정 초기화 22줄) · `tcp_poll`(out 출력) · `disp_step`(함수-static) 와 헬퍼 잔존 `render_run_std`(53) · `weld_step_weld`(58) 이 더해진다. 슬라이스 7 에서 DIFF 로 되돌린 건은 원래 길이로 표에 들어온다
+- 50줄 초과 함수 재집계: 38 → **13** (실측, 전체 328함수). 초안의 "≤6" 도 plan D9 의 "11"(슬라이스 7 전부 SAME 가정)도 미달 — H7 로 보류한 5건 중 `reg_publish_measure`(81) · `disp_compute_output`(61) 두 함수가 더해졌기 때문이다(`app_weld_tick`·`tcp_poll` 은 D9 에도 이미 있었고, 보류라 원래 길이 131·111 로 들어온다). 내역 = §6 표
+
+  | 함수 | 줄수(코드) | 왜 남는가 |
+  |---|---|---|
+  | `app_modbus_apply_writes` | 256 (157) | 36분기 else-if 뼈대 + 13 클램프 분기 |
+  | `app_lcd_input_dispatch` | 188 (149) | 35 `case…break` 뼈대 |
+  | `app_weld_tick` | 131 (95) | 7-2 보류(`.bin` ≠) — 지정 초기화 22줄 |
+  | `app_modbus_tcp_poll` | 111 (75) | 7-3 보류(`.bin` ≠) — `off`/`tx_len` 출력 |
+  | `app_lcd_send_model_str` | 93 (83) | §4 미분할 결정 |
+  | `reg_publish_measure` | 81 (54) | 슬라이스 3 보류(`.bin` ≠) |
+  | `app_lcd_change_page` | 78 (57) | 8분기 뼈대 + set_page 꼬리 |
+  | `weld_fsm_step` | 72 (53) | abort 판정·엣지 래치·타이머·READY/HOLD/default 뼈대 |
+  | `app_config_load` | 64 (56) | 미착수(`fail++` 누산) |
+  | `disp_compute_output` | 61 (54) | 7-4 헬퍼 보류 — 주석 이동만 |
+  | `weld_step_weld` | 58 (49) | 헬퍼 잔존, 더 쪼개지 않음(§8) |
+  | `app_lcd_disp_step` | 57 (55) | 함수-static 엣지 블록 §2.2 제외 |
+  | `render_run_std` | 53 (48) | 헬퍼 잔존(RUN_STD 본체 49줄 + `n` 선언) |
 
 ---
 
@@ -159,13 +179,24 @@ base=fw/.bin-baseline
 
 | 함수 | 이유 | 이번 결과 | 후속(범위 밖) |
 |---|---|---|---|
-| `app_modbus_apply_writes` | 36분기 else-if 체인 뼈대만 코드 ≥110줄. 체인 분할은 감사 b-1 계열 3변형 전부 ✗ | 본체 추출로 ~120 코드줄 | HW 벤치 트랙: 체인 → 테이블. 회귀 = `plans/2026-09-05-bench-results.md` FC06 클램프 27항목 재사용 |
-| `app_lcd_input_dispatch` | 35 `case…break` 뼈대 ~105줄. 재그룹은 감사 b-3 ✗ | ~130 | HW 벤치 트랙: 핸들러 테이블. LCD 터치 E2E |
-| `app_lcd_change_page` | 8분기 + 공통 꼬리, 로컬 배열 포인터 전달이 H4 경계 | 슬라이스 7 에서 시도, ≠ 이면 보류 | HW 벤치 트랙: STDC/MHC·STDE/MHE 중복 블록 DRY |
-| `weld_fsm_step` | WELD case 자체가 ~55줄 | case 본체 추출 후 `weld_step_weld` 가 >50 잔존 가능 | host `test_app_weld_fsm.c` 21함수가 있어 **host 게이트 트랙**으로 구조 변경 가능 |
-| `app_config_load` | `fail++` 누산 구조 | 미착수 | host `test_app_config.c` 게이트 트랙 |
+| `app_modbus_apply_writes` | 36분기 else-if 체인 뼈대만 코드 ≥110줄. 체인 분할은 감사 b-1 계열 3변형 전부 ✗ | 본체 3추출(`gate_reject_body`/`start_cmd_body`/`cfg_ctrl_commit_body`) → **256줄(코드 157)** | HW 벤치 트랙: 체인 → 테이블. 회귀 = `plans/2026-09-05-bench-results.md` FC06 클램프 27항목 재사용 |
+| `app_lcd_input_dispatch` | 35 `case…break` 뼈대 ~105줄. 재그룹은 감사 b-3 ✗ | 본체 **3**추출(`handle_sys_pic_now`/`handle_setup_param_enter`/`handle_run_mode`) → **188줄(코드 149)**. `mo_time_clamp_echo`(LV_MO_TIME1/2 공통 꼬리 4줄)는 `.bin` ≠ (STD `ef9dbaa8…eee32a` / REMOTE `98823184…dd3297`, dispatch 크기 `0x3fc` 불변·명령 바이트 상이) → **보류** | HW 벤치 트랙: 핸들러 테이블. LCD 터치 E2E |
+| `app_lcd_change_page` | 8분기 + 공통 꼬리, 로컬 배열 포인터 전달이 H4 경계 | 슬라이스 7-1 **SAME**(`render_run_std`/`render_setup_main`/`render_comm_page`/`render_comm_tail`) → 203→**78줄(코드 57)**, 헬퍼 `render_run_std` **53줄(코드 48)** 잔존 | HW 벤치 트랙: STDC/MHC·STDE/MHE 중복 블록 DRY |
+| `weld_fsm_step` | WELD case 자체가 ~55줄 | case 본체 4추출 → **72줄(코드 53)**(abort 판정·엣지 래치·타이머·READY/HOLD/default 뼈대) + 헬퍼 `weld_step_weld` **58줄(코드 49)** 잔존 | host `test_app_weld_fsm.c` 21함수가 있어 **host 게이트 트랙**으로 구조 변경 가능 |
+| `app_config_load` | `fail++` 누산 구조 | 미착수 (**64줄**, 코드 56) | host `test_app_config.c` 게이트 트랙 |
+| `app_weld_tick` | `weld_in_t` 지정 초기화 22줄 + 트리거 스캔 — 헬퍼화 시 코드 변화 가능(§4) | 슬라이스 7-2 `.bin` ≠ (STD `5d0d5222…d9a334` / REMOTE `180a6e07…1b6527`, −4 B) → **보류**, **131줄(코드 95)** 잔존 | 글루 — host 트랙 없음, HW 벤치 |
+| `app_modbus_tcp_poll` | 워커 루프가 `off`/`tx_len` 출력 요구 = out-포인터 ✗ | 슬라이스 7-3 `.bin` ≠ (STD `2fa973b6…0cb035` / REMOTE `c1cb8a50…11ff3a`, Δ0 크기·바이트 상이) → **보류**, **111줄(코드 75)** 잔존 | HW 벤치(TCP) |
+| `reg_publish_measure` | 순차 3블록 — 슬라이스 3 대상이었으나 리터럴 풀/레지스터 할당이 어긋남 | 슬라이스 3 `.bin` ≠ (STD `7c8150ae…4b937f` / REMOTE `98003830…a84358`, `nm` 0x118→0x110 = −8 B) → **보류**, **81줄(코드 54)** 잔존 | host `test_app_reg*` 게이트 트랙 |
+| `disp_compute_output` | `fill_upper_band`/`fill_lower_band` 값 인자가 H4 경계 | 슬라이스 7-4 헬퍼 `.bin` ≠ (STD `9c5ec0d2…b06494` / REMOTE `9f2aa9ca…948c97`, Δ0) → 헬퍼 **보류**, C1 주석 이동만 랜딩 → 76→**61줄**(코드 54 불변) | HW 벤치 트랙(바그래프 육안) |
+| `app_lcd_disp_step` | 코드 55; 엣지 블록은 함수-static(`prev_run_on`·`prev_remote_on`) → §2.2 제외, switch 10 case 재그룹 ✗ | 슬라이스 1 주석 이동만 → **57줄(코드 55)** | HW 벤치 트랙(ICON_RUN/REMOTE 육안) |
+| `app_lcd_send_model_str` | §4 미분할 결정(`#if` 브랜드 4블록 중 컴파일되는 것은 1블록 ~25줄) | 무변경 **93줄(코드 83)** | — |
 
 예외는 이 표가 정본이다. `CLAUDE.md` 에는 쓰지 않는다(결정 범위 밖).
+
+보류(H7) 5건은 전부 **첫 시도에서 되돌렸고 우회 재시도는 하지 않았다**. 되돌린 헬퍼 10개 =
+`publish_sr_edge`/`publish_amp_power`/`publish_copy_out` · `mo_time_clamp_echo` ·
+`weld_sensor_mirror`/`weld_dispatch_out` · `tcp_recv_accumulate`/`tcp_flush` ·
+`fill_upper_band`/`fill_lower_band`. 랜딩한 헬퍼는 **27개**(계획 37 중).
 
 ---
 

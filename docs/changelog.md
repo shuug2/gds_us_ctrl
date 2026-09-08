@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### 2026-09-09 — refactor: 바이트 동일 리팩토링 — 50줄 초과 함수 38→13 · app_modbus.c 815→792 · .bin 무변경
+
+- **무엇**: 함수 안 장문 주석을 함수 헤더로 옮기고(22함수 편집 / 23함수 검토, 코드 줄 무변경), 직선 본체를 `static inline __attribute__((always_inline)) void` 헬퍼로 뽑았다(**27개 랜딩**: `mirror_live` 3 · `usart6_mb_open` 2 · `apply_writes` 3 · `lcd_input_dispatch` 3 · FSM step 4+4+2 · 조건부 6). else-if 체인·switch case·파일 분할은 하지 않았다(감사 실측 ✗). 외부 계약(Modbus·LCD)·거동 변화 0.
+- **검증**: 슬라이스 커밋마다 `fw/tools/bin-same.sh` — STD `fd66f6e7…e278f`(66,696 B) / REMOTE `c5223ada…7373f`(67,008 B) 가 시작 커밋 `b61ef0f` 클린 빌드와 **바이트 동일**(gcc 15.2.1). host 17스위트 PASS · our-code 경고 0 · 슬라이스 1 은 주석·빈 줄 제거 스트림 diff 로 코드 줄 무변경 입증. **HW 벤치 없음** — 바이너리가 태그 `hw-revA_fw-stage-hold-wdt` 빌드와 동일하므로 그 벤치 결과를 승계.
+- **app_modbus.c**: 이력 서술(2026-09-04/05 fix 경위 등, changelog 에 있는 것만) 압축 + 리플로로 815→753(커밋 시점 752 + K12 안전 근거 복원 1), 헬퍼 6개 추가 후 792.
+- **보류 10개**(H7 — `.bin` ≠ 이면 되돌리고 보류, 우회 금지): `publish_sr_edge`/`publish_amp_power`/`publish_copy_out`(`reg_publish_measure`) · `mo_time_clamp_echo`(`lcd_input_dispatch`) · `weld_sensor_mirror`/`weld_dispatch_out`(`app_weld_tick`) · `tcp_recv_accumulate`/`tcp_flush`(`app_modbus_tcp_poll`) · `fill_upper_band`/`fill_lower_band`(`disp_compute_output`). 근거 해시·바이트 델타는 spec §6.
+- **예외(≤50 불가, spec §6)** — 실측 **13개**: `app_modbus_apply_writes` 256 · `app_lcd_input_dispatch` 188 · `app_weld_tick` 131(보류) · `app_modbus_tcp_poll` 111(보류) · `app_lcd_send_model_str` 93(미분할 결정) · `reg_publish_measure` 81(보류) · `app_lcd_change_page` 78 · `weld_fsm_step` 72 · `app_config_load` 64(미착수) · `disp_compute_output` 61(주석 이동만) · `weld_step_weld` 58 · `app_lcd_disp_step` 57 · `render_run_std` 53. 진짜 분할은 HW 벤치/host 게이트 트랙(spec §6 후속 열).
+- 슬라이스 7 조건부: 7-1 `change_page` **SAME**(203→78) · 7-2 `app_weld_tick` **DIFF → 보류** · 7-3 `tcp_poll` **DIFF → 보류** · 7-4 `disp_compute_output` 헬퍼 **DIFF → 주석 이동만**(76→61) · 7-5 `handle_std_setup_param` **SAME**(58→38).
+- 도구: `fw/tools/bin-same.sh`(두 모델 .bin sha256 대조) · `fw/tools/funclen.py`(중괄호 균형 함수 길이). spec = `docs/superpowers/specs/2026-09-08-refactor-byte-identical-design.md`, plan = `docs/superpowers/plans/2026-09-08-refactor-byte-identical.md`.
+
 ### 2026-09-06 — feat: 원격 hold-to-run 워치독 (요구사항 2026-09-05 R-1/2/3/4/6) — HW 벤치 대기
 
 - **무엇**: 원격기 START 를 "누르고 있는 동안만 가동" 으로 만들기 위해, 유지 신호가 **T=600 ms** 끊기면 컨트롤러가 스스로 그 런을 세운다. 단절 시 잔여 가동 30 s → **0.6 s**.
