@@ -47,25 +47,26 @@
 static uint16_t level_buf[20];
 static uint16_t time_buf[20];
 
-/* 출력 파워 바 계산 */
+/* 출력 파워 바 계산.
+ * [fill 규칙] Output-power bar fill (port of send_outpower_data step==0, main.c:2616-2661).
+ *
+ * Thresholds (state->ref_lv_1/10/20) seed from model_freq in app_lcd_init_mode.
+ * Set-point marker lands at slot (output_power * 20 / 100), clamped to 19.
+ *
+ *   curr_amp <= 10            -> all 20 slots 0
+ *   curr_amp >  10            -> slot[0]=1
+ *     curr_amp <= ref_lv_1    -> slots[1..19]=0
+ *     curr_amp >  ref_lv_1
+ *       curr_amp <= ref_lv_10 -> slots[2..2+t-1]=1 where t=(amp-ref_lv_1)*8/(ref_lv_10-ref_lv_1)
+ *       curr_amp >  ref_lv_10
+ *         curr_amp >= ref_lv_20 -> slots[1..19]=1 (full)
+ *         else                  -> slots[2..9]=1 and slots[10..10+t-1]=1
+ *                                  where t=(amp-ref_lv_10)*10/(ref_lv_20-ref_lv_10)
+ * Then unconditionally: marker slot = 1.
+ */
 static void disp_compute_output(uint16_t curr_amp, uint8_t out_power,
                                 const lcd_app_state_t *st)
 {
-    /* Output-power bar fill (port of send_outpower_data step==0, main.c:2616-2661).
-     *
-     * Thresholds (state->ref_lv_1/10/20) seed from model_freq in app_lcd_init_mode.
-     * Set-point marker lands at slot (output_power * 20 / 100), clamped to 19.
-     *
-     *   curr_amp <= 10            -> all 20 slots 0
-     *   curr_amp >  10            -> slot[0]=1
-     *     curr_amp <= ref_lv_1    -> slots[1..19]=0
-     *     curr_amp >  ref_lv_1
-     *       curr_amp <= ref_lv_10 -> slots[2..2+t-1]=1 where t=(amp-ref_lv_1)*8/(ref_lv_10-ref_lv_1)
-     *       curr_amp >  ref_lv_10
-     *         curr_amp >= ref_lv_20 -> slots[1..19]=1 (full)
-     *         else                  -> slots[2..9]=1 and slots[10..10+t-1]=1
-     *                                  where t=(amp-ref_lv_10)*10/(ref_lv_20-ref_lv_10)
-     * Then unconditionally: marker slot = 1. */
     uint8_t  i;
     uint8_t  marker;
     uint16_t span;          /* threshold gap, guarded != 0 before dividing */
