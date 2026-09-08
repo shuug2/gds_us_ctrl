@@ -288,6 +288,89 @@ static void mirror_live(void)
     mirror_stage_and_gate(cfg);
 }
 
+#ifndef REMOTE_EN_GATE_BYPASS
+/* apply_writes 본체 1/3 — 게이트 닫힘: 명령 소거 + STOP 통과 + mon 로그 + CFG_CTRL 소거 (판정·return 은 호출자) */
+static inline __attribute__((always_inline)) void gate_reject_body(void)
+{
+    /* 벤치 관측용(VR-3): 무엇이 막혔는지 mon에 남긴다. 소거 전에 잡아야 한다.
+     * 무음 거부는 "STATUS 무변화"라는 간접 증거만 남겨서, 게이트가 막은 것인지
+     * 애초에 요청이 안 온 것인지 컨트롤러 쪽에서 구분할 수 없다.
+     * ⚠ mon은 RTU 점유 시 꺼지므로(app_modbus.c apply_config의
+     * mon_set_enabled) 이 줄은 ETH 모드에서만 보인다 — VR-3은 TCP로 칠 것. */
+    uint8_t blocked = 0u;
+    if      (g_mb.holding[MB_REG_RESET] != 0u) { blocked = MB_REG_RESET; }
+    else if (g_mb.holding[MB_REG_SEEK]  != 0u) { blocked = MB_REG_SEEK;  }
+    else if ((g_mb.holding[MB_REG_START] != 0u) &&
+             (g_mb.holding[MB_REG_START] != MB_START_KEEP)) { blocked = MB_REG_START; }
+    /* START=KEEP 은 로그에서 제외 — 닫힌 게이트에 초당 ~7건 오면 mon 을 덮는다.
+     * 소거는 아래에서 값 불문 그대로(유지 신호가 굶어 ≤T 트립 = R-11 부수 효과). */
+
+    g_mb.holding[MB_REG_RESET] = 0u;
+    g_mb.holding[MB_REG_SEEK]  = 0u;
+    g_mb.holding[MB_REG_START] = 0u;
+    uint8_t stop_passed = (g_mb.holding[MB_REG_STOP] == 1u) ? 1u : 0u;
+    if (stop_passed != 0u) {
+        app_reg_command(US_CMD_RUN_RELEASE, (uint8_t)US_COMM);
+    }
+    /* 명령이 걸린 경우에만 찍는다 — cfg 전용 쓰기까지 찍으면 원격기의 주기
+     * 파라미터 쓰기(수 초 간격)가 로그를 덮어버린다. cfg 거부는 read-back
+     * 미러 복원으로 이미 관측 가능하다(위 주석). */
+    if ((blocked != 0u) || (stop_passed != 0u)) {
+        mon_printf("[mb] gate closed(state=%u): blocked=0x%02X stop_passed=%u\r\n",
+                   (unsigned)s_ren.state, (unsigned)blocked, (unsigned)stop_passed);
+    }
+    /* STOP도 값 불문 소거 — 디스패치는 ==1일 때만이지만, 소거를 그 안에 두면
+     * STOP=2 같은 비-1 write가 영영 잔류해(미러 대상 아님, 아래 체인도 ==1만
+     * 매치) FC03 읽기가 유령 pending STOP을 계속 보고한다. */
+    g_mb.holding[MB_REG_STOP] = 0u;
+    /* F-A: 커밋은 실계 변경이라 게이트 대상이다. 값 불문 소거하되 CFG_STAT 는
+     * 건드리지 않는다 — 게이트 거부와 커밋 검증 거부는 다른 층이고, 사유는
+     * REMOTE_EN(0x2B)을 읽어 안다. staged 쓰기 자체는 실계 무영향이라
+     * 게이트 대상이 아니지만, 이 return 이 스캔 분기도 함께 건너뛴다:
+     * 게이트가 닫힌 동안의 staged 편집은 열린 뒤 다시 쓰면 된다. */
+    g_mb.holding[MB_REG_CFG_CTRL] = 0u;
+}
+#endif
+
+/* apply_writes 본체 2/3 — START 값(1 탭 / 2 hold 시작 / 3 유지) 디스패치 */
+static inline __attribute__((always_inline)) void start_cmd_body(app_config_t *cfg, uint16_t sv, uint32_t now)
+{
+    if (sv == MB_START_TAP) {
+        app_reg_command(US_CMD_START, (uint8_t)US_COMM);
+        /* samd20 comm START 는 같은 자리에서 진폭 pot 을 쓴다(main.c:4400-4401).
+         * LCD RUN-press 경로(app_lcd_input.c:217/242)와 동형 — 무조건 write.
+         * 거부된 START 여도 출력이 없어 무해(멱등 1바이트).
+         * (구 `us_run_status == US_COMM` 가드는 구조적으로 항상 FALSE 였다 — changelog 2026-09-04 `ac7e691`.) */
+        app_lcd_hook_set_pot(cfg->output_power);
+    } else if (sv == MB_START_HOLD) {
+        if (app_reg_start_allowed()) {
+            app_reg_command(US_CMD_START, (uint8_t)US_COMM);
+            app_lcd_hook_set_pot(cfg->output_power);   /* 탭과 동형, 1회 */
+            hold_wdt_arm(&s_hwd, now);
+        } else if (hold_wdt_armed(&s_hwd) != 0u) {
+            hold_wdt_keep(&s_hwd, now);   /* START=2 응답 유실 재시도 흡수 */
+        }
+        /* start_allowed 거짓 + 미무장 = 다른 마스터의 탭 런이 도는 중 — 무시.
+         * 그 런은 워치독 대상이 아니다(§3.1 무변경의 근거). */
+    } else if (sv == MB_START_KEEP) {
+        hold_wdt_keep(&s_hwd, now);       /* armed 아니면 no-op = 기동 권한 없음 */
+    }
+}
+
+/* apply_writes 본체 3/3 — CFG_CTRL=1 커밋 통과분 반영: cfg 대입 + ether 훅 (검증·save 는 호출자) */
+static inline __attribute__((always_inline)) void cfg_ctrl_commit_body(app_config_t *cfg, uint16_t d)
+{
+    stg_apply_to_cfg(cfg, d);
+    if ((d & CFG_STG_ETHER_MASK) != 0u) {
+        /* LCD SAVE 와 같은 훅을 재사용 — app_eth_tick 이 dirty 를
+         * consume 해 재적용한다. RTU 는 응답을 blocking 으로 먼저
+         * 보내고 나서 apply 를 부르므로(send → apply 순서, 아래 tick)
+         * 지연이 불필요하다. DG-12 로 ether 커밋은 RTU 로만 온다(500ms 지연 상수 폐기 = changelog 2026-09-04 F-A). */
+        app_lcd_hook_ether_apply(cfg->comm_mode, cfg->ether_ip,
+                                 cfg->ether_nm, cfg->ether_gw);
+    }
+}
+
 /* FC06 write 적용 */
 void app_modbus_apply_writes(mb_link_t link)
 {
@@ -314,43 +397,7 @@ void app_modbus_apply_writes(mb_link_t link)
      * mbpoll 흐름이 죽는다. T-5 머지 시 이 #ifdef와 CMake 옵션을 함께 제거할 것. */
 #ifndef REMOTE_EN_GATE_BYPASS
     if (s_ren.state != (uint8_t)REN_ENABLED) {
-        /* 벤치 관측용(VR-3): 무엇이 막혔는지 mon에 남긴다. 소거 전에 잡아야 한다.
-         * 무음 거부는 "STATUS 무변화"라는 간접 증거만 남겨서, 게이트가 막은 것인지
-         * 애초에 요청이 안 온 것인지 컨트롤러 쪽에서 구분할 수 없다.
-         * ⚠ mon은 RTU 점유 시 꺼지므로(app_modbus.c apply_config의
-         * mon_set_enabled) 이 줄은 ETH 모드에서만 보인다 — VR-3은 TCP로 칠 것. */
-        uint8_t blocked = 0u;
-        if      (g_mb.holding[MB_REG_RESET] != 0u) { blocked = MB_REG_RESET; }
-        else if (g_mb.holding[MB_REG_SEEK]  != 0u) { blocked = MB_REG_SEEK;  }
-        else if ((g_mb.holding[MB_REG_START] != 0u) &&
-                 (g_mb.holding[MB_REG_START] != MB_START_KEEP)) { blocked = MB_REG_START; }
-        /* START=KEEP 은 로그에서 제외 — 닫힌 게이트에 초당 ~7건 오면 mon 을 덮는다.
-         * 소거는 아래에서 값 불문 그대로(유지 신호가 굶어 ≤T 트립 = R-11 부수 효과). */
-
-        g_mb.holding[MB_REG_RESET] = 0u;
-        g_mb.holding[MB_REG_SEEK]  = 0u;
-        g_mb.holding[MB_REG_START] = 0u;
-        uint8_t stop_passed = (g_mb.holding[MB_REG_STOP] == 1u) ? 1u : 0u;
-        if (stop_passed != 0u) {
-            app_reg_command(US_CMD_RUN_RELEASE, (uint8_t)US_COMM);
-        }
-        /* 명령이 걸린 경우에만 찍는다 — cfg 전용 쓰기까지 찍으면 원격기의 주기
-         * 파라미터 쓰기(수 초 간격)가 로그를 덮어버린다. cfg 거부는 read-back
-         * 미러 복원으로 이미 관측 가능하다(위 주석). */
-        if ((blocked != 0u) || (stop_passed != 0u)) {
-            mon_printf("[mb] gate closed(state=%u): blocked=0x%02X stop_passed=%u\r\n",
-                       (unsigned)s_ren.state, (unsigned)blocked, (unsigned)stop_passed);
-        }
-        /* STOP도 값 불문 소거 — 디스패치는 ==1일 때만이지만, 소거를 그 안에 두면
-         * STOP=2 같은 비-1 write가 영영 잔류해(미러 대상 아님, 아래 체인도 ==1만
-         * 매치) FC03 읽기가 유령 pending STOP을 계속 보고한다. */
-        g_mb.holding[MB_REG_STOP] = 0u;
-        /* F-A: 커밋은 실계 변경이라 게이트 대상이다. 값 불문 소거하되 CFG_STAT 는
-         * 건드리지 않는다 — 게이트 거부와 커밋 검증 거부는 다른 층이고, 사유는
-         * REMOTE_EN(0x2B)을 읽어 안다. staged 쓰기 자체는 실계 무영향이라
-         * 게이트 대상이 아니지만, 이 return 이 스캔 분기도 함께 건너뛴다:
-         * 게이트가 닫힌 동안의 staged 편집은 열린 뒤 다시 쓰면 된다. */
-        g_mb.holding[MB_REG_CFG_CTRL] = 0u;
+        gate_reject_body();
         return;
     }
 #endif
@@ -371,26 +418,7 @@ void app_modbus_apply_writes(mb_link_t link)
         uint16_t sv  = g_mb.holding[MB_REG_START];
         uint32_t now = sys_tick_get_ms();
         g_mb.holding[MB_REG_START] = 0u;
-        if (sv == MB_START_TAP) {
-            app_reg_command(US_CMD_START, (uint8_t)US_COMM);
-            /* samd20 comm START 는 같은 자리에서 진폭 pot 을 쓴다(main.c:4400-4401).
-             * LCD RUN-press 경로(app_lcd_input.c:217/242)와 동형 — 무조건 write.
-             * 거부된 START 여도 출력이 없어 무해(멱등 1바이트).
-             * (구 `us_run_status == US_COMM` 가드는 구조적으로 항상 FALSE 였다 — changelog 2026-09-04 `ac7e691`.) */
-            app_lcd_hook_set_pot(cfg->output_power);
-        } else if (sv == MB_START_HOLD) {
-            if (app_reg_start_allowed()) {
-                app_reg_command(US_CMD_START, (uint8_t)US_COMM);
-                app_lcd_hook_set_pot(cfg->output_power);   /* 탭과 동형, 1회 */
-                hold_wdt_arm(&s_hwd, now);
-            } else if (hold_wdt_armed(&s_hwd) != 0u) {
-                hold_wdt_keep(&s_hwd, now);   /* START=2 응답 유실 재시도 흡수 */
-            }
-            /* start_allowed 거짓 + 미무장 = 다른 마스터의 탭 런이 도는 중 — 무시.
-             * 그 런은 워치독 대상이 아니다(§3.1 무변경의 근거). */
-        } else if (sv == MB_START_KEEP) {
-            hold_wdt_keep(&s_hwd, now);       /* armed 아니면 no-op = 기동 권한 없음 */
-        }
+        start_cmd_body(cfg, sv, now);
     } else if (g_mb.holding[MB_REG_STOP] == 1u) {
         app_reg_command(US_CMD_RUN_RELEASE, (uint8_t)US_COMM);
         g_mb.holding[MB_REG_STOP] = 0u;
@@ -408,15 +436,7 @@ void app_modbus_apply_writes(mb_link_t link)
              * 재초기화를 막는다. */
             if (cfg_stage_commit(&s_stg, link,
                                  app_lcd_measure()->us_on_status) != 0u) {
-                stg_apply_to_cfg(cfg, d);
-                if ((d & CFG_STG_ETHER_MASK) != 0u) {
-                    /* LCD SAVE 와 같은 훅을 재사용 — app_eth_tick 이 dirty 를
-                     * consume 해 재적용한다. RTU 는 응답을 blocking 으로 먼저
-                     * 보내고 나서 apply 를 부르므로(send → apply 순서, 아래 tick)
-                     * 지연이 불필요하다. DG-12 로 ether 커밋은 RTU 로만 온다(500ms 지연 상수 폐기 = changelog 2026-09-04 F-A). */
-                    app_lcd_hook_ether_apply(cfg->comm_mode, cfg->ether_ip,
-                                             cfg->ether_nm, cfg->ether_gw);
-                }
+                cfg_ctrl_commit_body(cfg, d);
                 /* serial 그룹에는 즉시 재초기화가 **일어나지 않는다** — 그리고
                  * 그것이 맞다. DG-12 가 serial 커밋을 RTU 에서 거부하므로 커밋은
                  * TCP 로만 오고, TCP 분기는 comm_mode != SERIAL 일 때만 도는데,
