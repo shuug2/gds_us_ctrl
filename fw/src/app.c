@@ -94,32 +94,32 @@ void app_init(void)
 }
 
 /* 슈퍼루프 1회 반복.
- * [step 2] 2. Display step machine — 4 ms cadence (spec §11), one VP-group per step.
- * [step 2.5] 2.5 Weld-cycle FSM — 10 ms cadence. WELD가 US_CYCLE로 게이트를 구동하므로
+ * [step 2] Display step machine — 4 ms cadence (spec §11), one VP-group per step.
+ * [step 2.5] Weld-cycle FSM — 10 ms cadence. WELD가 US_CYCLE로 게이트를 구동하므로
  * app_reg_tick 앞에 둬서 이번 iter publish에 반영. 슬라이스1은 프로덕션
  * 트리거 없음 -> READY 휴면(회귀 영향 없음).
- * [step 2.55] 2.55 과부하 — 10 ms. assert면 force-stop(이번 iter reg publish 반영) +
+ * [step 2.55] 과부하 — 10 ms. assert면 force-stop(이번 iter reg publish 반영) +
  * deassert면 자동복구 요청(다음 줄 seek_reset_tick이 같은 iter에 처리).
- * [step 2.57] 2.57 물리 명령 입력 + E-stop — 10 ms. B_RESET/SEEK는 다음 줄
+ * [step 2.57] 물리 명령 입력 + E-stop — 10 ms. B_RESET/SEEK는 다음 줄
  * seek_reset_tick이 같은 iter 소비; B_START/force-stop은 app_reg_tick에 반영
  * (app_seek_reset_tick·app_reg_tick 앞 배치).
- * [step 2.58] 2.58 SYS_HORN horn-down — 10 ms. STD SETUP이 모드 소유(LCD dispatch가
+ * [step 2.58] SYS_HORN horn-down — 10 ms. STD SETUP이 모드 소유(LCD dispatch가
  * set_mode), 양손 키 press 엣지 = 솔 토글. 초음파/weld 배제는 게이트
  * (app_reg_start_allowed / app_weld_tick)가 담당. app_input_tick 뒤 =
  * estop 신선.
- * [step 2.6] 2.6 SEEK/RESET FSM — 10 ms cadence. run_active(us_run_status)를 읽어 RUN
+ * [step 2.6] SEEK/RESET FSM — 10 ms cadence. run_active(us_run_status)를 읽어 RUN
  * 직교; ICON/hook만 emit (app_reg에 명령 안 보냄)이라 reg_tick 앞/뒤 무관 —
  * weld 패턴 일관성 위해 weld_tick 다음에 배치 (1-iter stale run_active 무해).
- * [step 3] 3. Regulation core — ~2 ms cadence (spec §6), compute-only this slice.
+ * [step 3] Regulation core — ~2 ms cadence (spec §6), compute-only this slice.
  * 런 한계(on-time ceiling / energy-도달 / OVTIME)를 라이브 config에서 주입
  * (cpp-review M1: app_reg는 app_lcd로 콜백 금지); per-iter read = 라이브 편집.
- * [step 4] 4. Ethernet/DHCP — drive the W5500 DHCP client (no-op unless DHCP mode).
+ * [step 4] Ethernet/DHCP — drive the W5500 DHCP client (no-op unless DHCP mode).
  * Before Modbus so a lease acquired this iter flips app_eth_available().
- * [step 5] 5. Modbus slave — occupancy re-eval + one RTU/TCP frame per iter (spec §2).
+ * [step 5] Modbus slave — occupancy re-eval + one RTU/TCP frame per iter (spec §2).
  * After app_reg_tick so the mirror sees this iter's freshest measure.
- * [step 6] 6. I2C1 관측 — 1 s cadence, err_count 델타 시에만 mon 1줄 (감사 H2 표면;
+ * [step 6] I2C1 관측 — 1 s cadence, err_count 델타 시에만 mon 1줄 (감사 H2 표면;
  * mon 전용 = 사용자 확정. save_all/POT write 실패 런타임 관측용).
- * [step 6.5] 6.5 일반 fault(OVTIME 등) 부저 점멸 — measure.error_status 감시.
+ * [step 6.5] 일반 fault(OVTIME 등) 부저 점멸 — measure.error_status 감시.
  * app_reg_tick(위) publish 후·app_buzzer_tick(아래) 전 = 같은 iter 반영.
  */
 void app_loop_iter(void)

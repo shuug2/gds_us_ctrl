@@ -36,7 +36,8 @@
  * (main.c:3046) — 포트는 길이를 여기서 강제한다. */
 _Static_assert(sizeof(VERSION_MSG) - 1u == 20u, "VERSION_MSG must be exactly 20 chars");
 
-/* change_page 본체 — LCD_RUN_STD: DELAY/TRIGGER 별 D/W(E)/H 3줄 텍스트 */
+/* change_page 본체 — LCD_RUN_STD: DELAY/TRIGGER 별 D/W(E)/H 3줄 텍스트
+ * + 수치 4필드(LV_DM_DELAY/DISP_RUN_MODE/DISP_SAFTY/LV_LIMIT_OUT_T) */
 static inline __attribute__((always_inline)) void render_run_std(const app_config_t *cfg, uint8_t *buf)
 {
     uint8_t n;                  /* formatter return length (samd20 'temp') */
@@ -147,7 +148,7 @@ static inline __attribute__((always_inline)) void render_comm_page(const app_con
     }
 }
 
-/* change_page 본체 — comm 페이지 set_page 후 DISP_COMM_MODE/EN_DHCP 재기록 (판정은 호출자) */
+/* change_page 본체 — comm 페이지 set_page 후 DISP_COMM_MODE/EN_DHCP 재기록 (외곽 페이지 판정은 호출자) */
 static inline __attribute__((always_inline)) void render_comm_tail(uint8_t page, const lcd_app_state_t *state)
 {
     dgus_write_u16(DISP_COMM_MODE, (state->temp_comm_mode == 0) ? 0u : 1u);

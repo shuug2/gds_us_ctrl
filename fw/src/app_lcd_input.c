@@ -654,6 +654,7 @@ void app_lcd_input_dispatch(const dgus_frame_t *f)
         handle_ether_key(data16);
         break;
 
+    /*--- panel boot / page-flip → handle_sys_pic_now (spec §10) ------------*/
     case SYS_PIC_NOW:
         handle_sys_pic_now(state, cfg, data16);
         break;

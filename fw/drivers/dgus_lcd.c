@@ -200,7 +200,7 @@ void dgus_read_var(uint8_t var)
  * [PS_GOT_5A] 연속 0x5A: PS_GOT_5A 유지
  * [PS_GOT_HEADER] 이 byte 가 LEN
  * [PS_COLLECTING] 벽시계 timeout — samd20 결함 #2 회피
- * [프레임 완성] 프레임 완성 — frame_buf 매핑:
+ * [프레임 완성] frame_buf 매핑:
  *   [0] = cmd, [1] = addr_h, [2] = addr_l, [3..] = payload
  *   payload 길이 = LEN - 3 = s_frame_idx - 3
  * [unreachable] unreachable

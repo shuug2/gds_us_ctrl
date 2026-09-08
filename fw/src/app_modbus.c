@@ -326,7 +326,7 @@ static inline __attribute__((always_inline)) void gate_reject_body(void)
     /* F-A: 커밋은 실계 변경이라 게이트 대상이다. 값 불문 소거하되 CFG_STAT 는
      * 건드리지 않는다 — 게이트 거부와 커밋 검증 거부는 다른 층이고, 사유는
      * REMOTE_EN(0x2B)을 읽어 안다. staged 쓰기 자체는 실계 무영향이라
-     * 게이트 대상이 아니지만, 이 return 이 스캔 분기도 함께 건너뛴다:
+     * 게이트 대상이 아니지만, 호출자의 `return` 이 스캔 분기도 함께 건너뛴다:
      * 게이트가 닫힌 동안의 staged 편집은 열린 뒤 다시 쓰면 된다. */
     g_mb.holding[MB_REG_CFG_CTRL] = 0u;
 }
@@ -725,7 +725,7 @@ static void tcp_leave(void)
 /* modbus 매 tick 처리.
  * [게이트 step] 게이트는 분기 밖 첫 문장 — RTU 점유/TCP/미점유 어디로 빠지든 시간이 흐르고
  * 만료돼야 한다 (spec §6). 이후 같은 tick의 mirror_live()가 최신 상태를 싣는다.
- * [hold 워치독] hold 워치독 — 분기 밖 첫머리. RTU 점유/TCP/미점유 어디로 빠져도 시간이 흘러야 한다:
+ * [hold 워치독] 분기 밖 첫머리. RTU 점유/TCP/미점유 어디로 빠져도 시간이 흘러야 한다:
  * apply_config 가 링크를 해제해도 hold 런은 T 안에 서야 한다.
  * 🔴 불변식(spec §4 ②): 연속한 두 step 사이에 us_run_status 를 US_COMM 으로 바꿀 수 있는 것은
  * 같은 tick 의 apply_writes **1건**뿐이다(RTU = tick 당 1 프레임, TCP = poll 당 FC06 1건 —
@@ -733,7 +733,7 @@ static void tcp_leave(void)
  * 구간에 들어가 다른 마스터의 탭 런이 hold 세션을 상속받는다 — 그 변경은 이 워치독을 함께
  * 고쳐야 한다. step 은 반드시 apply_writes 보다 **앞**이어야 한다 — 뒤집히면 같은 tick 의
  * keep 이 now_hwd 보다 늦은 시각을 남겨 unsigned 뺄셈이 ≈4.29e9 가 되고 즉시 오트립한다.
- * [staging 타임아웃] staging 타임아웃 — 분기 밖. 어느 경로로 빠지든 만료돼야 한다.
+ * [staging 타임아웃] 분기 밖. 어느 경로로 빠지든 만료돼야 한다.
  * [RTU 분기] RTU owns USART6 (comm_mode==SERIAL && addr!=0). Behavior-identical
  * to the hardware-verified slice-1 path.
  * [TCP 분기] Not RTU. Run the TCP server when in an ETH mode and the W5500 is up.
@@ -742,8 +742,8 @@ static void tcp_leave(void)
  */
 void app_modbus_tick(void)
 {
-    remote_en_step();
-    {
+    remote_en_step();   /* [게이트 step] 헤더 */
+    {   /* [hold 워치독] 헤더 — apply_writes 보다 앞(불변식) */
         uint32_t now_hwd = sys_tick_get_ms();
         uint8_t  run_is_comm = (app_reg_run_src() == (uint8_t)US_COMM) ? 1u : 0u;
         if (hold_wdt_step(&s_hwd, now_hwd, run_is_comm) != 0u) {

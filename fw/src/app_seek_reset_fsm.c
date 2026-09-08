@@ -23,7 +23,7 @@ static inline __attribute__((always_inline)) void sr_step_reset(seek_reset_out_t
 {
     /* 포화 가드: SR_TICKS=60 고정이라 s_elapsed는 최대 60에서 전이 — 현재는
      * 미발동이나 config-driven 비교로 확장될 때 대비해 weld 패턴 유지
-     * (cpp-review Minor 1). SR_SEEK도 동일. */
+     * (cpp-review Minor 1). `sr_step_seek` 도 동일. */
     if (s_elapsed < 0xFFFFu) {
         s_elapsed++;
     }
