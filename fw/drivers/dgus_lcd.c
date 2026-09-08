@@ -217,7 +217,7 @@ static bool parser_step(uint8_t b, dgus_frame_t *out)
         if (b == DGUS_SYNC2) {
             s_parse_state    = PS_GOT_HEADER;
             s_frame_start_ms = sys_tick_get_ms();
-        } else if (b == DGUS_SYNC1) {
+        } else if (b == DGUS_SYNC1) {   /* 연속 0x5A: PS_GOT_5A 유지 — 헤더 [PS_GOT_5A] */
         } else {
             s_parse_state = PS_IDLE;
         }

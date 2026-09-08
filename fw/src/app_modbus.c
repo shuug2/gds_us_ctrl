@@ -536,8 +536,9 @@ void app_modbus_apply_writes(mb_link_t link)
          * 따라서 이 쓰기 하나가
          *   0/1 -> 2 : PC11 이 HIGH 면 즉시 E-stop 진입 + SOL 강제 OFF
          *   2 -> 0/1 : E-stop 활성 중이면 s_estop_active 가 0 으로 클리어
-         * 를 일으킨다. **가드를 두지 않는 것은 사용자 결정**(changelog 2026-09-04 B-5) — LCD 편집
-         * 경로(app_lcd_input.c:452)에도 가드가 없어, 원격에만 새 규칙을 만들지 않는다.
+         * 를 일으킨다. **가드를 두지 않는 것은 사용자 결정**(changelog 2026-09-04 B-5):
+         * LCD 편집 경로에도 같은 가드가 없어(app_lcd_input.c:452 무조건 대입) 기계 앞의 조작자는
+         * 이미 같은 일을 할 수 있고, 원격에만 새 규칙을 만들지 않는다는 이 저장소 원칙과 일관된다.
          * ⚠ 남는 차이: 원격 조작자는 기계 앞에 없을 수 있다. 거부가 필요해지면
          * app_estop_active() || us_on_status 로 막는 것이 그 자리다. */
         cfg->model_type = (uint8_t)g_mb.holding[MB_REG_MODEL_TYPE];
