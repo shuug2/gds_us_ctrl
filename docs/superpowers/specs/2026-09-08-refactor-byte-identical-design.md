@@ -82,6 +82,7 @@
 | H5 | 헬퍼는 같은 번역 단위에, 호출 함수 바로 위에 둔다. 파일-static 변수(`g_mb`, `s_stg`, `s_ren`, `g_reg`, `g_measure` 등)는 헬퍼가 직접 접근 | — |
 | H6 | 헬퍼 안 `return` 은 **미실측** → 쓰지 않는다. early-return 이 있는 블록은 추출 대상에서 제외 | (추측) |
 | H7 | 슬라이스마다 두 모델 `.bin` sha256 대조가 **게이트**다. 규칙을 지켜도 리터럴 풀·레지스터 할당이 어긋날 수 있다 → 다르면 **되돌리고 보류**, 우회 시도 금지 | 감사 B-3 5 |
+| H8 | 옮기는 블록 안에서만 쓰이는 스크래치 로컬(예: change_page 의 `i`/`n`)은 **선언을 헬퍼 안으로 옮긴다** — 인자로 넘기지 않는다. 타입·초기화 동일, 스코프만 축소 (Task 7-1 실증 ○, 최종 리뷰 M-1) | (스코프 축소는 코드생성 무영향이 실측됨) |
 
 > **H3 각주(구현 판정 R9)**: H3 의 "판정 구조" 는 **호출자 측 라우팅**(if/else-if 분기 진입·`case`·`break`·`return`)을 뜻한다.
 > 옮겨진 블록 **안에 원래 있던** 내부 if 체인(예: `gate_reject_body` 의 blocked 선택, `start_cmd_body` 의 `sv` 체인)은
@@ -133,7 +134,8 @@
 #!/bin/sh
 # 두 모델을 빌드해 .bin sha256 을 기준과 비교. 사용: bin-same.sh baseline | bin-same.sh
 set -eu; cd "$(dirname "$0")/../.."
-./fw.sh >/dev/null && MODEL=remote ./fw.sh >/dev/null
+./fw.sh >/dev/null
+MODEL=remote ./fw.sh >/dev/null
 cur=$(shasum -a 256 fw/build/gds_us_ctrl.bin fw/build-remote/gds_us_ctrl.bin | cut -d' ' -f1 | paste -sd' ' -)
 base=fw/.bin-baseline
 [ "${1:-}" = baseline ] && { printf '%s\n' "$cur" >"$base"; echo "baseline: $cur"; exit 0; }
