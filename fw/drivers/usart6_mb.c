@@ -42,18 +42,9 @@ static uint16_t rx_head(void)
     return (uint16_t)(head & (MB_RX_DMA_SIZE - 1u));
 }
 
-/* Modbus 포트 열기 */
-void usart6_mb_open(uint8_t speed_idx, uint8_t parity_idx)
+/* usart6_mb_open 본체 1/2 — USART6 를 Modbus 라인 설정(baud/parity)으로 재초기화 */
+static inline __attribute__((always_inline)) void mb_uart_reinit(uint8_t speed_idx, uint8_t parity_idx)
 {
-    /* Double-open guard: the app_modbus state machine always closes before
-     * reopening; a second open here would silently kill the live DMA stream
-     * mid-transfer and reset the ring state. Make it a no-op instead. */
-    if (s_open) {
-        return;
-    }
-
-    __HAL_RCC_DMA2_CLK_ENABLE();
-
     /* Re-init USART6 at the Modbus line config. GPIO PC6/PC7 AF8 was set by
      * usart6_init() at boot and is never unconfigured. */
     HAL_UART_DeInit(&huart6);
@@ -81,7 +72,11 @@ void usart6_mb_open(uint8_t speed_idx, uint8_t parity_idx)
     if (HAL_UART_Init(&huart6) != HAL_OK) {
         Error_Handler();
     }
+}
 
+/* usart6_mb_open 본체 2/2 — DMA2 Stream1 Ch5 circular RX 초기화 + UART 링크 */
+static inline __attribute__((always_inline)) void mb_dma_init(void)
+{
     /* DMA2 Stream1 Ch5 = USART6_RX (RM0401 DMA2 request map; the Stream2 Ch5
      * alternate is unusable — Stream2 belongs to USART1 RX). Same circular
      * free-running config as usart1.c. */
@@ -99,6 +94,23 @@ void usart6_mb_open(uint8_t speed_idx, uint8_t parity_idx)
         Error_Handler();
     }
     __HAL_LINKDMA(&huart6, hdmarx, hdma_usart6_rx);
+}
+
+/* Modbus 포트 열기 */
+void usart6_mb_open(uint8_t speed_idx, uint8_t parity_idx)
+{
+    /* Double-open guard: the app_modbus state machine always closes before
+     * reopening; a second open here would silently kill the live DMA stream
+     * mid-transfer and reset the ring state. Make it a no-op instead. */
+    if (s_open) {
+        return;
+    }
+
+    __HAL_RCC_DMA2_CLK_ENABLE();
+
+    mb_uart_reinit(speed_idx, parity_idx);
+
+    mb_dma_init();
 
     s_rx_tail    = 0;
     s_prev_head  = 0;
