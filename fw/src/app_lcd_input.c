@@ -410,6 +410,57 @@ static uint16_t clamp_echo_power(uint16_t vp, uint16_t v)
  * Public entry — VP → action dispatch
  *--------------------------------------------------------------*/
 
+/*--- panel boot / page-flip notification — guarded re-init (spec §10) ----
+ * data16==0 means the panel reports it landed on a page (its own splash or a
+ * mid-run reset). Re-seed the panel vars + model string + run page, but ONLY
+ * when (a) the Stage B boot handshake has finished (boot_complete) and (b) at
+ * least 200 ms passed since our own last set_page — otherwise the
+ * change_page→set_page→SYS_PIC_NOW→re-init→set_page chain is a feedback loop.
+ * app_lcd_init_mode ends in app_lcd_change_page, which refreshes
+ * last_set_page_ms, so the 200 ms gate re-arms after each re-init. */
+static inline __attribute__((always_inline)) void handle_sys_pic_now(lcd_app_state_t *state, app_config_t *cfg, uint16_t data16)
+{
+    if (data16 == 0 && state->boot_complete &&
+        (uint32_t)(sys_tick_get_ms() - state->last_set_page_ms) >= 200u) {
+        /* Panel self-reset mid-run: the held RUN press is lost and no
+         * RUN_RELEASE will arrive, so stop the run (UI lost -> stop the
+         * actuator). This also re-syncs ICON_RUN: us_run_status -> IDLE
+         * makes the next disp_step see a real edge after init_mode clears
+         * the icon (spec §4.3). Harmless when already idle. */
+        app_lcd_hook_us_command(US_CMD_RUN_RELEASE);
+        s_run_key_down = 0u;   /* panel reset: the release edge never arrives */
+        app_lcd_var_init();
+        app_lcd_send_model_str(cfg->model_freq, cfg->model_type);
+        app_lcd_init_mode(cfg);
+    }
+}
+
+/* dispatch 본체 — SETUP_PARAM / SETUP_PARAM_MOOHAN 공통: setup1 페이지 진입 + horn 체크박스 미러 (두 case 에서 각각 호출) */
+static inline __attribute__((always_inline)) void handle_setup_param_enter(lcd_app_state_t *state)
+{
+    state->lcd_status = setup1_page_for_mode(state->sys_mode);
+    app_lcd_change_page(state->lcd_status);
+    /* horn-down 체크박스 = 현재 SYS_HORN 모드 미러 + shadow 리셋 (legacy
+     * main.c:3617-3622 verbatim — 저장 시 체크 안 건드리면 temp==0이라
+     * 모드 이탈되는 legacy 거동 포함). */
+    dgus_write_u16(DISP_HORNDOWN, (uint16_t)app_horn_mode_active());
+    state->temp_horndown = 0u;
+}
+
+/* dispatch 본체 — LV_RUN_MODE: 1=delay / 2=trigger 로 run_mode 설정 + STD2 페이지 전환 */
+static inline __attribute__((always_inline)) void handle_run_mode(lcd_app_state_t *state, app_config_t *cfg, uint16_t data16)
+{
+    if (data16 == 1) {                               /* delay mode */
+        cfg->run_mode = MODE_DELAY;
+        state->lcd_status = LCD_SETUP_STD2D;
+        app_lcd_change_page(state->lcd_status);
+    } else if (data16 == 2) {                        /* trigger mode */
+        cfg->run_mode = MODE_TRIGGER;
+        state->lcd_status = LCD_SETUP_STD2T;
+        app_lcd_change_page(state->lcd_status);
+    }
+}
+
 /* 터치 키 디스패치 */
 void app_lcd_input_dispatch(const dgus_frame_t *f)
 {
@@ -540,20 +591,11 @@ void app_lcd_input_dispatch(const dgus_frame_t *f)
 
     /*--- page navigation ---------------------------------------------------*/
     case SETUP_PARAM:
-        state->lcd_status = setup1_page_for_mode(state->sys_mode);
-        app_lcd_change_page(state->lcd_status);
-        /* horn-down 체크박스 = 현재 SYS_HORN 모드 미러 + shadow 리셋 (legacy
-         * main.c:3617-3622 verbatim — 저장 시 체크 안 건드리면 temp==0이라
-         * 모드 이탈되는 legacy 거동 포함). */
-        dgus_write_u16(DISP_HORNDOWN, (uint16_t)app_horn_mode_active());
-        state->temp_horndown = 0u;
+        handle_setup_param_enter(state);
         break;
     case SETUP_PARAM_MOOHAN:                             /* long-press variant of SETUP_PARAM */
         if (long_press_released(vp, data16)) {
-            state->lcd_status = setup1_page_for_mode(state->sys_mode);
-            app_lcd_change_page(state->lcd_status);
-            dgus_write_u16(DISP_HORNDOWN, (uint16_t)app_horn_mode_active());
-            state->temp_horndown = 0u;                   /* legacy 3617-3622 미러 */
+            handle_setup_param_enter(state);
         }
         break;
     case SETUP_MODEL:                                    /* long-press → model setup */
@@ -565,15 +607,7 @@ void app_lcd_input_dispatch(const dgus_frame_t *f)
         handle_std_setup_param(data16);
         break;
     case LV_RUN_MODE:
-        if (data16 == 1) {                               /* delay mode */
-            cfg->run_mode = MODE_DELAY;
-            state->lcd_status = LCD_SETUP_STD2D;
-            app_lcd_change_page(state->lcd_status);
-        } else if (data16 == 2) {                        /* trigger mode */
-            cfg->run_mode = MODE_TRIGGER;
-            state->lcd_status = LCD_SETUP_STD2T;
-            app_lcd_change_page(state->lcd_status);
-        }
+        handle_run_mode(state, cfg, data16);
         break;
 
     /*--- ultrasonic commands ----------------------------------------------*/
@@ -608,28 +642,8 @@ void app_lcd_input_dispatch(const dgus_frame_t *f)
         handle_ether_key(data16);
         break;
 
-    /*--- panel boot / page-flip notification — guarded re-init (spec §10) ----
-     * data16==0 means the panel reports it landed on a page (its own splash or a
-     * mid-run reset). Re-seed the panel vars + model string + run page, but ONLY
-     * when (a) the Stage B boot handshake has finished (boot_complete) and (b) at
-     * least 200 ms passed since our own last set_page — otherwise the
-     * change_page→set_page→SYS_PIC_NOW→re-init→set_page chain is a feedback loop.
-     * app_lcd_init_mode ends in app_lcd_change_page, which refreshes
-     * last_set_page_ms, so the 200 ms gate re-arms after each re-init. */
     case SYS_PIC_NOW:
-        if (data16 == 0 && state->boot_complete &&
-            (uint32_t)(sys_tick_get_ms() - state->last_set_page_ms) >= 200u) {
-            /* Panel self-reset mid-run: the held RUN press is lost and no
-             * RUN_RELEASE will arrive, so stop the run (UI lost -> stop the
-             * actuator). This also re-syncs ICON_RUN: us_run_status -> IDLE
-             * makes the next disp_step see a real edge after init_mode clears
-             * the icon (spec §4.3). Harmless when already idle. */
-            app_lcd_hook_us_command(US_CMD_RUN_RELEASE);
-            s_run_key_down = 0u;   /* panel reset: the release edge never arrives */
-            app_lcd_var_init();
-            app_lcd_send_model_str(cfg->model_freq, cfg->model_type);
-            app_lcd_init_mode(cfg);
-        }
+        handle_sys_pic_now(state, cfg, data16);
         break;
 
     default:
