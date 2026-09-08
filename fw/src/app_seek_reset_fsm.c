@@ -18,6 +18,41 @@ uint8_t seek_reset_fsm_state(void)
     return s_state;
 }
 
+/* seek_reset_fsm_step 본체 — case SR_RESET: 600ms 레벨 유지 → SEEK 자동 체인 (icon off/on 엣지) */
+static inline __attribute__((always_inline)) void sr_step_reset(seek_reset_out_t *out)
+{
+    /* 포화 가드: SR_TICKS=60 고정이라 s_elapsed는 최대 60에서 전이 — 현재는
+     * 미발동이나 config-driven 비교로 확장될 때 대비해 weld 패턴 유지
+     * (cpp-review Minor 1). SR_SEEK도 동일. */
+    if (s_elapsed < 0xFFFFu) {
+        s_elapsed++;
+    }
+    if (s_elapsed >= SR_TICKS) {      /* 600ms 경과 → SEEK 자동 체인 (samd20 5395-5396) */
+        out->reset_icon_off = 1u;     /* reset_signal=0 (memset), off 엣지 */
+        out->seek_signal    = 1u;
+        out->seek_icon      = 1u;     /* on 엣지 */
+        s_state             = SR_SEEK;
+        s_elapsed           = 0u;
+    } else {
+        out->reset_signal = 1u;       /* 레벨 유지 */
+    }
+}
+
+/* seek_reset_fsm_step 본체 — case SR_SEEK: 600ms 레벨 유지 → IDLE 자동 해제 (icon off 엣지) */
+static inline __attribute__((always_inline)) void sr_step_seek(seek_reset_out_t *out)
+{
+    if (s_elapsed < 0xFFFFu) {
+        s_elapsed++;
+    }
+    if (s_elapsed >= SR_TICKS) {      /* 600ms 경과 → 자동 해제 (samd20 5403-5407) */
+        out->seek_icon_off = 1u;      /* seek_signal=0 (memset), off 엣지 */
+        s_state            = SR_IDLE;
+        s_elapsed          = 0u;
+    } else {
+        out->seek_signal = 1u;        /* 레벨 유지 */
+    }
+}
+
 /* SR FSM 1틱 진행 */
 void seek_reset_fsm_step(const seek_reset_in_t *in, seek_reset_out_t *out)
 {
@@ -41,34 +76,11 @@ void seek_reset_fsm_step(const seek_reset_in_t *in, seek_reset_out_t *out)
         break;
 
     case SR_RESET:                        /* cmd 무시 (busy) */
-        /* 포화 가드: SR_TICKS=60 고정이라 s_elapsed는 최대 60에서 전이 — 현재는
-         * 미발동이나 config-driven 비교로 확장될 때 대비해 weld 패턴 유지
-         * (cpp-review Minor 1). SR_SEEK도 동일. */
-        if (s_elapsed < 0xFFFFu) {
-            s_elapsed++;
-        }
-        if (s_elapsed >= SR_TICKS) {      /* 600ms 경과 → SEEK 자동 체인 (samd20 5395-5396) */
-            out->reset_icon_off = 1u;     /* reset_signal=0 (memset), off 엣지 */
-            out->seek_signal    = 1u;
-            out->seek_icon      = 1u;     /* on 엣지 */
-            s_state             = SR_SEEK;
-            s_elapsed           = 0u;
-        } else {
-            out->reset_signal = 1u;       /* 레벨 유지 */
-        }
+        sr_step_reset(out);
         break;
 
     case SR_SEEK:                         /* cmd 무시 (busy) */
-        if (s_elapsed < 0xFFFFu) {
-            s_elapsed++;
-        }
-        if (s_elapsed >= SR_TICKS) {      /* 600ms 경과 → 자동 해제 (samd20 5403-5407) */
-            out->seek_icon_off = 1u;      /* seek_signal=0 (memset), off 엣지 */
-            s_state            = SR_IDLE;
-            s_elapsed          = 0u;
-        } else {
-            out->seek_signal = 1u;        /* 레벨 유지 */
-        }
+        sr_step_seek(out);
         break;
 
     default:
