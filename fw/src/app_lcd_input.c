@@ -329,6 +329,38 @@ static void enter_model_setup(void)
     dgus_write_u16(VAR_FREQ_CAL_VAL, (uint16_t)cfg->freq_cal_val);
 }
 
+/* handle_std_setup_param 본체 — case 1: SETUP 페이지 1 로 (MH2/MHC/MHE 면 모델별 HAND/MULTI, 아니면 STD1; set_page 만) */
+static inline __attribute__((always_inline)) void goto_setup1(lcd_app_state_t *state, const app_config_t *cfg)
+{
+    if (state->lcd_status == LCD_SETUP_MH2 ||
+        state->lcd_status == LCD_SETUP_MHC ||
+        state->lcd_status == LCD_SETUP_MHE) {
+        if (cfg->model_type == 0)        state->lcd_status = LCD_SETUP_HAND;
+        else if (cfg->model_type == 1)   state->lcd_status = LCD_SETUP_MULTI;
+    } else {
+        state->lcd_status = LCD_SETUP_STD1;
+    }
+    dgus_set_page(state->lcd_status);               /* samd20 set_lcd_page only (no rebuild) */
+}
+
+/* handle_std_setup_param 본체 — case 2: SETUP 페이지 2 로 (STD 계열 → run_mode 별 STD2D/T, MH 계열 → MH2; change_page) */
+static inline __attribute__((always_inline)) void goto_setup2(lcd_app_state_t *state, const app_config_t *cfg)
+{
+    if (state->lcd_status == LCD_SETUP_STD1 ||
+        state->lcd_status == LCD_SETUP_STD3 ||
+        state->lcd_status == LCD_SETUP_STDC ||
+        state->lcd_status == LCD_SETUP_STDE) {
+        state->lcd_status = (cfg->run_mode == MODE_DELAY)
+                            ? LCD_SETUP_STD2D : LCD_SETUP_STD2T;
+    } else if (state->lcd_status == LCD_SETUP_MULTI ||
+               state->lcd_status == LCD_SETUP_HAND ||
+               state->lcd_status == LCD_SETUP_MHC ||
+               state->lcd_status == LCD_SETUP_MHE) {
+        state->lcd_status = LCD_SETUP_MH2;
+    }
+    app_lcd_change_page(state->lcd_status);
+}
+
 /* SETUP 페이지 내비 */
 static void handle_std_setup_param(uint16_t data16)
 {
@@ -339,29 +371,9 @@ static void handle_std_setup_param(uint16_t data16)
     app_config_t    *cfg   = app_lcd_cfg();
 
     if (data16 == 1) {                                  /* GOTO SETUP PAGE 1 */
-        if (state->lcd_status == LCD_SETUP_MH2 ||
-            state->lcd_status == LCD_SETUP_MHC ||
-            state->lcd_status == LCD_SETUP_MHE) {
-            if (cfg->model_type == 0)        state->lcd_status = LCD_SETUP_HAND;
-            else if (cfg->model_type == 1)   state->lcd_status = LCD_SETUP_MULTI;
-        } else {
-            state->lcd_status = LCD_SETUP_STD1;
-        }
-        dgus_set_page(state->lcd_status);               /* samd20 set_lcd_page only (no rebuild) */
+        goto_setup1(state, cfg);
     } else if (data16 == 2) {                           /* GOTO SETUP PAGE 2 */
-        if (state->lcd_status == LCD_SETUP_STD1 ||
-            state->lcd_status == LCD_SETUP_STD3 ||
-            state->lcd_status == LCD_SETUP_STDC ||
-            state->lcd_status == LCD_SETUP_STDE) {
-            state->lcd_status = (cfg->run_mode == MODE_DELAY)
-                                ? LCD_SETUP_STD2D : LCD_SETUP_STD2T;
-        } else if (state->lcd_status == LCD_SETUP_MULTI ||
-                   state->lcd_status == LCD_SETUP_HAND ||
-                   state->lcd_status == LCD_SETUP_MHC ||
-                   state->lcd_status == LCD_SETUP_MHE) {
-            state->lcd_status = LCD_SETUP_MH2;
-        }
-        app_lcd_change_page(state->lcd_status);
+        goto_setup2(state, cfg);
     } else if (data16 == 3) {                           /* GOTO SETUP PAGE 3 */
         if (state->lcd_status == LCD_SETUP_STD1 ||
             state->lcd_status == LCD_SETUP_STD2D ||
