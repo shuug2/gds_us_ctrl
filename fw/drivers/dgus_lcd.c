@@ -195,31 +195,34 @@ void dgus_read_var(uint8_t var)
 #define DGUS_LEN_MAX          26
 #define DGUS_FRAME_TIMEOUT_MS 50
 
-/* RX 1바이트 파싱 */
+/* RX 1바이트 파싱.
+ * [개요] 1바이트 처리. true 리턴 시 out 에 완성 프레임 적재.
+ * [PS_GOT_5A] 연속 0x5A: PS_GOT_5A 유지
+ * [PS_GOT_HEADER] 이 byte 가 LEN
+ * [PS_COLLECTING] 벽시계 timeout — samd20 결함 #2 회피
+ * [프레임 완성] 프레임 완성 — frame_buf 매핑:
+ *   [0] = cmd, [1] = addr_h, [2] = addr_l, [3..] = payload
+ *   payload 길이 = LEN - 3 = s_frame_idx - 3
+ * [unreachable] unreachable
+ */
 static bool parser_step(uint8_t b, dgus_frame_t *out)
 {
-    /* 1바이트 처리. true 리턴 시 out 에 완성 프레임 적재. */
     switch (s_parse_state) {
-
     case PS_IDLE:
         if (b == DGUS_SYNC1) {
             s_parse_state = PS_GOT_5A;
         }
         return false;
-
     case PS_GOT_5A:
         if (b == DGUS_SYNC2) {
             s_parse_state    = PS_GOT_HEADER;
             s_frame_start_ms = sys_tick_get_ms();
         } else if (b == DGUS_SYNC1) {
-            /* 연속 0x5A: PS_GOT_5A 유지 */
         } else {
             s_parse_state = PS_IDLE;
         }
         return false;
-
     case PS_GOT_HEADER:
-        /* 이 byte 가 LEN */
         if (b < DGUS_LEN_MIN || b > DGUS_LEN_MAX) {
             s_dgus_rx_drop_count++;                     /* samd20 결함 #1 회피 */
             s_parse_state = PS_IDLE;
@@ -229,9 +232,7 @@ static bool parser_step(uint8_t b, dgus_frame_t *out)
         s_frame_idx       = 0;
         s_parse_state     = PS_COLLECTING;
         return false;
-
     case PS_COLLECTING:
-        /* 벽시계 timeout — samd20 결함 #2 회피 */
         if ((uint32_t)(sys_tick_get_ms() - s_frame_start_ms) > DGUS_FRAME_TIMEOUT_MS) {
             s_dgus_rx_drop_count++;
             s_parse_state = PS_IDLE;
@@ -240,10 +241,6 @@ static bool parser_step(uint8_t b, dgus_frame_t *out)
         s_frame_buf[s_frame_idx++] = b;
         s_bytes_remaining--;
         if (s_bytes_remaining == 0) {
-            /* 프레임 완성 — frame_buf 매핑:
-             *   [0] = cmd, [1] = addr_h, [2] = addr_l, [3..] = payload
-             *   payload 길이 = LEN - 3 = s_frame_idx - 3
-             */
             out->cmd      = s_frame_buf[0];
             out->vp_addr  = (uint16_t)((s_frame_buf[1] << 8) | s_frame_buf[2]);
             out->data_len = (uint8_t)(s_frame_idx - 3);
@@ -255,7 +252,6 @@ static bool parser_step(uint8_t b, dgus_frame_t *out)
         }
         return false;
     }
-    /* unreachable */
     s_parse_state = PS_IDLE;
     return false;
 }

@@ -32,7 +32,22 @@ void app_input_init(void)
 /* E-stop 활성 여부 */
 uint8_t app_estop_active(void) { return s_estop_active; }
 
-/* 입력 10ms tick 처리 */
+/* 입력 10ms tick 처리.
+ * [estop 진입] E-stop 진입 엣지: SOL OFF 1-shot (io_sol_dn idempotent) + weld 즉시
+ * abort(페이지 무관 — LCD_WARNING 전환 후 weld tick 동결 레이스 차단) +
+ * E-STOP 경고 페이지 (legacy EMSW 핸들러+do_control, main.c:1409-1425/
+ * 4209-4215).
+ * [estop active] active 동안 force-stop 매-tick 재시도 (app_overload 패턴: us_run_status
+ * 미러가 app_reg_tick 발행이라 1-iter lag — 다음 tick에 잡힘). source-matched
+ * RUN_RELEASE; idempotent(IDLE→no-op). START는 app_reg guard(app_estop_active)
+ * 가 차단. E-stop 활성 중엔 명령 버튼 디스패치 스킵(아래 return) — FSM step은
+ * 이미 위에서 실행돼 bak이 갱신됐으므로 해제 시 stale 엣지 없음.
+ * [명령 버튼] 명령 버튼 (US_REMOTE 통일 strict). START 가드(==US_IDLE + estop/overload/
+ * seek_reset break)는 app_reg_command 내부.
+ * ⚠ 불변식: 부팅 첫 tick은 bak zero-init 재동기로 start_release가 1회
+ * 올 수 있음(input_fsm_init 주석) — RUN_RELEASE-while-IDLE(REMOTE)는
+ * no-op이어야 함(app_reg source-matched + swallow=touch-only 전제).
+ */
 void app_input_tick(void)
 {
     uint32_t now = sys_tick_get_ms();
@@ -50,11 +65,6 @@ void app_input_tick(void)
     input_out_t ev = input_fsm_step(&in);   /* 매 tick 실행: bak/엣지 항상 갱신 */
     uint8_t prev_estop = s_estop_active;
     s_estop_active = ev.estop_active;
-
-    /* E-stop 진입 엣지: SOL OFF 1-shot (io_sol_dn idempotent) + weld 즉시
-     * abort(페이지 무관 — LCD_WARNING 전환 후 weld tick 동결 레이스 차단) +
-     * E-STOP 경고 페이지 (legacy EMSW 핸들러+do_control, main.c:1409-1425/
-     * 4209-4215). */
     if (ev.estop_enter != 0u) {
         io_sol_dn(false);
         app_weld_abort_now();
@@ -70,11 +80,6 @@ void app_input_tick(void)
     }
 
     if (s_estop_active != 0u) {
-        /* active 동안 force-stop 매-tick 재시도 (app_overload 패턴: us_run_status
-         * 미러가 app_reg_tick 발행이라 1-iter lag — 다음 tick에 잡힘). source-matched
-         * RUN_RELEASE; idempotent(IDLE→no-op). START는 app_reg guard(app_estop_active)
-         * 가 차단. E-stop 활성 중엔 명령 버튼 디스패치 스킵(아래 return) — FSM step은
-         * 이미 위에서 실행돼 bak이 갱신됐으므로 해제 시 stale 엣지 없음. */
         uint8_t src = app_reg_measure()->us_run_status;
         if (src != (uint8_t)US_IDLE) {
             app_reg_command(US_CMD_RUN_RELEASE, src);
@@ -87,12 +92,6 @@ void app_input_tick(void)
         }
         return;
     }
-
-    /* 명령 버튼 (US_REMOTE 통일 strict). START 가드(==US_IDLE + estop/overload/
-     * seek_reset break)는 app_reg_command 내부.
-     * ⚠ 불변식: 부팅 첫 tick은 bak zero-init 재동기로 start_release가 1회
-     * 올 수 있음(input_fsm_init 주석) — RUN_RELEASE-while-IDLE(REMOTE)는
-     * no-op이어야 함(app_reg source-matched + swallow=touch-only 전제). */
     if (ev.start_press != 0u)   { app_reg_command(US_CMD_START,       (uint8_t)US_REMOTE); }
     if (ev.start_release != 0u) { app_reg_command(US_CMD_RUN_RELEASE, (uint8_t)US_REMOTE); }
     if (ev.reset_press != 0u)   { app_reg_command(US_CMD_RESET,       (uint8_t)US_REMOTE); }

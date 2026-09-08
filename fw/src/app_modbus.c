@@ -1,13 +1,9 @@
 /* fw/src/app_modbus.c — samd20 Modbus slave integration port (spec §3~§5).
  * Mirror pass = update_holding_reg(0) field-for-field; write-apply pass =
  * update_holding_reg(1) one-change-per-message else-if chain with the samd20
- * clamps. FRAM persistence = whole-map app_config_save_all (repo pattern;
- * structurally fixes the samd20 DELAY3->ADDR_TRIGGER2 / TRIGGER2->ADDR_DELAY2
- * copy-paste bugs — spec §3.2). Occupancy switching = per-tick cfg compare
- * (samd20 main-loop gate (comm_mode==SERIAL)&&(addr!=0), main.c:5043, plus
- * the DATA_SAVE close/init pair 3387/3429/3501 — tick-polled instead of
- * hook-driven so a comm_mode-only change also releases the port and no
- * app_lcd<->app_modbus include cycle forms; plan Deviations 5). */
+ * clamps. FRAM persistence = whole-map app_config_save_all. Occupancy switching =
+ * per-tick cfg compare of (comm_mode==SERIAL)&&(addr!=0) — tick-polled, not hook-driven,
+ * so no app_lcd<->app_modbus include cycle forms (이력 = changelog 2026-06-13 `349bd91`). */
 #include <string.h>
 #include "app_modbus.h"
 #include "app_modbus_core.h"
@@ -48,9 +44,8 @@ static uint8_t g_tcp_active;   /* rising-edge baseline guard for ETH mode */
 static uint32_t s_remote_ms;    /* last decoded request (REMOTE icon hold base) */
 static uint8_t  s_remote_seen;  /* 0 until the first request — boot/wrap guard */
 
-/* 원격 활성화 게이트 상태 (비영속 — holding[]은 링크 전이의 mb_core_init이 0으로
- * 지우고 FRAM 저장은 요구사항 위반이라, 파일 static만 가능).
- * s_ren = 마지막 step 출력 캐시(미러 + apply 게이트가 소비).
+/* 원격 활성화 게이트 상태 (비영속 — holding[]은 링크 전이의 mb_core_init이 0으로 지우고 FRAM 저장은
+ * 요구사항 위반이라, 파일 static만 가능). s_ren = 마지막 step 출력 캐시(미러 + apply 게이트가 소비).
  * 조작 입력은 PC8 물리 스위치 레벨뿐이라 1-shot 래치가 필요 없다. */
 static remote_en_out_t s_ren;
 
@@ -118,12 +113,10 @@ bool app_modbus_remote_active(void)
            ((uint32_t)(sys_tick_get_ms() - s_remote_ms) < MB_REMOTE_HOLD_MS);
 }
 
-/* 게이트 FSM 1 tick.
- *
- * MODEL_STD 에는 인터록 스위치가 없다 — 게이트를 넣으면 스위치 미장착 유닛에서
- * 유선 Modbus HMI 의 설정 쓰기가 죽는다. 그래서 STD 는 게이트 자체를 두지 않고
- * 상시 개방으로 고정한다. 이 #if 하나가 apply_writes 쪽 분기를 대신하므로
- * 아래 게이트 검사는 두 모델 공통 코드로 남는다 (분기 확산 방지). */
+/* 게이트 FSM 1 tick. MODEL_STD 에는 인터록 스위치가 없다 — 게이트를 넣으면 스위치 미장착 유닛에서
+ * 유선 Modbus HMI 의 설정 쓰기가 죽는다. 그래서 STD 는 게이트 자체를 두지 않고 상시 개방으로
+ * 고정한다. 이 #if 하나가 apply_writes 쪽 분기를 대신하므로 아래 게이트 검사는 두 모델 공통 코드로
+ * 남는다 (분기 확산 방지). */
 static void remote_en_step(void)
 {
 #if defined(MODEL_REMOTE)
@@ -151,9 +144,8 @@ static void remote_en_step(void)
 #else
     in.sw          = (io_read_remote_en() == 0u) ? 1u : 0u;  /* 원안 active-LOW fail-safe */
 #endif
-    /* 침묵 입력 = REMOTE 아이콘과 같은 스탬프. note_remote가 유효 디코드 전부에
-     * 찍히므로 읽기 요청도 링크 생존 신호다. 진입 이전 값일 수 있으나 FSM의
-     * 무장 규칙이 걸러낸다. MB_REMOTE_HOLD_MS와는 무관. */
+    /* 침묵 입력 = REMOTE 아이콘과 같은 스탬프. note_remote가 유효 디코드 전부에 찍히므로 읽기 요청도
+     * 링크 생존 신호다. 진입 이전 값일 수 있으나 FSM의 무장 규칙이 걸러낸다. MB_REMOTE_HOLD_MS와는 무관. */
     in.last_req_ms = s_remote_ms;
     in.req_valid   = s_remote_seen;
     in.estop       = app_estop_active();
@@ -179,9 +171,8 @@ mb_core_t *app_modbus_core(void)
 /* live 값 mirror */
 static void mirror_live(void)
 {
-    /* samd20 update_holding_reg(0): live values -> holding mirror. Runs every
-     * owned tick (plan Deviations 6: fresher reads than samd20's post-message
-     * refresh + immediately normalizes clamped writes). */
+    /* samd20 update_holding_reg(0): live values -> holding mirror. Runs every owned
+     * tick — fresher than samd20's post-message refresh, normalizes clamped writes. */
     const app_config_t  *cfg = app_lcd_cfg();
     const lcd_measure_t *m   = app_lcd_measure();
     uint8_t running = (m->us_run_status != (uint8_t)US_IDLE) ? 1u : 0u;
@@ -211,10 +202,8 @@ static void mirror_live(void)
     g_mb.holding[MB_REG_DISP_FREQ]   = disp_on ? m->curr_freq : m->last_freq;
     g_mb.holding[MB_REG_DISP_ENERGY] = disp_on ? (uint16_t)m->curr_energy
                                                : (uint16_t)m->last_energy;
-    /* B-5: 이제 R/W 다. 미러는 그대로 두는 것이 맞다 — 다른 cfg 필드와 동형으로
-     * "쓰기는 apply 체인이 받고, 미러가 결과를 되비춘다". 미러를 없앨 필요가
-     * 없었다: 예전에 쓰기가 안 먹은 진짜 원인은 미러가 아니라 **apply 체인에
-     * 분기가 없어서** 값이 무시된 것이었다. */
+    /* B-5: R/W 다 — 쓰기는 apply 체인이 받고 미러가 결과를 되비춘다(다른 cfg 필드와
+     * 동형). 구 "쓰기 안 먹음"의 원인은 apply 체인 분기 부재였다(changelog 2026-09-04 B-5). */
     g_mb.holding[MB_REG_MODEL_FREQ]  = cfg->model_freq;
     g_mb.holding[MB_REG_MODEL_TYPE]  = cfg->model_type;
     g_mb.holding[MB_REG_RUN_MODE]    = cfg->run_mode;
@@ -224,16 +213,13 @@ static void mirror_live(void)
     /* B-2 calibration — int16 를 2의 보수 그대로 싣는다 (C-1). */
     g_mb.holding[MB_REG_CAL_VAL]      = (uint16_t)cfg->cal_val;
     g_mb.holding[MB_REG_FREQ_CAL_VAL] = (uint16_t)cfg->freq_cal_val;
-    /* STATUS bit0 = run active (spec §3.1: us_run_status != US_IDLE).
-     * OVTIME = app_reg가 publish한 energy 모드 직접런 과대시간 fault
-     * (2026-06-28-ovtime spec). OVLD = app_overload_active() 라이브 반영
-     * (슬라이스 C). ESTOP = app_estop_active() (슬라이스 D). OUTERR는 6b.
-     * SENSOR/HORN = 원격 관측용 신규 비트 (요구사항 B-3/B-4). 비트 배치는
-     * mb_status_bits()가 소유 — host 스위트가 겹침·극성까지 고정한다. */
-    /* SEEK/RESET 은 FSM 단일 상태라 두 비트가 동시에 서지 않는다. 글루
-     * (app_seek_reset.c)를 거치지 않고 순수 FSM 상태를 직접 읽는다 — 글루가
-     * 노출하는 것은 active(직교 판정용) 뿐이고 leg 구분이 없다. app_remote_en_fsm
-     * 을 같은 방식으로 읽는 선례가 위에 있다. */
+    /* STATUS bit0 = run active (spec §3.1: us_run_status != US_IDLE). OVTIME = app_reg가 publish한
+     * energy 모드 직접런 과대시간 fault(2026-06-28-ovtime spec). OVLD = app_overload_active() 라이브
+     * 반영(슬라이스 C). ESTOP = app_estop_active()(슬라이스 D). OUTERR는 6b. SENSOR/HORN = 원격
+     * 관측용 신규 비트(요구사항 B-3/B-4). 비트 배치는 mb_status_bits()가 소유 — host 스위트가
+     * 겹침·극성까지 고정한다. SEEK/RESET 은 FSM 단일 상태라 두 비트가 동시에 서지 않는다. 글루
+     * (app_seek_reset.c)를 거치지 않고 순수 FSM 상태를 직접 읽는다 — 글루가 노출하는 것은 active
+     * (직교 판정용) 뿐이고 leg 구분이 없다. app_remote_en_fsm 을 같은 방식으로 읽는 선례가 위에 있다. */
     const uint8_t sr = seek_reset_fsm_state();
     const mb_status_in_t sin = {
         .running = running,
@@ -267,16 +253,13 @@ static void mirror_live(void)
         }
     }
 
-    /* 원격 게이트 미러. CAP는 매직 무조건 복원 = capability probe의 신-펌웨어
-     * 판별점("read-only는 미러가 덮음" — MODEL_FREQ/TYPE 위와 동형). 0x2D는
-     * 예약이라 미러하지 않는다. 조건 없이 함수 말미에 두어야 세 호출처
-     * (apply_config RTU 획득 / tick RTU / tick TCP)가 전부 커버되고, 링크 전이의
-     * mb_core_init 0-리셋도 같은 tick에 즉시 복원된다.
-     *
-     * ⚠ STD 는 미러하지 않는다 — 인터록이 없는데 CAP 매직을 실으면 원격기가
-     * "이 컨트롤러는 게이트를 지원한다"고 오판한다(A-7의 판별이 정확히 이것).
-     * 미러가 없으면 0x2A 는 원격기가 쓴 probe 값 P 가 그대로 남아 구-펌웨어와
-     * 같은 판정을 받는다 = 의도한 동작. */
+    /* 원격 게이트 미러. CAP는 매직 무조건 복원 = capability probe의 신-펌웨어 판별점("read-only는
+     * 미러가 덮음" — MODEL_FREQ/TYPE 위와 동형). 0x2D는 예약이라 미러하지 않는다. 조건 없이 함수
+     * 말미에 두어야 세 호출처(apply_config RTU 획득 / tick RTU / tick TCP)가 전부 커버되고, 링크
+     * 전이의 mb_core_init 0-리셋도 같은 tick에 즉시 복원된다.
+     * ⚠ STD 는 미러하지 않는다 — 인터록이 없는데 CAP 매직을 실으면 원격기가 "이 컨트롤러는 게이트를
+     * 지원한다"고 오판한다(A-7의 판별이 정확히 이것). 미러가 없으면 0x2A 는 원격기가 쓴 probe 값 P
+     * 가 그대로 남아 구-펌웨어와 같은 판정을 받는다 = 의도한 동작. */
 #if defined(MODEL_REMOTE)
     g_mb.holding[MB_REG_REMOTE_CAP]     = MB_REG_REMOTE_CAP_MAGIC;
     g_mb.holding[MB_REG_REMOTE_EN]      = s_ren.state;
@@ -296,28 +279,20 @@ void app_modbus_apply_writes(mb_link_t link)
     uint16_t v;
     bool save = false;
 
-    /* 원격 활성화 게이트 (spec §5.3). 닫혀 있으면 명령 3종은 디스패치 없이
-     * 소거하고, STOP만 통과시킨 뒤 return으로 cfg 체인 전체를 건너뛴다.
-     *
-     * ⚠ 소거는 생략 불가 — 명령 레지스터 0x19~0x1C는 미러 대상이 아니라서
-     * (mirror_live 위쪽 전수) 무시만 하면 1이 홀딩에 잔류하고, 게이트가 열린
-     * 뒤 아무 FC06이나 도착하는 순간 아래 체인이 그 stale START를 디스패치한다.
-     * 값 불문 무조건 0 — 1 이외 값도 잔류물을 남기지 않는다.
-     *
-     * STOP을 아래 기존 분기에 맡기지 않고 여기 복제하는 이유: cfg 쓰기 거부의
-     * 유일한 장치가 이 return이라, STOP을 fall-through 시키려면 return을
-     * 포기해야 하고 그러면 "게이트 닫힘 + cfg 반영"이라는 모순이 생긴다.
-     *
-     * cfg 거부에 별도 조치가 없는 것은 의도 — 체인을 건너뛰면 다음 tick의
-     * mirror_live()가 holding을 cfg 값으로 되돌리므로 원격기 read-back이
-     * 불일치를 본다 (예외 응답 없음 = samd20 계약 동형).
-     *
+    /* 원격 활성화 게이트 (spec §5.3). 닫혀 있으면 명령 3종은 디스패치 없이 소거하고, STOP만
+     * 통과시킨 뒤 return으로 cfg 체인 전체를 건너뛴다.
+     * ⚠ 소거는 생략 불가 — 명령 레지스터 0x19~0x1C는 미러 대상이 아니라서(mirror_live 위쪽 전수)
+     * 무시만 하면 1이 홀딩에 잔류하고, 게이트가 열린 뒤 아무 FC06이나 도착하는 순간 아래 체인이
+     * 그 stale START를 디스패치한다. 값 불문 무조건 0 — 1 이외 값도 잔류물을 남기지 않는다.
+     * STOP을 아래 기존 분기에 맡기지 않고 여기 복제하는 이유: cfg 쓰기 거부의 유일한 장치가 이
+     * return이라, STOP을 fall-through 시키려면 return을 포기해야 하고 그러면 "게이트 닫힘 + cfg
+     * 반영"이라는 모순이 생긴다.
+     * cfg 거부에 별도 조치가 없는 것은 의도 — 체인을 건너뛰면 다음 tick의 mirror_live()가 holding을
+     * cfg 값으로 되돌리므로 원격기 read-back이 불일치를 본다 (예외 응답 없음 = samd20 계약 동형).
      * RTU/TCP가 이 함수를 공유하므로 여기 1곳이 양 전송로 전부다.
-     *
-     * ⚠ REMOTE_EN_GATE_BYPASS는 T-5(LCD 활성화 조작)가 없는 동안의 한시적
-     * 벤치 탈출구다. 게이트를 켤 수단이 아직 없어 기본 빌드는 모든 원격 명령을
-     * 막고, 그러면 이 repo의 HW 검증이 의존하는 mbpoll 흐름이 죽는다.
-     * T-5 머지 시 이 #ifdef와 CMake 옵션을 함께 제거할 것. */
+     * ⚠ REMOTE_EN_GATE_BYPASS는 T-5(LCD 활성화 조작)가 없는 동안의 한시적 벤치 탈출구다. 게이트를
+     * 켤 수단이 아직 없어 기본 빌드는 모든 원격 명령을 막고, 그러면 이 repo의 HW 검증이 의존하는
+     * mbpoll 흐름이 죽는다. T-5 머지 시 이 #ifdef와 CMake 옵션을 함께 제거할 것. */
 #ifndef REMOTE_EN_GATE_BYPASS
     if (s_ren.state != (uint8_t)REN_ENABLED) {
         /* 벤치 관측용(VR-3): 무엇이 막혔는지 mon에 남긴다. 소거 전에 잡아야 한다.
@@ -362,9 +337,8 @@ void app_modbus_apply_writes(mb_link_t link)
 #endif
 
     if (g_mb.holding[MB_REG_RESET] == 1u) {
-        /* app_reg_command 가 app_seek_reset 에 위임: RESET→SEEK 자동 체인 +
-         * 물리 OSC 구동 + fault 클리어 (tag hw-revA_fw-stage-seekreset, 물리
-         * 구동 `29803ae`). */
+        /* app_reg_command 가 app_seek_reset 에 위임: RESET→SEEK 자동 체인 + 물리 OSC 구동 +
+         * fault 클리어 (changelog 2026-07-05 seek-reset `29803ae`). */
         app_reg_command(US_CMD_RESET, (uint8_t)US_COMM);
         g_mb.holding[MB_REG_RESET] = 0u;
     } else if (g_mb.holding[MB_REG_SEEK] == 1u) {
@@ -383,10 +357,7 @@ void app_modbus_apply_writes(mb_link_t link)
             /* samd20 comm START 는 같은 자리에서 진폭 pot 을 쓴다(main.c:4400-4401).
              * LCD RUN-press 경로(app_lcd_input.c:217/242)와 동형 — 무조건 write.
              * 거부된 START 여도 출력이 없어 무해(멱등 1바이트).
-             * 구 가드 `app_lcd_measure()->us_run_status == US_COMM` 는 g_measure 가
-             * app_reg_tick(app_modbus_tick 앞)에서만 게시돼 START 를 수락한 그 iter 에
-             * 항상 FALSE 였다 — 2026-06-12 리뷰 NOTE 가 "set_pot 이 log stub 이라 무해"
-             * 로 남겼으나 2026-06-28 I2C_POT 실구동 이후 전제가 깨졌다(2026-09-04 fix). */
+             * (구 `us_run_status == US_COMM` 가드는 구조적으로 항상 FALSE 였다 — changelog 2026-09-04 `ac7e691`.) */
             app_lcd_hook_set_pot(cfg->output_power);
         } else if (sv == MB_START_HOLD) {
             if (app_reg_start_allowed()) {
@@ -423,9 +394,7 @@ void app_modbus_apply_writes(mb_link_t link)
                     /* LCD SAVE 와 같은 훅을 재사용 — app_eth_tick 이 dirty 를
                      * consume 해 재적용한다. RTU 는 응답을 blocking 으로 먼저
                      * 보내고 나서 apply 를 부르므로(send → apply 순서, 아래 tick)
-                     * 지연이 불필요하다. DG-12 로 ether 커밋은 RTU 로만 도착하니
-                     * TCP 응답 유실 시나리오 자체가 없다 — spec §7 의 500ms 지연
-                     * 상수는 근거가 사라져 도입하지 않는다(T-1 재확인 결과). */
+                     * 지연이 불필요하다. DG-12 로 ether 커밋은 RTU 로만 온다(500ms 지연 상수 폐기 = changelog 2026-09-04 F-A). */
                     app_lcd_hook_ether_apply(cfg->comm_mode, cfg->ether_ip,
                                              cfg->ether_nm, cfg->ether_gw);
                 }
@@ -527,14 +496,9 @@ void app_modbus_apply_writes(mb_link_t link)
         save = true;
     } else if (g_mb.holding[MB_REG_EN_SAFTY] != cfg->f_safty) {
         /* C-2 (2026-08-30 요구사항): 0/1 정규화.
-         *
-         * ⚠ samd20 이탈이다 — 원본 comm 경로는 as-is 저장이었고(main.c:4533)
-         * 이 포트도 그걸 의식적으로 충실 복제하고 있었다. 사용자 승인 후 변경.
-         * 이탈을 받아들인 이유: **LCD 경로는 이미 정규화한다**
-         * (app_lcd_input.c:518 `(data16 == 1) ? 1 : 0`). 즉 두 편집 경로가
-         * 갈려 있었고, 이 변경은 "원격에만 새 규칙을 발명"하는 것이 아니라
-         * 유일하게 어긋나 있던 Modbus 를 LCD 에 맞추는 쪽이다.
-         *
+         * ⚠ samd20 이탈 — 원본 comm 경로는 as-is 저장(main.c:4533), 사용자 승인 후 변경
+         * (changelog 2026-09-04 `c5c2f7e`). 근거: LCD 경로는 이미 정규화한다
+         * (app_lcd_input.c:518) — 어긋나 있던 Modbus 를 LCD 에 맞춘 것.
          * 기능 동작은 불변 — 소비자(weld trigger FSM)는 != 0 판정이다.
          * 달라지는 것은 read-back 값·FRAM 저장값·DISP_SAFTY 로 보내는 값. */
         uint8_t sf = (g_mb.holding[MB_REG_EN_SAFTY] == 1u) ? 1u : 0u;
@@ -547,38 +511,33 @@ void app_modbus_apply_writes(mb_link_t link)
          * 다음 미러가 holding 을 1 로 되돌리므로 read-back 은 정규화를 보고,
          * 불필요한 전체맵 FRAM 쓰기를 피한다. */
     } else if (g_mb.holding[MB_REG_HORN_CMD] != app_horn_mode_active()) {
-        /* B-4 조작. cfg 가 아니라 비영속 RAM 상태라 save 하지 않는다 —
-         * "재부팅 시 소실"은 설계이지 누락이 아니다(원격기에도 그렇게 알렸다).
-         * 모드를 켜는 것만으로는 아무것도 움직이지 않는다: 솔레노이드를 실제로
-         * 토글하는 것은 기계 앞 조작자의 양손 START 다. 그래서 요구사항이 이것을
-         * "일반 설정과 같은 급"으로 분류했다.
-         * ⚠ 전이 시 솔레노이드는 무조건 OFF 된다(app_horn_set_mode 안, legacy
-         * 3459/3468). horn 모드가 켜지면 모든 소스의 START 가 차단되며, 그
-         * 사실은 STATUS 의 HORN 비트로 원격에서 읽힌다. */
+        /* B-4 조작. cfg 가 아니라 비영속 RAM 상태라 save 하지 않는다 — "재부팅 시 소실"은 설계이지
+         * 누락이 아니다(원격기에도 그렇게 알렸다). 모드를 켜는 것만으로는 아무것도 움직이지 않는다:
+         * 솔레노이드를 실제로 토글하는 것은 기계 앞 조작자의 양손 START 다. 그래서 요구사항이 이것을
+         * "일반 설정과 같은 급"으로 분류했다. ⚠ 전이 시 솔레노이드는 무조건 OFF 된다(app_horn_set_mode
+         * 안, legacy 3459/3468). horn 모드가 켜지면 모든 소스의 START 가 차단되며, 그 사실은 STATUS 의
+         * HORN 비트로 원격에서 읽힌다. */
         app_horn_set_mode(g_mb.holding[MB_REG_HORN_CMD] != 0u);
     } else if (g_mb.holding[MB_REG_MODEL_FREQ] != cfg->model_freq) {
-        /* B-5 모델 주파수. LCD 편집 경로(app_lcd_input.c:447-450)와 **정확히
-         * 동형**: cfg 설정 + 모델명 문자열 갱신이 전부다. sys_mode·런페이지·
-         * 출력바 임계(ref_lv_*)는 여기서 재파생하지 않는다 — LCD 도 그렇고,
-         * 다음 app_lcd_init_mode()(부팅 / SYS_PIC_NOW)에서 갱신된다.
-         * 범위 클램프 없음: LCD 에 없는 규칙을 원격에만 발명하지 않는다(사용자
-         * 결정). 범위 밖 값은 안전하게 퇴화한다 — send_model_str 은 switch+
-         * default(배열 인덱싱 ✗), run_page/ref_lv_* 도 else 분기를 갖는다. */
+        /* B-5 모델 주파수. LCD 편집 경로(app_lcd_input.c:447-450)와 **정확히 동형**: cfg 설정 +
+         * 모델명 문자열 갱신이 전부다. sys_mode·런페이지·출력바 임계(ref_lv_*)는 여기서 재파생하지
+         * 않는다 — LCD 도 그렇고, 다음 app_lcd_init_mode()(부팅 / SYS_PIC_NOW)에서 갱신된다.
+         * 범위 클램프 없음: LCD 에 없는 규칙을 원격에만 발명하지 않는다(사용자 결정). 범위 밖 값은
+         * 안전하게 퇴화한다 — send_model_str 은 switch+default(배열 인덱싱 ✗), run_page/ref_lv_* 도
+         * else 분기를 갖는다. */
         cfg->model_freq = (uint8_t)g_mb.holding[MB_REG_MODEL_FREQ];
         app_lcd_send_model_str(cfg->model_freq, cfg->model_type);
         save = true;
     } else if (g_mb.holding[MB_REG_MODEL_TYPE] != cfg->model_type) {
-        /* B-5 모델 타입. 위와 동형이나 🔴 **부작용이 하나 더 있다**:
-         * PC11 의 의미가 model_type 으로 뒤바뀐다(app_input_fsm.c:46-60).
+        /* B-5 모델 타입. 위와 동형이나 🔴 **부작용이 하나 더 있다**: PC11 의 의미가 model_type 으로
+         * 뒤바뀐다(app_input_fsm.c:46-60).
          *   <=1 (hand/multi) -> PC11 = B_SEEK (active-LOW)
          *   ==2 (std)        -> PC11 = EMSW  (active-HIGH 레벨추종)
          * 따라서 이 쓰기 하나가
          *   0/1 -> 2 : PC11 이 HIGH 면 즉시 E-stop 진입 + SOL 강제 OFF
          *   2 -> 0/1 : E-stop 활성 중이면 s_estop_active 가 0 으로 클리어
-         * 를 일으킨다. **가드를 두지 않는 것은 사용자 결정**이다(2026-09-04):
-         * LCD 편집 경로에도 같은 가드가 없어(app_lcd_input.c:452 무조건 대입)
-         * 기계 앞의 조작자는 이미 같은 일을 할 수 있고, 원격에만 새 규칙을
-         * 만들지 않는다는 이 저장소 원칙과 일관된다.
+         * 를 일으킨다. **가드를 두지 않는 것은 사용자 결정**(changelog 2026-09-04 B-5) — LCD 편집
+         * 경로(app_lcd_input.c:452)에도 가드가 없어, 원격에만 새 규칙을 만들지 않는다.
          * ⚠ 남는 차이: 원격 조작자는 기계 앞에 없을 수 있다. 거부가 필요해지면
          * app_estop_active() || us_on_status 로 막는 것이 그 자리다. */
         cfg->model_type = (uint8_t)g_mb.holding[MB_REG_MODEL_TYPE];
@@ -593,39 +552,23 @@ void app_modbus_apply_writes(mb_link_t link)
         cfg->freq_cal_val = cfg_cal_from_wire(g_mb.holding[MB_REG_FREQ_CAL_VAL]);
         save = true;
     } else if (mb_work_cnt_reset_req(&g_mb, cfg->work_cnt) != 0u) {
-        /* CNTL=0 write = work counter reset (samd20 main.c:4539: cfg + FRAM +
-         * LCD refresh).
-         *
-         * ⚠ samd20 이탈(사용자 승인 2026-09-04): 원본은 하위 워드만 비교했고 이
-         * 포트도 그것을 충실 복제했는데, `work_cnt` 는 uint32_t 라 **65536 의
-         * 배수일 때 `(uint16_t)work_cnt == 0` 이 되어 리셋이 조용히 무시된다.**
-         * 조작자가 WORK_CNTL=0 을 써도 아무 일도 안 일어나고 에러도 안 난다.
-         * 용접기 수명 동안 사이클 65536 회는 충분히 도달하므로 이론적이지 않다.
-         * LCD 경로는 원래부터 32비트 전체를 비교한다(app_lcd_input.c:385) —
-         * 여기서도 그렇게 맞춘다. 거동 차이는 **65536 의 배수라는 한 점에서만**
-         * 생기고(다른 모든 값에서 두 비교는 일치한다), 그 변화는
-         * "조용히 실패 → 정상 동작" 방향이다.
-         *
-         * 🔴 판정은 mb_work_cnt_reset_req() 로 옮겼다. 32비트 비교만 하면
-         * **미러가 만든 0**(work_cnt 가 0 아닌 65536 배수일 때 하위-워드 미러가
-         * 정당하게 싣는 0)과 마스터가 쓴 0 이 구분되지 않아, 앞 분기에 안 걸린
-         * 아무 FC06 이나 카운터를 날리고 그 메시지의 staged 쓰기까지 탈락시켰다
-         * (2026-09-04 캐스트 제거가 만든 회귀). 술어가 last_write_addr 로 가른다. */
+        /* CNTL=0 write = work counter reset (samd20 main.c:4539: cfg + FRAM + LCD refresh).
+         * ⚠ samd20 이탈(사용자 승인, changelog 2026-09-04 `0ab2608`): 원본은 하위 워드만 비교해
+         * work_cnt 가 65536 의 배수일 때 리셋이 조용히 무시됐다 — LCD 경로(app_lcd_input.c:385)처럼
+         * 32비트 전체를 비교한다. 거동 차이는 그 한 점에서만, "조용히 실패 → 정상 동작" 방향.
+         * 🔴 판정은 mb_work_cnt_reset_req() — 32비트 비교만 하면 **미러가 만든 0**(65536 배수의
+         * 하위-워드 미러)과 마스터가 쓴 0 이 구분되지 않아 아무 FC06 이나 카운터를 날렸다
+         * (changelog 2026-09-05 가짜 리셋). 술어가 last_write_addr 로 가른다. */
         cfg->work_cnt = 0u;
         app_lcd_set_work_cnt(0u);
         save = true;
     } else {
         /* staged 스캔 — 예약 영역 쓰기를 staging 으로 흡수한다.
-         *
-         * 🔴 전수 비교(holding != 기대값)로 하면 **stale 미러를 staged 편집으로
-         * 오인한다**: 예전엔 mirror_live()가 tick 말미에 돌아 LCD 나 DHCP 가
-         * cfg->ether_* 를 바꾼 직후 한 iteration 동안 holding 이 옛값이었고,
-         * 그때 아무 FC06 이나 도착하면 스캔이 **옛값**을 staged 로 잡아 이후
-         * 커밋이 그것을 cfg·FRAM 에 되썼다. 미러를 디코드 앞으로 옮겨(2026-09-05)
-         * 그 창 자체는 닫혔지만, **이 가드는 방어선으로 남긴다** — 미러 순서는
-         * app_modbus_tick 의 불변식이고 여기서 재확인할 수단이 없다.
-         * "마스터가 이번에 실제로 쓴 주소"만 본다 — 코어가 기록해 준다.
-         * mb_core_decode/mb_write_reg 의 거동은 그대로다(관측값 1개 추가). */
+         * 🔴 전수 비교(holding != 기대값)는 **stale 미러를 staged 편집으로 오인한다** — 미러가
+         * tick 말미에 돌던 시절 아무 FC06 이 옛값을 staged 로 잡아 커밋이 cfg·FRAM 에 되썼다
+         * (changelog 2026-09-05 stale-미러). 미러를 디코드 앞으로 옮겨 창은 닫혔지만 **이 가드는
+         * 방어선으로 남긴다** — 미러 순서는 app_modbus_tick 의 불변식이고 여기서 재확인할 수단이 없다.
+         * "마스터가 이번에 실제로 쓴 주소"만 본다 — 코어가 기록해 준다(mb_core 거동은 그대로). */
         for (uint8_t i = 0u; i < (uint8_t)CFG_STG_COUNT; i++) {
             if ((uint16_t)k_stg_reg[i] == g_mb.last_write_addr) {
                 cfg_stage_write(&s_stg, i, g_mb.holding[k_stg_reg[i]],
@@ -646,7 +589,12 @@ void app_modbus_apply_writes(mb_link_t link)
      * 이 체인을 재발화시키지 못한다. 순서는 app_modbus_tick 참조. */
 }
 
-/* 점유/라인설정 전이 */
+/* 점유/라인설정 전이.
+ * [해제 분기] NOTE: a US_COMM run active at this point keeps running until the
+ * on-time ceiling stops it (samd20-faithful link-loss behavior;
+ * ceiling=0 disables that net — power cycle is then the only stop).
+ * hold 런(워치독 무장, spec 2026-09-06)은 예외 — keep 이 굶어 ≤HOLD_WDT_MS 에 선다.
+ */
 static void apply_config(void)
 {
     /* Occupancy + line-config edge detector. Cheap compares every tick;
@@ -675,10 +623,6 @@ static void apply_config(void)
         usart6_init();                            /* restore mon 115200 8N1 */
         mon_set_enabled(true);
         g_applied.owned = 0u;
-        /* NOTE: a US_COMM run active at this point keeps running until the
-         * on-time ceiling stops it (samd20-faithful link-loss behavior;
-         * ceiling=0 disables that net — power cycle is then the only stop).
-         * hold 런(워치독 무장, spec 2026-09-06)은 예외 — keep 이 굶어 ≤HOLD_WDT_MS 에 선다. */
         mon_printf("[mb] release usart6 (mode=%u addr=%u)\r\n",
                    (unsigned)cfg->comm_mode, (unsigned)cfg->comm_address);
     }
@@ -738,21 +682,27 @@ static void tcp_leave(void)
     }
 }
 
-/* modbus 매 tick 처리 */
+/* modbus 매 tick 처리.
+ * [게이트 step] 게이트는 분기 밖 첫 문장 — RTU 점유/TCP/미점유 어디로 빠지든 시간이 흐르고
+ * 만료돼야 한다 (spec §6). 이후 같은 tick의 mirror_live()가 최신 상태를 싣는다.
+ * [hold 워치독] hold 워치독 — 분기 밖 첫머리. RTU 점유/TCP/미점유 어디로 빠져도 시간이 흘러야 한다:
+ * apply_config 가 링크를 해제해도 hold 런은 T 안에 서야 한다.
+ * 🔴 불변식(spec §4 ②): 연속한 두 step 사이에 us_run_status 를 US_COMM 으로 바꿀 수 있는 것은
+ * 같은 tick 의 apply_writes **1건**뿐이다(RTU = tick 당 1 프레임, TCP = poll 당 FC06 1건 —
+ * app_modbus_tcp.c 의 break). tick 당 FC06 apply 를 2건으로 늘리면 "정지+재시작" 이 한 관측
+ * 구간에 들어가 다른 마스터의 탭 런이 hold 세션을 상속받는다 — 그 변경은 이 워치독을 함께
+ * 고쳐야 한다. step 은 반드시 apply_writes 보다 **앞**이어야 한다 — 뒤집히면 같은 tick 의
+ * keep 이 now_hwd 보다 늦은 시각을 남겨 unsigned 뺄셈이 ≈4.29e9 가 되고 즉시 오트립한다.
+ * [staging 타임아웃] staging 타임아웃 — 분기 밖. 어느 경로로 빠지든 만료돼야 한다.
+ * [RTU 분기] RTU owns USART6 (comm_mode==SERIAL && addr!=0). Behavior-identical
+ * to the hardware-verified slice-1 path.
+ * [TCP 분기] Not RTU. Run the TCP server when in an ETH mode and the W5500 is up.
+ * This also closes a gap: the old early-return when !owned meant
+ * mirror_live() never ran in ETH mode, so FC03 reads would go stale.
+ */
 void app_modbus_tick(void)
 {
-    /* 게이트는 분기 밖 첫 문장 — RTU 점유/TCP/미점유 어디로 빠지든 시간이 흐르고
-     * 만료돼야 한다 (spec §6). 이후 같은 tick의 mirror_live()가 최신 상태를 싣는다. */
     remote_en_step();
-    /* hold 워치독 — 분기 밖 첫머리. RTU 점유/TCP/미점유 어디로 빠져도 시간이 흘러야
-     * 한다: apply_config 가 링크를 해제해도 hold 런은 T 안에 서야 한다.
-     * 🔴 불변식(spec §4 ②): 연속한 두 step 사이에 us_run_status 를 US_COMM 으로
-     * 바꿀 수 있는 것은 같은 tick 의 apply_writes **1건**뿐이다(RTU = tick 당 1
-     * 프레임, TCP = poll 당 FC06 1건 — app_modbus_tcp.c 의 break). tick 당 FC06
-     * apply 를 2건으로 늘리면 "정지+재시작" 이 한 관측 구간에 들어가 다른 마스터의
-     * 탭 런이 hold 세션을 상속받는다 — 그 변경은 이 워치독을 함께 고쳐야 한다.
-     * step 은 반드시 apply_writes 보다 **앞**이어야 한다 — 뒤집히면 같은 tick 의
-     * keep 이 now_hwd 보다 늦은 시각을 남겨 unsigned 뺄셈이 ≈4.29e9 가 되고 즉시 오트립한다. */
     {
         uint32_t now_hwd = sys_tick_get_ms();
         uint8_t  run_is_comm = (app_reg_run_src() == (uint8_t)US_COMM) ? 1u : 0u;
@@ -761,25 +711,16 @@ void app_modbus_tick(void)
             mon_printf("[mb] hold wdt trip\r\n");
         }
     }
-    /* staging 타임아웃 — 분기 밖. 어느 경로로 빠지든 만료돼야 한다. */
     cfg_stage_tick(&s_stg, sys_tick_get_ms());
     apply_config();
     const app_config_t *cfg = app_lcd_cfg();
-
     if (g_applied.owned != 0u) {
-        /* RTU owns USART6 (comm_mode==SERIAL && addr!=0). Behavior-identical
-         * to the hardware-verified slice-1 path. */
         tcp_leave();
         mirror_live();   /* 🔴 디코드 **앞**에서 미러한다 — 이 순서가 계약이다.
-                          * cfg 를 바꾸는 주체(LCD 입력·app_weld work_cnt++·DHCP)는
-                          * 전부 app_modbus_tick 보다 앞에 있다. 미러를 tick 말미에
-                          * 두면 apply_writes 가 보는 holding[] 이 **직전 iteration**
-                          * 값이라, 같은 iteration 에 도착한 FC06 이 조작자의 LCD
-                          * 편집을 "마스터가 쓴 값"으로 오인해 되돌리고 FRAM 에
-                          * 굳혔다(무음 + 영속). LCD CANCEL 은 전 필드를 한꺼번에
-                          * stale 로 만들어 최악이었다.
-                          * ⚠ 불변식: 이 지점부터 apply_writes 사이에 cfg 를 쓰는
-                          * 코드를 넣지 말 것 — 넣는 순간 창이 다시 열린다. */
+                          * cfg 를 바꾸는 주체(LCD 입력·app_weld work_cnt++·DHCP)는 전부
+                          * app_modbus_tick 보다 앞에 있다 — 미러가 tick 말미면 apply_writes 가
+                          * 직전 iteration 의 holding[] 을 본다(changelog 2026-09-05 stale-미러).
+                          * ⚠ 불변식: 이 지점부터 apply_writes 사이에 cfg 를 쓰는 코드를 넣지 말 것. */
         uint8_t frame[MB_FRAME_MAX];
         uint8_t len = usart6_mb_rx_frame(frame, sizeof frame);
         if (len != 0u) {
@@ -796,10 +737,6 @@ void app_modbus_tick(void)
         }
         return;
     }
-
-    /* Not RTU. Run the TCP server when in an ETH mode and the W5500 is up.
-     * This also closes a gap: the old early-return when !owned meant
-     * mirror_live() never ran in ETH mode, so FC03 reads would go stale. */
     if ((cfg->comm_mode != MB_COMM_MODE_SERIAL) && app_eth_available()) {
         if (g_tcp_active == 0u) {
             cfg_stage_discard(&s_stg);  /* 링크 전이 = staging 무조건 폐기 */

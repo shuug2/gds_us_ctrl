@@ -182,14 +182,31 @@ void app_lcd_input_run_key_reanchor(void)
     s_run_key_down = 0u;
 }
 
-/* KEY_MULTI 키 처리 */
+/* KEY_MULTI 키 처리.
+ * [개요] KEY_MULTI (0x1080): 1=RESET / 2=SEEK / 3=RUN(press) / 4=RUN(release); the V30
+ * DGUS asset additionally returns 0=RUN on both edges (toggle-mapped — §4.4).
+ * Raise the ultrasonic command hook only (Stage D owns the us/sig/energy FSM).
+ * RUN press also writes the DAC. RESET in an OVLD/OUTERR error clears those bits,
+ * blanks the icons, and restores the run page (samd20 main.c:3633-3706).
+ * [data=0 토글] The V30 DGUS asset returns KEY_MULTI=0 on BOTH press and release for the
+ * RUN button (RESET=1/SEEK=2 are correct; data=0 is unique to RUN, HW-traced
+ * 2026-06-08). Each data=0 event IS one physical edge, so the s_run_key_down
+ * toggle reconstructs the press/release pairing exactly. Mapping by the live
+ * run state instead (pre-2026-07-08) inverted the pairing whenever app_reg
+ * silently rejected the mapped START (boot warm-up ~4 s, seek/reset chain,
+ * E-stop/overload/fault, back-to-back frames in one drain): the physical
+ * release then re-mapped to START and began an un-held run that nothing
+ * released (30 s safety cap only), and every further tap stop-then-
+ * restarted it — RUN looked dead until power cycle. With the toggle a
+ * rejected press simply pairs with a no-op RELEASE-while-IDLE (which also
+ * clears any armed swallow_start). Only a lost or duplicated edge frame
+ * can drift the toggle (the HW trace saw neither: one event per edge, no
+ * auto-repeat); SYS_PIC_NOW re-init (panel reset) re-anchors it. The legacy
+ * data=3/4 branches above stay for forward-compat if the asset is later
+ * fixed to send them. See spec §4.4.
+ */
 static void handle_key_multi(uint16_t data16)
 {
-    /* KEY_MULTI (0x1080): 1=RESET / 2=SEEK / 3=RUN(press) / 4=RUN(release); the V30
-     * DGUS asset additionally returns 0=RUN on both edges (toggle-mapped — §4.4).
-     * Raise the ultrasonic command hook only (Stage D owns the us/sig/energy FSM).
-     * RUN press also writes the DAC. RESET in an OVLD/OUTERR error clears those bits,
-     * blanks the icons, and restores the run page (samd20 main.c:3633-3706). */
     lcd_app_state_t *state = app_lcd_state();
     app_config_t    *cfg   = app_lcd_cfg();
 
@@ -220,22 +237,6 @@ static void handle_key_multi(uint16_t data16)
         app_lcd_hook_us_command(US_CMD_RUN_RELEASE);
         /* Stage D owns us/measure state; input only raises the command. */
     } else if (data16 == 0) {                           /* RUN (V30 panel: key value 0 on both edges) */
-        /* The V30 DGUS asset returns KEY_MULTI=0 on BOTH press and release for the
-         * RUN button (RESET=1/SEEK=2 are correct; data=0 is unique to RUN, HW-traced
-         * 2026-06-08). Each data=0 event IS one physical edge, so the s_run_key_down
-         * toggle reconstructs the press/release pairing exactly. Mapping by the live
-         * run state instead (pre-2026-07-08) inverted the pairing whenever app_reg
-         * silently rejected the mapped START (boot warm-up ~4 s, seek/reset chain,
-         * E-stop/overload/fault, back-to-back frames in one drain): the physical
-         * release then re-mapped to START and began an un-held run that nothing
-         * released (30 s safety cap only), and every further tap stop-then-
-         * restarted it — RUN looked dead until power cycle. With the toggle a
-         * rejected press simply pairs with a no-op RELEASE-while-IDLE (which also
-         * clears any armed swallow_start). Only a lost or duplicated edge frame
-         * can drift the toggle (the HW trace saw neither: one event per edge, no
-         * auto-repeat); SYS_PIC_NOW re-init (panel reset) re-anchors it. The legacy
-         * data=3/4 branches above stay for forward-compat if the asset is later
-         * fixed to send them. See spec §4.4. */
         s_run_key_down ^= 1u;
         if (s_run_key_down != 0u) {
             app_lcd_hook_us_command(US_CMD_START);

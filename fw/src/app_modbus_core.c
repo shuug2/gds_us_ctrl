@@ -168,7 +168,10 @@ static uint8_t mb_write_coil(mb_core_t *mb, const uint8_t *frame,
     return 8u;
 }
 
-/* 요청 디코드/응답 생성 */
+/* 요청 디코드/응답 생성.
+ * [memset] read_coil builds bits with ^= over a zeroed buffer (samd20
+ * clear_response invariant) — zero up front.
+ */
 uint8_t mb_core_decode(mb_core_t *mb, const uint8_t *frame, uint8_t len,
                        uint8_t mode, uint8_t resp[MB_RESP_MAX], uint8_t *fc_out)
 {
@@ -193,9 +196,6 @@ uint8_t mb_core_decode(mb_core_t *mb, const uint8_t *frame, uint8_t len,
             return 0;
         }
     }
-
-    /* read_coil builds bits with ^= over a zeroed buffer (samd20
-     * clear_response invariant) — zero up front. */
     memset(resp, 0, MB_RESP_MAX);
 
     switch (frame[1]) {

@@ -18,15 +18,17 @@
 static volatile uint8_t s_rx_dma_buf[RX_DMA_SIZE]; /* DMA circular 목적지 (.bss SRAM). volatile: DMA가 비동기로 씀 */
 static uint16_t s_rx_tail;                 /* loop reader 인덱스 (단독 소유) */
 
-/* USART1 초기화 */
+/* USART1 초기화.
+ * [1] 1. 클럭
+ * [2] 2. GPIO PA9/PA10 AF7
+ * [6] 6. free-running circular RX 시작 — _Start (인터럽트 없음) + USART CR3 DMAR.
+ *    UART/DMA RX 인터럽트·NVIC 일절 미사용 → ORE에 반응해 RX를 멈추는 HAL 경로 부재.
+ */
 void usart1_init(void)
 {
-    /* 1. 클럭 */
     __HAL_RCC_USART1_CLK_ENABLE();
     __HAL_RCC_GPIOA_CLK_ENABLE();
     __HAL_RCC_DMA2_CLK_ENABLE();
-
-    /* 2. GPIO PA9/PA10 AF7 */
     GPIO_InitTypeDef g = {0};
     g.Pin       = GPIO_PIN_9 | GPIO_PIN_10;
     g.Mode      = GPIO_MODE_AF_PP;
@@ -66,9 +68,6 @@ void usart1_init(void)
 
     /* 5. reader 인덱스 초기화 */
     s_rx_tail = 0;
-
-    /* 6. free-running circular RX 시작 — _Start (인터럽트 없음) + USART CR3 DMAR.
-     *    UART/DMA RX 인터럽트·NVIC 일절 미사용 → ORE에 반응해 RX를 멈추는 HAL 경로 부재. */
     if (HAL_DMA_Start(&hdma_usart1_rx, (uint32_t)&huart1.Instance->DR,
                       (uint32_t)s_rx_dma_buf, RX_DMA_SIZE) != HAL_OK) {
         Error_Handler();

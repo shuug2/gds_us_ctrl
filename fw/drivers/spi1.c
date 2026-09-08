@@ -54,7 +54,9 @@ void spi1_burst_write(uint8_t *buf, uint16_t len)
     (void)HAL_SPI_Transmit(&s_spi1, buf, len, 100u);
 }
 
-/* SPI1 초기화 */
+/* SPI1 초기화.
+ * [SCK/MISO/MOSI] PA5/6/7 = SPI1 SCK/MISO/MOSI, AF5
+ */
 void spi1_init(void)
 {
     __HAL_RCC_GPIOA_CLK_ENABLE();
@@ -62,8 +64,6 @@ void spi1_init(void)
     __HAL_RCC_SPI1_CLK_ENABLE();
 
     GPIO_InitTypeDef g = {0};
-
-    /* PA5/6/7 = SPI1 SCK/MISO/MOSI, AF5 */
     g.Pin       = GPIO_PIN_5 | GPIO_PIN_6 | GPIO_PIN_7;
     g.Mode      = GPIO_MODE_AF_PP;
     g.Pull      = GPIO_NOPULL;
