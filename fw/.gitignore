@@ -5,3 +5,4 @@ build-*/
 *.hex
 *.elf
 *.su
+.bin-baseline
