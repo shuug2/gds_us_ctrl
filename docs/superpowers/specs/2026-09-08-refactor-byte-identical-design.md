@@ -163,7 +163,7 @@ base=fw/.bin-baseline
   | 함수 | 줄수(코드) | 왜 남는가 |
   |---|---|---|
   | `app_modbus_apply_writes` | 256 (157) | 36분기 else-if 뼈대 + 13 클램프 분기 |
-  | `app_lcd_input_dispatch` | 188 (149) | 35 `case…break` 뼈대 |
+  | `app_lcd_input_dispatch` | 189 (149) | 35 `case…break` 뼈대 |
   | `app_weld_tick` | 131 (95) | 7-2 보류(`.bin` ≠) — 지정 초기화 22줄 |
   | `app_modbus_tcp_poll` | 111 (75) | 7-3 보류(`.bin` ≠) — `off`/`tx_len` 출력 |
   | `app_lcd_send_model_str` | 93 (83) | §4 미분할 결정 |
@@ -183,7 +183,7 @@ base=fw/.bin-baseline
 | 함수 | 이유 | 이번 결과 | 후속(범위 밖) |
 |---|---|---|---|
 | `app_modbus_apply_writes` | 36분기 else-if 체인 뼈대만 코드 ≥110줄. 체인 분할은 감사 b-1 계열 3변형 전부 ✗ | 본체 3추출(`gate_reject_body`/`start_cmd_body`/`cfg_ctrl_commit_body`) → **256줄(코드 157)** | HW 벤치 트랙: 체인 → 테이블. 회귀 = `plans/2026-09-05-bench-results.md` FC06 클램프 27항목 재사용 |
-| `app_lcd_input_dispatch` | 35 `case…break` 뼈대 ~105줄. 재그룹은 감사 b-3 ✗ | 본체 **3**추출(`handle_sys_pic_now`/`handle_setup_param_enter`/`handle_run_mode`) → **188줄(코드 149)**. `mo_time_clamp_echo`(LV_MO_TIME1/2 공통 꼬리 4줄)는 `.bin` ≠ (STD `ef9dbaa8…eee32a` / REMOTE `98823184…dd3297`, dispatch 크기 `0x3fc` 불변·명령 바이트 상이) → **보류** | HW 벤치 트랙: 핸들러 테이블. LCD 터치 E2E |
+| `app_lcd_input_dispatch` | 35 `case…break` 뼈대 ~105줄. 재그룹은 감사 b-3 ✗ | 본체 **3**추출(`handle_sys_pic_now`/`handle_setup_param_enter`/`handle_run_mode`) → **189줄(코드 149)**(+1 = SYS_PIC_NOW 배너, 최종 리뷰 fix). `mo_time_clamp_echo`(LV_MO_TIME1/2 공통 꼬리 4줄)는 `.bin` ≠ (STD `ef9dbaa8…eee32a` / REMOTE `98823184…dd3297`, dispatch 크기 `0x3fc` 불변·명령 바이트 상이) → **보류** | HW 벤치 트랙: 핸들러 테이블. LCD 터치 E2E |
 | `app_lcd_change_page` | 8분기 + 공통 꼬리, 로컬 배열 포인터 전달이 H4 경계 | 슬라이스 7-1 **SAME**(`render_run_std`/`render_setup_main`/`render_comm_page`/`render_comm_tail`) → 203→**78줄(코드 57)**, 헬퍼 `render_run_std` **53줄(코드 48)** 잔존 | HW 벤치 트랙: STDC/MHC·STDE/MHE 중복 블록 DRY |
 | `weld_fsm_step` | WELD case 자체가 ~55줄 | case 본체 4추출 → **72줄(코드 53)**(abort 판정·엣지 래치·타이머·READY/HOLD/default 뼈대) + 헬퍼 `weld_step_weld` **58줄(코드 49)** 잔존 | host `test_app_weld_fsm.c` 21함수가 있어 **host 게이트 트랙**으로 구조 변경 가능 |
 | `app_config_load` | `fail++` 누산 구조 | 미착수 (**64줄**, 코드 56) | host `test_app_config.c` 게이트 트랙 |
