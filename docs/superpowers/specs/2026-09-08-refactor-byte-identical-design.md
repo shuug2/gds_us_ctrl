@@ -1,0 +1,203 @@
+# 바이트 동일 리팩토링 — 설계 spec (2026-09-08)
+
+> **문서 요약**: 50줄 초과 함수(38개)와 800줄 초과 파일(`app_modbus.c` 1개)을 **두 모델(STD·REMOTE) `.bin` 이
+> 시작 커밋과 바이트 동일**하다는 조건 아래 정리한다. HW 벤치 없이 머지하기 위한 조건이다. 사전 감사
+> (`docs/superpowers/research/2026-09-08-refactor-audit.md`)의 실측에 따라 허용되는 수단은 두 가지뿐이다 —
+> ① 함수 안 장문 주석을 **함수 선언 바로 위로** 옮기기(바이너리 무영향), ② 판정 구조는 호출자에 남기고 직선
+> 본체만 **`static inline __attribute__((always_inline)) void`** 헬퍼로 뽑기. 빌드가 `-Og` 라 plain `static`
+> 헬퍼는 실제 call 로 남아 바이너리가 바뀌므로 else-if 체인 분할·switch 재그룹·파일 분할은 **하지 않는다**.
+> 결과: 38개 중 ~34개가 50줄 아래로 내려가고, `apply_writes`·`lcd_input_dispatch`·`change_page`·`weld_fsm_step`
+> 4개는 구조적으로 불가해 **예외로 명시**한다. 슬라이스 7개, 슬라이스마다 커밋 1개, 커밋마다 `.bin` sha256 대조.
+
+작성 2026-09-08 · 대상 main `b61ef0f` · 툴체인 `arm-none-eabi-gcc 15.2.1 20251203` (Arm GNU Toolchain 15.2.Rel1)
+근거 = 감사 보고서(위 경로, 이하 "감사"). 이 문서가 **구현 정본**이다. 구현 plan 은 별도(`plans/2026-09-08-refactor-byte-identical.md`).
+
+---
+
+## 0. 확정 결정 (2026-09-08 사용자)
+
+| # | 결정 | 귀결 |
+|---|---|---|
+| 1 | 목표 = **긴 함수·큰 파일 분할, 거동 불변** (주석 정리·구조 재편·legacy 잔재 제거는 선택하지 않음) | 의미 변경 0. 외부 계약(Modbus·LCD) 무변경 |
+| 2 | 합격 기준 = **바이너리 바이트 동일** (host 테스트 + HW 벤치 기준은 선택하지 않음) | HW 세션 불필요. 대신 수단이 §3 으로 제한된다 |
+| 3 | 접근 = **바이트 동일 트랙만**. 구조 함수 4개의 HW 벤치 트랙은 **범위 밖** | 4개는 §6 예외 목록 |
+| 4 | 함수 안 장문 주석의 행선지 = **같은 파일, 함수 선언 바로 위** (docs 이동은 선택하지 않음) | 근거가 코드 옆에 남는다. `app_modbus.c` 는 이력 서술만 16줄 이상 압축 |
+
+---
+
+## 1. 배경 — 왜 수단이 이렇게 좁은가
+
+감사의 실측 3건이 설계를 결정했다.
+
+1. **빌드는 `-Og`** (`fw/CMakeLists.txt:23`, Debug 강제 `:14-16`). `-Og` 는 `-finline-functions-called-once` 가 **비활성**이라
+   (감사 A-1, `gcc -Q --help=optimizers` 실측) 한 번만 호출되는 `static` 헬퍼도 실제 함수 + `bl` 로 남는다.
+2. **spike 결과** (감사 B, 두 모델 `.bin` sha256 대조):
+   - else-if 체인 13분기 → `static bool` 헬퍼: ✗ (+144 B). `always_inline` 도 ✗ (+40 B). `void` + `bool *save` 도 ✗ (+56 B, 스택 스필).
+   - 게이트 블록 → `static bool gate_reject()`: ✗ (+16 B). **판정을 호출자에 두고 본체만 `always_inline void`: ○.**
+   - switch case 5개 재그룹 + 내부 switch: ✗. **case 라벨 유지 + 본체만 `always_inline void`: ○.**
+   - 파일 분할: `-ffunction-sections` + `*(.text*)` 입력 순서 배치라 함수 이동 = 이후 주소 전부 이동 → ✗ (논증, 감사 B-4).
+3. **재현성 전제 성립** (감사 A-2/A-3): 클린 재빌드 간 `.bin` 동일, `__LINE__`/`__FILE__`/`__DATE__`/`__TIME__`/`assert(` 0건,
+   빈 줄 삽입 시 `.bin` 불변·`.elf` 만 변화 → 비교 대상은 **`.bin`**.
+
+인벤토리(감사 C): 50줄 초과 함수 **38개**(전체 301개). 그중 **21개는 주석 제외 코드 ≤50줄**. 800줄 초과는 `app_modbus.c`(815 =
+코드 469 / 주석 311 / 빈 36) 하나. host 스위트가 직접 호출하는 함수 7개.
+
+---
+
+## 2. 범위
+
+### 2.1 In
+
+- §4 슬라이스 1~7 의 함수·파일. 전부 `fw/src`, `fw/drivers`.
+- 신규 검증 스크립트 `fw/tools/bin-same.sh` (§5).
+- 문서: 이 spec, plan, `docs/changelog.md` 항목.
+
+### 2.2 Out (명시적 제외)
+
+| 항목 | 이유 |
+|---|---|
+| else-if 체인·switch 구조 변경, 테이블 기반 디스패치 | 감사 B ✗. HW 벤치 트랙(범위 밖) |
+| 파일 분할(함수를 새 `.c` 로) | 감사 B-4 ✗. 필요도 없다(`app_modbus.c` 는 주석으로 800↓, 감사 C-3) |
+| `bool`/값 반환 헬퍼, out-포인터 인자 | 감사 B ✗ |
+| 함수-static 로컬(`app_loop_iter` i2c 관측, `disp_step` prev_*)을 헬퍼로 이동 | `.bss` 배치 변화 가능(추측) — 시도하지 않음 |
+| `app_config_load` 분할 | `&fail`/반환값 구조라 ✗ 확률 높음. host `test_app_config.c` 게이트 트랙으로 분리(범위 밖) |
+| `app_lcd_change_page` 중복 블록 DRY(비-인라인 공통화) | 코드 크기 변화 = ✗ |
+| `fw/vendor/`, `ref/`, 최적화 레벨 변경 | 읽기 전용 / 바이너리 전체 변화 |
+| 주석 **삭제** | 결정 4 — 이동·압축만. 압축 대상은 changelog·spec 에 이미 있는 이력 서술(날짜·커밋 해시 나열)에 한정 |
+| `CLAUDE.md`·`HANDOFF.md`·`NEXT_STEPS.md` 갱신 | 요청 범위 밖. 필요하면 사용자가 별건으로 |
+
+---
+
+## 3. 불변식 — 헬퍼 추출 규칙 (감사 B-3, 실측 ○ 조건만)
+
+구현자는 아래를 **전부** 지킨다. 하나라도 어기면 `.bin` 이 달라진 실측 사례가 있다.
+
+| # | 규칙 | 위반 시 실측 |
+|---|---|---|
+| H1 | 헬퍼는 `static inline __attribute__((always_inline)) void` | plain `static` → call 잔존 (+16~144 B) |
+| H2 | 헬퍼는 값을 반환하지 않고, 호출자는 헬퍼 결과로 분기하지 않는다 | `bool` 반환 → `movs r3,#1` 물질화 (+8~40 B) |
+| H3 | 판정 구조(`if` 조건·else-if 체인·`case` 라벨·`break`·`return`)는 **호출자에 남긴다**. 헬퍼에는 부수효과만 있는 직선 블록 | case 재그룹 → 이중 디스패치 ✗ |
+| H4 | 인자는 **이미 존재하는 포인터·스칼라 값만**. 호출자 로컬 변수의 주소를 새로 잡아 넘기지 않는다 | `&save` → 스택 스필 (+56 B) |
+| H5 | 헬퍼는 같은 번역 단위에, 호출 함수 바로 위에 둔다. 파일-static 변수(`g_mb`, `s_stg`, `s_ren`, `g_reg`, `g_measure` 등)는 헬퍼가 직접 접근 | — |
+| H6 | 헬퍼 안 `return` 은 **미실측** → 쓰지 않는다. early-return 이 있는 블록은 추출 대상에서 제외 | (추측) |
+| H7 | 슬라이스마다 두 모델 `.bin` sha256 대조가 **게이트**다. 규칙을 지켜도 리터럴 풀·레지스터 할당이 어긋날 수 있다 → 다르면 **되돌리고 보류**, 우회 시도 금지 | 감사 B-3 5 |
+
+주석 이동 규칙(슬라이스 1):
+
+| # | 규칙 |
+|---|---|
+| C1 | 함수 본문 안의 **5줄 이상** 주석 블록을 함수 선언 바로 위(기존 함수 헤더 주석과 합쳐 한 블록)로 옮긴다. 옮긴 자리에는 필요하면 한 줄 포인터(`/* 게이트 닫힘 분기 — 함수 헤더 §2 */`)만 남긴다 |
+| C2 | 문장은 **삭제하지 않는다.** 예외 = `app_modbus.c` 의 이력 서술(날짜·커밋 해시·"구 주석은 ~라고 했는데" 류)로, changelog·spec 에 이미 있는 내용만 16줄 이상 압축한다. 압축한 문장은 커밋 메시지에 어느 문서에 있는지 적는다 |
+| C3 | 코드 줄은 **한 글자도** 바꾸지 않는다(들여쓰기 포함). `git diff -w --ignore-blank-lines` 에서 코드 줄 변경 0 이어야 한다 |
+| C4 | `.bin` 대조는 그대로 한다(라인 이동은 무영향이 실증됐지만 게이트는 유지) |
+
+---
+
+## 4. 슬라이스
+
+각 슬라이스 = 커밋 1개. 커밋 전 `fw/tools/bin-same.sh` → `SAME`, `./fw.sh test` PASS, STD·REMOTE 빌드 경고 0. 좌표는 main `b61ef0f` 기준(감사 C-1).
+
+| # | 슬라이스 | 대상 (`파일:라인`) | 헬퍼 (이름 — 담는 블록) | 예상 결과 |
+|---|---|---|---|---|
+| **1** | 주석 재배치 | `app_modbus.c` 전체(815→≤799) + 코드 ≤50줄인 **21개 함수**: `app_reg_command`(:168-272) `app_loop_iter`(:99-186) `app_modbus_tick`(:742-815) `remote_en_fsm_step` `app_init` `app_input_tick` `parser_step` `app_reg_tick` `app_overload_tick` `handle_key_multi` `usart1_init` `main` `apply_config` `data_save_commit` `commit_comm_mode_and_ether` `cfg_stage_commit` `spi1_init` `i2c1_bus_unstick` `app_lcd_init_mode` `app_lcd_disp_step`(코드 55 — 주석만으로는 근접, 슬라이스 7 후보) `energy2str`/`mb_core_decode`/`process_ip_char` 는 이미 코드 ≤50·주석 적음 → 확인만 | 0 | 21개 함수 ≤50줄, 파일 800↓. 바이너리 무영향 **보장** |
+| **2** | `mirror_live` 3분할 | `app_modbus.c:180-287` (108, 코드 62) | `mirror_cfg_fields(cfg)` — WORK_CNT~EN_SAFTY·CAL 대입 / `mirror_disp_status(cfg, m, running)` — DISP_* 4개 + `mb_status_in_t` 합성 + STATUS / `mirror_stage_and_gate(cfg)` — COMM_MODE·CFG_STAT·CAP·FEAT·HORN·staged 루프·`#if MODEL_REMOTE` 블록 | 본체 ≤15줄. 가장 깨끗한 실증 패턴(정적 변수만 접근, 기존 포인터) |
+| **3** | 순차 함수 2개 | `app_reg.c:324-404` `reg_publish_measure`(81, 코드 54) / `usart6_mb.c:46-113` `usart6_mb_open`(68, 코드 53) | `publish_sr_edge(sr)` / `publish_amp_power(live)` / `publish_copy_out(now, active, freq_cal_val)` — 3개 · `mb_uart_reinit(speed_idx, parity_idx)` / `mb_dma_init()` — 2개 | 두 함수 ≤50 |
+| **4** | `apply_writes` 본체 추출 | `app_modbus.c:290-647` (358, 코드 191) | `gate_reject_body()` — `#ifndef REMOTE_EN_GATE_BYPASS` 블록의 소거·STOP 통과·로그·CFG_CTRL 소거(`return` 은 호출자) **실증 ○** / `start_cmd_body(cfg, sv, now)` — START 값 switch 본체 / `cfg_ctrl_commit_body(cfg, link)` — ctrl==1 커밋 본체(`save = true` 는 호출자에 남긴다, H4) | 코드 191 → ~120. **≤50 불가 → §6 예외**. 13개 클램프 분기는 **한 글자도 건드리지 않는다** |
+| **5** | `lcd_input_dispatch` case 본체 | `app_lcd_input.c:413-637` (225, 코드 170) | `handle_sys_pic_now(state, cfg, data16)` **실증 ○** / `handle_setup_param_enter(state)` — SETUP_PARAM·MOOHAN 공통 본체(두 case 각각에서 호출, 인라인이라 코드 중복은 유지됨) / `handle_mo_time_edit(cfg, vp, data16)` — LV_MO_TIME1/2 (case 라벨 2개 유지) / `handle_run_mode(state, cfg, data16)` | 코드 170 → ~130. **≤50 불가 → §6 예외**. 35개 `case … break` 뼈대 불변 |
+| **6** | FSM step case 본체 | `app_weld_fsm.c:121-290` `weld_fsm_step`(170, 코드 141) / `app_osc_init_fsm.c:24-100` `osc_init_fsm_step`(77, 코드 68) / `app_seek_reset_fsm.c:22-81` `seek_reset_fsm_step`(60, 코드 50) | `weld_abort_body(out)` `weld_step_cyl1(in)` `weld_step_weld(in, out)` `weld_step_cyl2(in, out)` · `osc_step_wait_h(in)` `osc_step_pulse(out)` · `sr_step_reset(out)` `sr_step_seek(out)` — 전부 case 라벨 유지, `in`/`out` 기존 포인터 | host 스위트 3개(`test_app_weld_fsm` 21함수 등)가 추가 안전망. `weld_step_weld` 자체가 >50 일 수 있음 → 그대로 두고 §6 에 기록 |
+| **7** | 조건부 — 시도 후 ≠ 이면 되돌리고 보류 | `app_lcd_render.c:40-242` `change_page`(로컬 배열 `buf/addr_str/ipbuf` 포인터 전달) / `app_weld.c:97-227` `app_weld_tick`(로컬 `out` 구조체 주소) / `app_modbus_tcp.c:123-233` `tcp_poll`(`off/tx_len` 출력 필요 — recv 블록만) / `app_lcd_disp.c:51-126` `disp_compute_output`(`fill_upper_band`/`fill_lower_band`, 값 인자) / `app_lcd_input.c:332-389` `handle_std_setup_param`(`goto_setup1/2`) | 각 1~3 | H4 경계 사례. 첫 시도 `.bin` ≠ 이면 **되돌리고 spec §6 에 "보류" 기록**. 우회 재시도 금지 |
+
+미분할 결정: `app_lcd_send_model_str`(93줄이나 `#if` 브랜드 4블록 중 컴파일되는 것은 1블록 ~25줄) — 그대로 둔다.
+
+---
+
+## 5. 검증
+
+### 5.1 기준 해시 (시작 커밋 `b61ef0f`, 클린 빌드, 감사 A-2)
+
+| 산출물 | sha256 | 크기 |
+|---|---|---|
+| STD `fw/build/gds_us_ctrl.bin` | `fd66f6e7bb9d6ff03f7ea1831797167813b3db4613de66e6c84841b1860e278f` | 66,696 B |
+| REMOTE `fw/build-remote/gds_us_ctrl.bin` | `c5223adac03c85861e242e592125bf163114c847f383d6304f5d2e0771f7373f` | 67,008 B |
+
+같은 커밋·같은 툴체인(15.2.1)이면 이 값이 나와야 한다. 다른 값이면 리팩토링을 시작하기 전에 원인을 찾는다(툴체인 버전 차이가 첫 후보).
+
+### 5.2 스크립트 `fw/tools/bin-same.sh` (신규)
+
+```sh
+#!/bin/sh
+# 두 모델을 빌드해 .bin sha256 을 기준과 비교. 사용: bin-same.sh baseline | bin-same.sh
+set -eu; cd "$(dirname "$0")/../.."
+./fw.sh >/dev/null && MODEL=remote ./fw.sh >/dev/null
+cur=$(shasum -a 256 fw/build/gds_us_ctrl.bin fw/build-remote/gds_us_ctrl.bin | cut -d' ' -f1 | paste -sd' ' -)
+base=fw/.bin-baseline
+[ "${1:-}" = baseline ] && { printf '%s\n' "$cur" >"$base"; echo "baseline: $cur"; exit 0; }
+[ "$cur" = "$(cat "$base")" ] && echo "SAME  $cur" || { echo "DIFF  base=$(cat "$base")  cur=$cur"; exit 1; }
+```
+
+- 기준 파일은 `fw/.bin-baseline` (`.gitignore` 에 추가 — `fw/build*/` 안에 두면 클린 빌드에 지워진다). 값은 §5.1 과 이 spec 에도 적혀 있다.
+- 비교는 **`.bin` 만**. `.elf` 는 DWARF 라인 테이블·`DW_AT_comp_dir` 때문에 라인·경로에 민감하다(감사 A-2 실증).
+- `DIFF` 시 진단 순서: `arm-none-eabi-nm -S --size-sort` 전후 비교로 크기가 바뀐 심볼 → 그 함수만 `objdump -d` diff. 원인이 H1~H6 위반이면 고치고, 아니면 **되돌린다**(H7).
+
+### 5.3 슬라이스 게이트 (커밋 조건)
+
+1. `fw/tools/bin-same.sh` → `SAME`
+2. `./fw.sh test` → host 17스위트 PASS (테스트 코드 무변경)
+3. STD·REMOTE 빌드 경고 0 (`-Wall -Wextra -Wundef -Wshadow`)
+4. 슬라이스 1 만: `git diff -w --ignore-blank-lines <prev>..HEAD -- fw/` 에서 코드 줄 변경 0 (C3)
+5. 함수 길이 재측정(감사의 `funclen.py` 방식 — 중괄호 균형): 대상 함수가 ≤50 이 됐는지, 새 헬퍼 중 >50 인 것은 §6 에 기록
+
+### 5.4 최종 게이트 (머지 전)
+
+- 브랜치 tip 에서 `rm -rf fw/build fw/build-remote` 후 클린 빌드 → `.bin` sha256 == §5.1
+- `git diff b61ef0f..HEAD --stat` 에 `fw/vendor/`·`ref/`·`fw/test/` 변경 0
+- 50줄 초과 함수 재집계: 38 → 목표 ≤ 6 (§6 예외 4 + 슬라이스 7 보류분)
+
+---
+
+## 6. 예외 목록 — 바이트 동일 조건에서 50줄 불가
+
+| 함수 | 이유 | 이번 결과 | 후속(범위 밖) |
+|---|---|---|---|
+| `app_modbus_apply_writes` | 36분기 else-if 체인 뼈대만 코드 ≥110줄. 체인 분할은 감사 b-1 계열 3변형 전부 ✗ | 본체 추출로 ~120 코드줄 | HW 벤치 트랙: 체인 → 테이블. 회귀 = `plans/2026-09-05-bench-results.md` FC06 클램프 27항목 재사용 |
+| `app_lcd_input_dispatch` | 35 `case…break` 뼈대 ~105줄. 재그룹은 감사 b-3 ✗ | ~130 | HW 벤치 트랙: 핸들러 테이블. LCD 터치 E2E |
+| `app_lcd_change_page` | 8분기 + 공통 꼬리, 로컬 배열 포인터 전달이 H4 경계 | 슬라이스 7 에서 시도, ≠ 이면 보류 | HW 벤치 트랙: STDC/MHC·STDE/MHE 중복 블록 DRY |
+| `weld_fsm_step` | WELD case 자체가 ~55줄 | case 본체 추출 후 `weld_step_weld` 가 >50 잔존 가능 | host `test_app_weld_fsm.c` 21함수가 있어 **host 게이트 트랙**으로 구조 변경 가능 |
+| `app_config_load` | `fail++` 누산 구조 | 미착수 | host `test_app_config.c` 게이트 트랙 |
+
+예외는 이 표가 정본이다. `CLAUDE.md` 에는 쓰지 않는다(결정 범위 밖).
+
+---
+
+## 7. 실행
+
+| 항목 | 내용 |
+|---|---|
+| 브랜치 | `refactor/byte-identical` (main `b61ef0f` 에서) |
+| 커밋 | 슬라이스당 1개. 메시지 `refactor(<모듈>): <함수> <N>분할 — .bin 동일 (STD fd66…e278f / REMOTE c522…7373f)`. 슬라이스 1 은 `refactor(comments): …`, 압축한 이력 문장의 소재 문서를 본문에 |
+| 순서 | 1 → 2 → 3 → 4 → 5 → 6 → 7. 1 이 끝나면 함수 줄수 재집계로 2~7 대상 확정 |
+| 분담 | spec·plan = Fable(이 문서 + plan). **구현 = Opus 세션**이 plan 대로. 슬라이스마다 `bin-same.sh` 출력을 커밋 메시지 또는 PR 본문에 |
+| 머지 | 전 슬라이스 SAME + §5.4 → `--no-ff` 머지. HW 태그 없음(바이너리가 태그 `hw-revA_fw-stage-hold-wdt` 빌드와 동일하므로 그 태그의 벤치 결과를 그대로 승계) |
+| 문서 | `docs/changelog.md` `[Unreleased]` 에 1항목(무엇·검증·예외 4개). 이 spec §6 에 슬라이스 7 결과 기입 |
+
+---
+
+## 8. 리스크
+
+| 리스크 | 완화 |
+|---|---|
+| H1~H6 을 지켜도 리터럴 풀·레지스터 할당 차이로 `.bin` ≠ | H7: 되돌리고 보류. 우회(인자 순서 바꾸기 등) 시도 금지 — 시도 자체가 시간 소모이고 결과 예측 불가 |
+| 주석 이동 중 문장 손실 | C2 + 리뷰 규칙 "diff 에서 `-` 된 주석 줄은 전부 `+` 로 다른 위치에 존재"(압축 대상 제외). 압축 문장은 커밋 본문에 소재 명시 |
+| 헬퍼 이름이 의미를 잘못 붙여 오해 유발 | 이름은 감사 C-1 제안을 따르고, 헬퍼 위 1줄 주석에 "무엇을 하는 블록인가"만 |
+| `always_inline` 헬퍼가 >50줄 (`weld_step_weld`) | 규칙 위반으로 보지 않고 §6 에 기록. 더 쪼개지 않는다(쪼갤수록 H4 경계에 가까워진다) |
+| 툴체인 업데이트로 기준 해시가 바뀜 | §5.1 에 툴체인 버전 고정. 바뀌면 시작 커밋을 새 툴체인으로 재빌드해 baseline 갱신 후 진행 |
+| 슬라이스 4·5 가 "이름 붙이기" 수준이라 가치가 작다는 반론 | 인지한 대가(결정 3). 진짜 분할은 HW 벤치 트랙(§6)으로 넘긴다 |
+
+---
+
+## 9. 참조
+
+- 감사 보고서: `docs/superpowers/research/2026-09-08-refactor-audit.md` (spike 로그·objdump 분석·인벤토리 전수·되돌림 확인)
+- 빌드: `fw/CMakeLists.txt:14-27`(Debug/-Og), `:19`(섹션 분리), `:91`(GLOB 링크 순서), `:113`(gc-sections), `:120`(POST_BUILD `.bin`)
+- 사용자 규칙: `~/.claude/rules/common/coding-style.md`(함수 <50줄, 파일 <800줄)
+- 프로젝트 규칙: `CLAUDE.md`(HW 게이트·태깅), 메모리 `feedback-fable-plans-opus-implements`, `feedback-confirm-before-code-change`
