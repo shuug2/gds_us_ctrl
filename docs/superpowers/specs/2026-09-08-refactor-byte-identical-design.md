@@ -86,9 +86,9 @@
 
 | # | 규칙 |
 |---|---|
-| C1 | 함수 본문 안의 **5줄 이상** 주석 블록을 함수 선언 바로 위(기존 함수 헤더 주석과 합쳐 한 블록)로 옮긴다. 옮긴 자리에는 필요하면 한 줄 포인터(`/* 게이트 닫힘 분기 — 함수 헤더 §2 */`)만 남긴다 |
+| C1 | 함수 본문 안의 **5줄 이상** 주석 블록을 함수 선언 바로 위(기존 함수 헤더 주석과 합쳐 한 블록)로 옮긴다. 옮긴 자리에는 필요하면 한 줄 포인터(`/* 게이트 닫힘 분기 — 함수 헤더 §2 */`)만 남긴다. 그래도 50줄을 넘으면 2~4줄 블록 → 1줄 독립 주석 순으로 더 옮기고, 옮긴 블록 바로 위의 빈 줄도 함께 제거한다(plan D6 — 감사 산식이 빈 줄과 짧은 블록을 빼먹었다). 코드 줄 사이의 구분용 빈 줄 삭제도 허용(`parser_step`·`energy2str`) |
 | C2 | 문장은 **삭제하지 않는다.** 예외 = `app_modbus.c` 의 이력 서술(날짜·커밋 해시·"구 주석은 ~라고 했는데" 류)로, changelog·spec 에 이미 있는 내용만 16줄 이상 압축한다. 압축한 문장은 커밋 메시지에 어느 문서에 있는지 적는다 |
-| C3 | 코드 줄은 **한 글자도** 바꾸지 않는다(들여쓰기 포함). `git diff -w --ignore-blank-lines` 에서 코드 줄 변경 0 이어야 한다 |
+| C3 | 코드 줄은 **한 글자도** 바꾸지 않는다(들여쓰기 포함). 판정은 **주석·빈 줄 제거 스트림 diff** — 파일마다 `arm-none-eabi-gcc -fpreprocessed -dD -E -P -x c -` 로 주석을 벗기고 빈 줄을 지운 전후 스트림이 동일해야 한다(plan Task 1 Step 3 루프, 기대 `SAME_CODE` × 파일 수). `git diff -w --ignore-blank-lines` 는 큰 주석 블록이 시그니처 근처로 이동하면 hunk 오정렬로 동일 코드 줄을 −/+ 로 보여 **판정에 쓰지 않는다**(참고용) |
 | C4 | `.bin` 대조는 그대로 한다(라인 이동은 무영향이 실증됐지만 게이트는 유지) |
 
 ---
@@ -99,12 +99,12 @@
 
 | # | 슬라이스 | 대상 (`파일:라인`) | 헬퍼 (이름 — 담는 블록) | 예상 결과 |
 |---|---|---|---|---|
-| **1** | 주석 재배치 | `app_modbus.c` 전체(815→≤799) + 코드 ≤50줄인 **21개 함수**: `app_reg_command`(:168-272) `app_loop_iter`(:99-186) `app_modbus_tick`(:742-815) `remote_en_fsm_step` `app_init` `app_input_tick` `parser_step` `app_reg_tick` `app_overload_tick` `handle_key_multi` `usart1_init` `main` `apply_config` `data_save_commit` `commit_comm_mode_and_ether` `cfg_stage_commit` `spi1_init` `i2c1_bus_unstick` `app_lcd_init_mode` `app_lcd_disp_step`(코드 55 — 주석만으로는 근접, 슬라이스 7 후보) `energy2str`/`mb_core_decode`/`process_ip_char` 는 이미 코드 ≤50·주석 적음 → 확인만 | 0 | 21개 함수 ≤50줄, 파일 800↓. 바이너리 무영향 **보장** |
-| **2** | `mirror_live` 3분할 | `app_modbus.c:180-287` (108, 코드 62) | `mirror_cfg_fields(cfg)` — WORK_CNT~EN_SAFTY·CAL 대입 / `mirror_disp_status(cfg, m, running)` — DISP_* 4개 + `mb_status_in_t` 합성 + STATUS / `mirror_stage_and_gate(cfg)` — COMM_MODE·CFG_STAT·CAP·FEAT·HORN·staged 루프·`#if MODEL_REMOTE` 블록 | 본체 ≤15줄. 가장 깨끗한 실증 패턴(정적 변수만 접근, 기존 포인터) |
-| **3** | 순차 함수 2개 | `app_reg.c:324-404` `reg_publish_measure`(81, 코드 54) / `usart6_mb.c:46-113` `usart6_mb_open`(68, 코드 53) | `publish_sr_edge(sr)` / `publish_amp_power(live)` / `publish_copy_out(now, active, freq_cal_val)` — 3개 · `mb_uart_reinit(speed_idx, parity_idx)` / `mb_dma_init()` — 2개 | 두 함수 ≤50 |
-| **4** | `apply_writes` 본체 추출 | `app_modbus.c:290-647` (358, 코드 191) | `gate_reject_body()` — `#ifndef REMOTE_EN_GATE_BYPASS` 블록의 소거·STOP 통과·로그·CFG_CTRL 소거(`return` 은 호출자) **실증 ○** / `start_cmd_body(cfg, sv, now)` — START 값 switch 본체 / `cfg_ctrl_commit_body(cfg, link)` — ctrl==1 커밋 본체(`save = true` 는 호출자에 남긴다, H4) | 코드 191 → ~120. **≤50 불가 → §6 예외**. 13개 클램프 분기는 **한 글자도 건드리지 않는다** |
-| **5** | `lcd_input_dispatch` case 본체 | `app_lcd_input.c:413-637` (225, 코드 170) | `handle_sys_pic_now(state, cfg, data16)` **실증 ○** / `handle_setup_param_enter(state)` — SETUP_PARAM·MOOHAN 공통 본체(두 case 각각에서 호출, 인라인이라 코드 중복은 유지됨) / `handle_mo_time_edit(cfg, vp, data16)` — LV_MO_TIME1/2 (case 라벨 2개 유지) / `handle_run_mode(state, cfg, data16)` | 코드 170 → ~130. **≤50 불가 → §6 예외**. 35개 `case … break` 뼈대 불변 |
-| **6** | FSM step case 본체 | `app_weld_fsm.c:121-290` `weld_fsm_step`(170, 코드 141) / `app_osc_init_fsm.c:24-100` `osc_init_fsm_step`(77, 코드 68) / `app_seek_reset_fsm.c:22-81` `seek_reset_fsm_step`(60, 코드 50) | `weld_abort_body(out)` `weld_step_cyl1(in)` `weld_step_weld(in, out)` `weld_step_cyl2(in, out)` · `osc_step_wait_h(in)` `osc_step_pulse(out)` · `sr_step_reset(out)` `sr_step_seek(out)` — 전부 case 라벨 유지, `in`/`out` 기존 포인터 | host 스위트 3개(`test_app_weld_fsm` 21함수 등)가 추가 안전망. `weld_step_weld` 자체가 >50 일 수 있음 → 그대로 두고 §6 에 기록 |
+| **1** | 주석 재배치 | `app_modbus.c` 전체(815→≤799) + 코드 ≤50줄인 **21개 함수**: `app_reg_command`(:168-272) `app_loop_iter`(:99-186) `app_modbus_tick`(:742-815) `remote_en_fsm_step` `app_init` `app_input_tick` `parser_step` `app_reg_tick` `app_overload_tick` `handle_key_multi` `usart1_init` `main` `apply_config` `data_save_commit` `commit_comm_mode_and_ether` `cfg_stage_commit` `spi1_init` `i2c1_bus_unstick` `app_lcd_init_mode` `app_lcd_disp_step`(코드 55 — 주석만으로는 근접, 슬라이스 7 후보) `energy2str`/`mb_core_decode`/`process_ip_char` 는 이미 코드 ≤50·주석 적음 → 확인만 | 0 | plan 실측(Task 1): 23함수 검토 · 22함수 편집 · **21함수 ≤50**(`app_lcd_disp_step` 은 코드 55 라 57 잔존 → §6). `app_modbus.c` 815→**753**(이력 압축 39줄 + 리플로 19줄 — 슬라이스 2·4 헬퍼 +39줄을 미리 상쇄해 최종 792). 바이너리 무영향 **보장** |
+| **2** | `mirror_live` 3분할 | `app_modbus.c:180-287` (108, 코드 62) | `mirror_cfg_fields(cfg)` — WORK_CNT~TIMEOVER 15개 대입(연속 블록) / `mirror_disp_status(cfg, m, running)` — DISP_* 4개 + B-5 cfg 6개 + CAL 2개 + `mb_status_in_t` 합성 + STATUS / `mirror_stage_and_gate(cfg)` — COMM_MODE·CFG_STAT·CAP·FEAT·HORN·staged 루프·`#if MODEL_REMOTE` 블록. (plan: 초안의 "WORK_CNT~EN_SAFTY·CAL" 은 DISP_* 4줄이 사이에 끼어 연속 블록이 아니라 문장 순서를 지키기 위해 연속 범위로 재절단) | 본체 13줄(plan 실측). 가장 깨끗한 실증 패턴(정적 변수만 접근, 기존 포인터) |
+| **3** | 순차 함수 2개 | `app_reg.c:324-404` `reg_publish_measure`(81, 코드 54) / `usart6_mb.c:46-113` `usart6_mb_open`(68, 코드 53) | `publish_sr_edge(sr)` / `publish_amp_power(live)` / `publish_copy_out(now, active, live, freq_cal_val)` — 3개(plan D3: 본체 마지막 줄이 `live` 를 써서 값 인자 추가) · `mb_uart_reinit(speed_idx, parity_idx)` / `mb_dma_init()` — 2개 | 두 함수 ≤50 |
+| **4** | `apply_writes` 본체 추출 | `app_modbus.c:290-647` (358, 코드 191) | `gate_reject_body()` — `#ifndef REMOTE_EN_GATE_BYPASS` 블록의 소거·STOP 통과·로그·CFG_CTRL 소거(`return` 은 호출자) **실증 ○** / `start_cmd_body(cfg, sv, now)` — START 값 if-체인 본체 / `cfg_ctrl_commit_body(cfg, d)` — 커밋 통과분 반영(`stg_apply_to_cfg` + ether 훅). `if (cfg_stage_commit(...) != 0u)` 판정과 `save = true` 는 호출자에 남긴다(H3/H4). plan D2: 본체가 `link` 를 안 쓰고 dirty 스냅샷 `d` 를 써서 `(cfg, d)` | 코드 191 → **157**(plan 실측, 358→255줄). **≤50 불가 → §6 예외**. 13개 클램프 분기는 **한 글자도 건드리지 않는다** |
+| **5** | `lcd_input_dispatch` case 본체 | `app_lcd_input.c:413-637` (225, 코드 170) | `handle_sys_pic_now(state, cfg, data16)` **실증 ○** / `handle_setup_param_enter(state)` — SETUP_PARAM·MOOHAN 공통 본체(두 case 각각에서 호출, 인라인이라 코드 중복은 유지됨) / `mo_time_clamp_echo(cfg)` — LV_MO_TIME1/2 의 **공통 꼬리 4줄**만(plan D1: 두 case 의 첫 줄 대입이 달라 한 헬퍼에 담으면 `vp` 분기를 새로 만들어야 함 → 대입은 case 에 남긴다) / `handle_run_mode(state, cfg, data16)` | 코드 170 → **143**(plan 실측, 225→182줄). **≤50 불가 → §6 예외**. 35개 `case … break` 뼈대 불변 |
+| **6** | FSM step case 본체 | `app_weld_fsm.c:121-290` `weld_fsm_step`(170, 코드 141) / `app_osc_init_fsm.c:24-100` `osc_init_fsm_step`(77, 코드 68) / `app_seek_reset_fsm.c:22-81` `seek_reset_fsm_step`(60, 코드 50) | `weld_abort_body(out)` `weld_step_cyl1(in)` `weld_step_weld(in, out)` `weld_step_cyl2(out)`(plan D4: CYL2 본체가 `in` 을 안 읽음) · `osc_step_wait_h(in)` `osc_step_wait_l(in)` `osc_step_reset(out)` `osc_step_seek(out)`(plan D5: RESET/SEEK 펄스 본체의 상수가 달라 한 헬퍼로 못 담음, wait_h 만으론 63줄) · `sr_step_reset(out)` `sr_step_seek(out)` — 전부 case 라벨 유지, `in`/`out` 기존 포인터 | host 스위트 3개(`test_app_weld_fsm` 21함수 등)가 추가 안전망. plan 실측: `weld_fsm_step` 72(코드 53)·`weld_step_weld` 58 잔존 → §6 기록 |
 | **7** | 조건부 — 시도 후 ≠ 이면 되돌리고 보류 | `app_lcd_render.c:40-242` `change_page`(로컬 배열 `buf/addr_str/ipbuf` 포인터 전달) / `app_weld.c:97-227` `app_weld_tick`(로컬 `out` 구조체 주소) / `app_modbus_tcp.c:123-233` `tcp_poll`(`off/tx_len` 출력 필요 — recv 블록만) / `app_lcd_disp.c:51-126` `disp_compute_output`(`fill_upper_band`/`fill_lower_band`, 값 인자) / `app_lcd_input.c:332-389` `handle_std_setup_param`(`goto_setup1/2`) | 각 1~3 | H4 경계 사례. 첫 시도 `.bin` ≠ 이면 **되돌리고 spec §6 에 "보류" 기록**. 우회 재시도 금지 |
 
 미분할 결정: `app_lcd_send_model_str`(93줄이나 `#if` 브랜드 4블록 중 컴파일되는 것은 1블록 ~25줄) — 그대로 둔다.
@@ -143,15 +143,15 @@ base=fw/.bin-baseline
 
 1. `fw/tools/bin-same.sh` → `SAME`
 2. `./fw.sh test` → host 17스위트 PASS (테스트 코드 무변경)
-3. STD·REMOTE 빌드 경고 0 (`-Wall -Wextra -Wundef -Wshadow`)
-4. 슬라이스 1 만: `git diff -w --ignore-blank-lines <prev>..HEAD -- fw/` 에서 코드 줄 변경 0 (C3)
+3. STD·REMOTE 빌드 **our-code 경고 0** (`-Wall -Wextra -Wundef -Wshadow`; `grep -E 'warning:|error:' | grep -v '/vendor/'` 출력 없음). vendor 헤더에서 나오는 경고는 리팩토링 전부터 있는 것이라 제외
+4. 슬라이스 1 만: C3 의 스트림 diff 루프에서 `CODE CHANGED` 0
 5. 함수 길이 재측정(감사의 `funclen.py` 방식 — 중괄호 균형): 대상 함수가 ≤50 이 됐는지, 새 헬퍼 중 >50 인 것은 §6 에 기록
 
 ### 5.4 최종 게이트 (머지 전)
 
 - 브랜치 tip 에서 `rm -rf fw/build fw/build-remote` 후 클린 빌드 → `.bin` sha256 == §5.1
 - `git diff b61ef0f..HEAD --stat` 에 `fw/vendor/`·`ref/`·`fw/test/` 변경 0
-- 50줄 초과 함수 재집계: 38 → 목표 ≤ 6 (§6 예외 4 + 슬라이스 7 보류분)
+- 50줄 초과 함수 재집계: 38 → **11** (plan Task 8 표 — 슬라이스 7 이 전부 SAME 인 경우). 초안의 "≤6" 은 plan 실측(D9)으로 정정: §6 의 4개 + `send_model_str`(미분할 결정) + `app_config_load` 에, spec 수단으로는 못 내리는 `app_weld_tick`(지정 초기화 22줄) · `tcp_poll`(out 출력) · `disp_step`(함수-static) 와 헬퍼 잔존 `render_run_std`(53) · `weld_step_weld`(58) 이 더해진다. 슬라이스 7 에서 DIFF 로 되돌린 건은 원래 길이로 표에 들어온다
 
 ---
 
