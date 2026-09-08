@@ -168,15 +168,9 @@ mb_core_t *app_modbus_core(void)
     return &g_mb;
 }
 
-/* live 값 mirror */
-static void mirror_live(void)
+/* mirror_live 본체 1/3 — cfg 필드(WORK_CNT~TIMEOVER)를 holding 에 대입 */
+static inline __attribute__((always_inline)) void mirror_cfg_fields(const app_config_t *cfg)
 {
-    /* samd20 update_holding_reg(0): live values -> holding mirror. Runs every owned
-     * tick — fresher than samd20's post-message refresh, normalizes clamped writes. */
-    const app_config_t  *cfg = app_lcd_cfg();
-    const lcd_measure_t *m   = app_lcd_measure();
-    uint8_t running = (m->us_run_status != (uint8_t)US_IDLE) ? 1u : 0u;
-
     g_mb.holding[MB_REG_WORK_CNTH]   = (uint16_t)(cfg->work_cnt >> 16);
     g_mb.holding[MB_REG_WORK_CNTL]   = (uint16_t)(cfg->work_cnt);
     g_mb.holding[MB_REG_DELAY1]      = cfg->limit_delay_time1;
@@ -192,6 +186,12 @@ static void mirror_live(void)
     g_mb.holding[MB_REG_MULTI_O1]    = cfg->limit_mo_out1;
     g_mb.holding[MB_REG_MULTI_O2]    = cfg->limit_mo_out2;
     g_mb.holding[MB_REG_TIMEOVER]    = cfg->limit_out_time;
+}
+
+/* mirror_live 본체 2/3 — DISP_* 4개 + B-5·CAL 미러 + STATUS 비트 합성 */
+static inline __attribute__((always_inline)) void mirror_disp_status(const app_config_t *cfg,
+                                                  const lcd_measure_t *m, uint8_t running)
+{
     /* DISP_*: live shows the running peak, stopped shows the latched last
      * (samd20 main.c:4564-4567 us_on_status mirror). us_on_status = run OR
      * seek/reset active — SEEK/RESET 중에도 라이브 (legacy 4253/4280). STATUS
@@ -232,7 +232,11 @@ static void mirror_live(void)
         .reset   = (sr == (uint8_t)SR_RESET) ? 1u : 0u,
     };
     g_mb.holding[MB_REG_STATUS]      = mb_status_bits(&sin);
+}
 
+/* mirror_live 본체 3/3 — F-A comm/eth·CAP·FEAT·HORN 미러 + staged 루프 + 원격 게이트 미러 */
+static inline __attribute__((always_inline)) void mirror_stage_and_gate(const app_config_t *cfg)
+{
     /* F-A comm/eth 미러. COMM_MODE·CFG_STAT 는 무조건, staged 9종은 **비-dirty 일
      * 때만** cfg 라이브 값으로 덮는다 — dirty 인 동안 미러가 덮으면 "쓰기 후
      * read-back" 계약이 staging 에서 깨져 마스터가 자기가 쓴 값을 확인할 수 없다. */
@@ -267,6 +271,21 @@ static void mirror_live(void)
      * 읽지 않도록 0 으로 고정한다. */
     g_mb.holding[MB_REG_REMOTE_EN_LEFT] = 0u;
 #endif
+}
+
+/* live 값 mirror */
+static void mirror_live(void)
+{
+    /* samd20 update_holding_reg(0): live values -> holding mirror. Runs every owned
+     * tick — fresher than samd20's post-message refresh, normalizes clamped writes. */
+    const app_config_t  *cfg = app_lcd_cfg();
+    const lcd_measure_t *m   = app_lcd_measure();
+    uint8_t running = (m->us_run_status != (uint8_t)US_IDLE) ? 1u : 0u;
+
+    mirror_cfg_fields(cfg);
+    mirror_disp_status(cfg, m, running);
+
+    mirror_stage_and_gate(cfg);
 }
 
 /* FC06 write 적용 */
