@@ -11,6 +11,7 @@
 - **지연**: apply 1회 최악 100 B ≈ 8.7 ms(115200) → hold 워치독 적층 579 → **587.7 ms < 600**. UART wedge 시 프레임당 10 ms 캡은 `change_page` 와 같은 급.
 - **FLASH** ≈ +180 B(실측: STD text 66,124→66,304 / REMOTE text 66,440→66,620; Task1 +120 · Task2 +8 · Task3 +52). host 17 PASS · STD/REMOTE 경고 0. **HW 벤치 대기** — 항목 = spec §5.2 E-0~E-14·R-1~R-5, 결과는 `plans/2026-09-11-modbus-write-lcd-echo-bench-results.md`. 통과 시 태그 `hw-revA_fw-stage-lcd-echo`.
 - 관찰(범위 밖, 무수정): `LV_ENERGY_EDIT` 부팅 시드가 `/10`(`app_lcd.c:240`)이고 페이지 렌더는 raw(`render.c:103`) — 기존 불일치. spec = `specs/2026-09-11-modbus-write-lcd-echo-design.md`, plan = `plans/2026-09-11-modbus-write-lcd-echo.md`.
+- **fix(lcd) F1 — SETUP1 진입 horn shadow 시드**(같은 벤치 빌드): 진입 시 체크박스 VP 는 현재 horn 모드로 그리면서 shadow `temp_horndown` 은 0 리셋해(`app_lcd_input.c:459`), horn 이 이미 ON 인 상태에서 다른 항목만 바꾸고 SAVE 하면 **horn 모드가 실제로 꺼졌다**(SOL·START 게이트·STATUS bit6). `f_safty` 는 무관. shadow 를 `app_horn_mode_active()` 로 시드해 "화면 ✓ = SAVE 적용값". **legacy 복원** — samd20 SETUP_PARAM 진입(`main.c:3754-3771`)은 temp 무접촉이었고 포트 주석의 `3617-3622` 는 CANCEL 분기 오인용(`519d908`, 2026-07-18). 원격 `0x30=1` 로 켠 horn 도 LCD SAVE 에 살아남아 2026-09-06 벤치 함정("SETUP 저장이 horn 재전송") 원인 제거. CANCEL 의 temp=0(`comm.c:442`) 은 legacy 동일이라 유지. 조사 `research/2026-09-11-safty-horn-save-investigation.md`, spec `specs/2026-09-11-horn-shadow-seed-fix-design.md`. 벤치 E-11b 기대 변경 + E-11c 신설.
 
 ### 2026-09-09 — refactor: 바이트 동일 리팩토링 — 50줄 초과 함수 38→13 · app_modbus.c 815→792 · .bin 무변경
 

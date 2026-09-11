@@ -452,11 +452,13 @@ static inline __attribute__((always_inline)) void handle_setup_param_enter(lcd_a
 {
     state->lcd_status = setup1_page_for_mode(state->sys_mode);
     app_lcd_change_page(state->lcd_status);
-    /* horn-down 체크박스 = 현재 SYS_HORN 모드 미러 + shadow 리셋 (legacy
-     * main.c:3617-3622 verbatim — 저장 시 체크 안 건드리면 temp==0이라
-     * 모드 이탈되는 legacy 거동 포함). */
+    /* horn-down 체크박스 = 현재 SYS_HORN 모드 미러. shadow 도 **같은 값**으로 시드해
+     * "화면 ✓ = SAVE 가 적용할 값" 을 지킨다 — 안 건드린 체크박스는 SAVE 뒤에도 유지.
+     * (구 코드는 여기서 temp=0 리셋 — legacy main.c:3617-3622 를 인용했지만 그 라인은
+     * samd20 의 CANCEL 분기다. samd20 SETUP_PARAM 진입(:3754-3771)은 temp 를 안 건드려
+     * 다음 SAVE 에도 horn 이 유지됐다. 2026-09-11 F1, 조사 research/2026-09-11-safty-horn-save-investigation.md) */
     dgus_write_u16(DISP_HORNDOWN, (uint16_t)app_horn_mode_active());
-    state->temp_horndown = 0u;
+    state->temp_horndown = app_horn_mode_active();
 }
 
 /* dispatch 본체 — LV_RUN_MODE: 1=delay / 2=trigger 로 run_mode 설정 + STD2 페이지 전환 */

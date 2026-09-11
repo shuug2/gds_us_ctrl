@@ -456,7 +456,9 @@ Expected: 51개 정수. `snap[0x31] == 0xFA01`, `snap[0x32] == 1`, `snap[0x2B] =
 | E-8 | **RUN_STD(9)**: LCD CANCEL 로 복귀(SAVE 아님) | `m.write(0x0A, 150)` | `D : 1.50` 줄 + 상단 DELAY 숫자 150 즉시 | ⬜ |
 | E-9 | RUN_STD | `m.write(0x13, 1)` → 관찰 → `m.write(0x13, 0)` | 1: `SENSOR OFF` / `W : <TRIGGER2>` / `H : <TRIGGER3>` + 배지 TRIGGER · 0: `D :`/`W : <DELAY2>`/`H : <DELAY3>` 복귀 | ⬜ |
 | E-10 | RUN_STD | `m.write(0x14, 1)` → `m.write(0x14, 0)` | 2행 `E : <energy>` ↔ `W :` 전환 + ENERGY 아이콘 | ⬜ |
-| E-11 | STD1 | `m.write(0x30, 1); hex(m.r1(0x1D) & 0x40)` → `m.write(0x30, 0)` | 체크박스 ☑, `0x40` → ☐. **SAVE 누르지 말고 CANCEL 로 나감** | ⬜ |
+| E-11 | STD1 | `m.write(0x30, 1); hex(m.r1(0x1D) & 0x40)` → `m.write(0x30, 0)` | 체크박스 ☑, `0x40` → ☐. **CANCEL 로 나감**(E-11b/c 가 SAVE 경로를 따로 본다) | ⬜ |
+| E-11b | STD1: 먼저 `m.write(0x30, 1)` 로 horn ON 한 뒤 SETUP 진입(체크박스 ☑ 확인) | Safe mode 체크박스 탭(☑) → **SAVE** → `hex(m.r1(0x1D) & 0x40)` | **`0x40` 유지**(F1 전엔 0 으로 꺼졌다) · SETUP1 재진입 시 Horn ☑ 그대로 · `m.r1(0x16)==1` | ⬜ |
+| E-11c | E-11b 이어서 SETUP1 | Horn 체크박스 탭 1회(☐ 확인) → **SAVE** → `hex(m.r1(0x1D) & 0x40)` | `0x0`(☐ 대로 OFF). 끝나면 Safe 원복: `m.write(0x16, snap[0x16])` | ⬜ |
 | E-12 | STD2D, D 칸 키패드 **열어 둔 채** | `m.write(0x0A, 111)` | 기록만(입력란 덮임? 확정 후 값?) — 범위 밖 | 📝 |
 | E-13 | MODEL_SETUP(1): `SETUP_MODEL` 2 s 롱프레스 | `m.write(0x2E, 20); m.write(0x17, 2)` → (간이 벤치 = E-stop 미배선 확인) `m.write(0x18, 1); m.write(0x18, 2)` | CAL **20** · 주파수 선택 30 kHz + 모델명 `GDS-30…` · 타입 선택 이동 후 복귀. 끝나면 `m.write(0x2E, 16); m.write(0x17, 3)` 즉시 원복 | ⬜ |
 | E-14(선택) | 부팅 10 s 후, RUN_STD | `m.write(0x14,1); m.write(0x09,1); m.write(0x1B,1)` → 1.5 s 후 `hex(m.r1(0x1D))` 에 `0x8` → 경고 페이지에서 `m.write(0x0A, 175)` → LCD 에러 RESET 키 | 런 복귀 뒤 `D : 1.75`(새 값) — 페이지 게이트 미채택 근거. 끝나면 `m.write(0x14,0); m.write(0x09, snap[9])` | ⬜ |
