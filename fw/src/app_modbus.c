@@ -637,6 +637,10 @@ void app_modbus_apply_writes(mb_link_t link)
          * ~2 ms at 400 kHz nominal; the 50 ms/call I2C timeout governs the
          * worst case (bus hang). Same budget as the LCD DATA_SAVE path. */
         app_config_save_all(cfg);
+        /* STD RUN 페이지(9) 텍스트 D/W(E)/H·RUN_MODE 배지는 cfg 여러 필드의 함수라 항목별 에코로
+         * 못 맞춘다 — 페이지 렌더를 한 번 재사용한다(spec 2026-09-11 §3.2). ≤82 B ≈ 7.1 ms.
+         * 페이지 무관(VP RAM). hold 워치독 적층 579 → 587.7 ms < 600 (spec §4.3). */
+        app_lcd_run_std_refresh();
     }
     /* 다음 tick 시작의 mirror_live()(디코드 앞)가 holding 을 cfg 로 재동기한다:
      * 다음 read 는 클램프·정규화된 값을 보고, 클램프 잔여가 다음 메시지에서
