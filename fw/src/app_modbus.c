@@ -454,69 +454,83 @@ void app_modbus_apply_writes(mb_link_t link)
         v = g_mb.holding[MB_REG_DELAY1];
         if (v > 500u) { v = 500u; }
         cfg->limit_delay_time1 = v;
+        dgus_write_u16(LV_DM_DELAY, cfg->limit_delay_time1);   /* LCD 에코 — SETUP_STD2D/RUN_STD (spec 2026-09-11 §3.1) */
         save = true;
     } else if (g_mb.holding[MB_REG_DELAY2] != cfg->limit_delay_time2) {
         v = g_mb.holding[MB_REG_DELAY2];
         if (v > 500u) { v = 500u; }
         cfg->limit_delay_time2 = v;
+        dgus_write_u16(LV_DM_WELD, cfg->limit_delay_time2);
         save = true;
     } else if (g_mb.holding[MB_REG_DELAY3] != cfg->limit_delay_time3) {
         v = g_mb.holding[MB_REG_DELAY3];
         if (v > 2000u) { v = 2000u; }
         cfg->limit_delay_time3 = v;     /* samd20 saved this to ADDR_TRIGGER2 —
                                          * copy-paste bug, fixed by save_all */
+        dgus_write_u16(LV_DM_HOLD, cfg->limit_delay_time3);
         save = true;
     } else if (g_mb.holding[MB_REG_TRIGGER2] != cfg->limit_trigger_time2) {
         v = g_mb.holding[MB_REG_TRIGGER2];
         if (v > 500u) { v = 500u; }
         cfg->limit_trigger_time2 = v;   /* samd20 saved to ADDR_DELAY2 — ditto */
+        dgus_write_u16(LV_TM_WELD, cfg->limit_trigger_time2);
         save = true;
     } else if (g_mb.holding[MB_REG_TRIGGER3] != cfg->limit_trigger_time3) {
         v = g_mb.holding[MB_REG_TRIGGER3];
         if (v > 2000u) { v = 2000u; }
         cfg->limit_trigger_time3 = v;
+        dgus_write_u16(LV_TM_HOLD, cfg->limit_trigger_time3);
         save = true;
     } else if (g_mb.holding[MB_REG_OUT_POWER] != cfg->output_power) {
         v = g_mb.holding[MB_REG_OUT_POWER];
         if (v > 100u) { v = 100u; }
         else if (v < 50u) { v = 50u; }
         cfg->output_power = (uint8_t)v;
+        dgus_write_u16(LV_OUT_POWER, cfg->output_power);   /* 표시만 — pot 은 START/SAVE/페이지 진입 때 (spec §2.2) */
         save = true;
     } else if (g_mb.holding[MB_REG_ON_TIME] != cfg->limit_on_time) {
         v = g_mb.holding[MB_REG_ON_TIME];
         if (v > 2000u) { v = 2000u; }
         cfg->limit_on_time = v;
+        dgus_write_u16(LV_MAX_ON_TIME, cfg->limit_on_time);
         save = true;
     } else if (g_mb.holding[MB_REG_ENERGY] != (uint16_t)cfg->limit_energy) {
         cfg->limit_energy = (uint32_t)g_mb.holding[MB_REG_ENERGY];
+        dgus_write_u32(LV_ENERGY_VAL,  cfg->limit_energy);             /* render_setup_main :102-103 과 동형 */
+        dgus_write_u16(LV_ENERGY_EDIT, (uint16_t)cfg->limit_energy);
         save = true;
     } else if (g_mb.holding[MB_REG_MULTI_T1] != cfg->limit_mo_time1) {
         v = g_mb.holding[MB_REG_MULTI_T1];
         if (v > 2000u) { v = 2000u; }
         cfg->limit_mo_time1 = v;
+        dgus_write_u16(LV_MO_TIME1, cfg->limit_mo_time1);
         save = true;
     } else if (g_mb.holding[MB_REG_MULTI_T2] != cfg->limit_mo_time2) {
         v = g_mb.holding[MB_REG_MULTI_T2];
         if (v > 2000u) { v = 2000u; }
         cfg->limit_mo_time2 = v;
+        dgus_write_u16(LV_MO_TIME2, cfg->limit_mo_time2);
         save = true;
     } else if (g_mb.holding[MB_REG_MULTI_O1] != cfg->limit_mo_out1) {
         v = g_mb.holding[MB_REG_MULTI_O1];
         if (v > 100u) { v = 100u; }
         else if (v < 50u) { v = 50u; }
         cfg->limit_mo_out1 = v;
+        dgus_write_u16(LV_MO_OUT1, cfg->limit_mo_out1);
         save = true;
     } else if (g_mb.holding[MB_REG_MULTI_O2] != cfg->limit_mo_out2) {
         v = g_mb.holding[MB_REG_MULTI_O2];
         if (v > 100u) { v = 100u; }
         else if (v < 50u) { v = 50u; }
         cfg->limit_mo_out2 = v;
+        dgus_write_u16(LV_MO_OUT2, cfg->limit_mo_out2);
         save = true;
     } else if (g_mb.holding[MB_REG_TIMEOVER] != cfg->limit_out_time) {
         v = g_mb.holding[MB_REG_TIMEOVER];
         if (v > 10u) { v = 10u; }
         cfg->limit_out_time = v;        /* samd20 wrote the clamp back into the
                                          * reg; our per-tick mirror does that */
+        dgus_write_u16(LV_LIMIT_OUT_T, cfg->limit_out_time);
         save = true;
     } else if (g_mb.holding[MB_REG_RUN_MODE] != cfg->run_mode) {
         cfg->run_mode = (uint8_t)g_mb.holding[MB_REG_RUN_MODE];   /* no clamp
