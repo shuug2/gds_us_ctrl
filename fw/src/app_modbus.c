@@ -571,6 +571,7 @@ void app_modbus_apply_writes(mb_link_t link)
          * 안, legacy 3459/3468). horn 모드가 켜지면 모든 소스의 START 가 차단되며, 그 사실은 STATUS 의
          * HORN 비트로 원격에서 읽힌다. */
         app_horn_set_mode(g_mb.holding[MB_REG_HORN_CMD] != 0u);
+        dgus_write_u16(DISP_HORNDOWN, (uint16_t)app_horn_mode_active());   /* SETUP1 체크박스 — 진입 시드 app_lcd_input.c:458 와 동형. temp_horndown(shadow)은 안 건드린다 */
     } else if (g_mb.holding[MB_REG_MODEL_FREQ] != cfg->model_freq) {
         /* B-5 모델 주파수. LCD 편집 경로(app_lcd_input.c:447-450)와 **정확히 동형**: cfg 설정 +
          * 모델명 문자열 갱신이 전부다. sys_mode·런페이지·출력바 임계(ref_lv_*)는 여기서 재파생하지
@@ -580,6 +581,7 @@ void app_modbus_apply_writes(mb_link_t link)
          * else 분기를 갖는다. */
         cfg->model_freq = (uint8_t)g_mb.holding[MB_REG_MODEL_FREQ];
         app_lcd_send_model_str(cfg->model_freq, cfg->model_type);
+        dgus_write_u16(MODEL_FREQ, cfg->model_freq);   /* MODEL_SETUP 선택 VP — enter_model_setup :326 와 동형 */
         save = true;
     } else if (g_mb.holding[MB_REG_MODEL_TYPE] != cfg->model_type) {
         /* B-5 모델 타입. 위와 동형이나 🔴 **부작용이 하나 더 있다**: PC11 의 의미가 model_type 으로
@@ -596,14 +598,17 @@ void app_modbus_apply_writes(mb_link_t link)
          * app_estop_active() || us_on_status 로 막는 것이 그 자리다. */
         cfg->model_type = (uint8_t)g_mb.holding[MB_REG_MODEL_TYPE];
         app_lcd_send_model_str(cfg->model_freq, cfg->model_type);
+        dgus_write_u16(MODEL_TYPE, cfg->model_type);   /* :327 와 동형. PC11 의미 변경(위 주석)과 무관 */
         save = true;
     } else if (g_mb.holding[MB_REG_CAL_VAL] != (uint16_t)cfg->cal_val) {
         /* 클램프된 쓰기는 다음 미러가 되돌리므로 이 체인을 재발화시키지 않는다
          * (기존 클램프 분기들과 같은 형태). 원격기는 read-back 으로 클램프를 본다. */
         cfg->cal_val = cfg_cal_from_wire(g_mb.holding[MB_REG_CAL_VAL]);
+        dgus_write_u16(VAR_CAL_VAL, (uint16_t)cfg->cal_val);   /* MODEL_SETUP — raw int16 캐스트, enter_model_setup :328 와 동형 (÷100 은 DGUS 자산 몫) */
         save = true;
     } else if (g_mb.holding[MB_REG_FREQ_CAL_VAL] != (uint16_t)cfg->freq_cal_val) {
         cfg->freq_cal_val = cfg_cal_from_wire(g_mb.holding[MB_REG_FREQ_CAL_VAL]);
+        dgus_write_u16(VAR_FREQ_CAL_VAL, (uint16_t)cfg->freq_cal_val);
         save = true;
     } else if (mb_work_cnt_reset_req(&g_mb, cfg->work_cnt) != 0u) {
         /* CNTL=0 write = work counter reset (samd20 main.c:4539: cfg + FRAM + LCD refresh).
