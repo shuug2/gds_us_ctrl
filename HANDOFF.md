@@ -1,4 +1,18 @@
-# Handoff: 원격 hold-to-run 워치독 — 설계·구현·HW 벤치·머지 하루 완료 + 릴리즈 3.1.0 컷
+# Handoff: 통신문서 · 바이트 동일 리팩토링(PR #1) · FC06→LCD 에코 + F1 코드 완료 — 플래시·벤치 대기
+
+**Generated**: 2026-09-11 (비보드 세션 — ST-LINK 미연결로 플래시 불가)
+**Branches**: `refactor/byte-identical` tip `3f82c06` = **PR #1** https://github.com/shuug2/gds_us_ctrl/pull/1 (`.bin` 시작 커밋과 바이트 동일, 벤치 불요) → 그 위 `feat/modbus-write-lcd-echo` tip `6ec5b78`(9 커밋, worktree `.claude/worktrees/feat-modbus-write-lcd-echo`). main 로컬 `4928ad9`(docs 2 미푸시), origin/main `b61ef0f`
+**Board**: 여전히 REMOTE `V3.1.0R!_260906` 바이너리(09-09 재플래시 = PR #1 빌드, 동일 바이트). **에코+F1 빌드(`_260911`) 미플래시**
+**Status**: ① 통신 프로토콜 문서 V3.0(상세 `docs/comm_protocol.md` / PLC 용 `comm_protocol_plc.md`+PDF) — main 체크아웃 미추적 ② 리팩토링: 50줄 초과 38→13, 헬퍼 27 랜딩/10 보류, 13 커밋 내부 리뷰 12회 ③ 에코: 원격 FC06 쓰기 시 LCD SETUP 숫자·STD RUN 텍스트·HORN/CAL/MODEL 즉시 갱신(19 VP, 방법 A, hold 예산 587.7<600) ④ **F1**: Safe+Horn 동시 SAVE 시 horn 모드가 **실제로 꺼지던** 결함 — 진입 shadow 시드 1줄(legacy 복원, 09-06 벤치 "SETUP 저장이 horn 재전송" 함정 원인 제거)
+
+> **★ 다음 세션 진입 순서 (보드 세션)**
+> 1. `docs/superpowers/RESUME.md` 최상단(2026-09-11) — 플래시·벤치·머지 순서 한 화면
+> 2. `plans/2026-09-11-modbus-write-lcd-echo.md` Task 5 — 벤치 표(E-11b/c 포함) + 환경 규칙. 추가 항목 E-13b/E-15/E-16/R-4b 는 RESUME
+> 3. `plans/2026-09-06-hold-to-run-bench-results.md` §4 · `plans/2026-09-05-bench-results.md` §4 — 기존 함정
+> 4. 조사 정본 `research/2026-09-11-setup-sync-investigation.md` · `research/2026-09-11-safty-horn-save-investigation.md`
+---
+
+## 2026-09-06 — 원격 hold-to-run 워치독 (이전 세션 헤더 보존)
 
 **Generated**: 2026-09-06 (보드 세션, `gds_us_remote` 병행 — 원격기 실기 통과까지)
 **Branch**: `main` `b8d33ee` — 머지 `9b8e53b`(`--no-ff`), 태그 `hw-revA_fw-stage-hold-wdt` · `hw-revA_fw-3.1.0`, origin 동기, **미푸시 0**, feature 브랜치 삭제
