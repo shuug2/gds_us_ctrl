@@ -280,7 +280,6 @@ void app_lcd_tick(void)
      * 매 iter 호출(4ms 게이트는 disp_step 한정). */
     static uint8_t prev_err = 0u;
     uint8_t err = app_lcd_measure()->error_status;
-    uint32_t now = sys_tick_get_ms();
     /* 터치 RESET 직후 ~1 iter 동안 stale publish가 state를 재기록할 수 있음 —
      * 모든 복귀 경로가 lcd_status==LCD_WARNING을 먼저 게이트하므로 무해. */
     app_lcd_state()->error_status = err;
@@ -291,25 +290,11 @@ void app_lcd_tick(void)
     }
     prev_err = err;
 
-    /* B (2026-09-13): comm 페이지 set_page 뒤 LCD_COMM_ICON_REASSERT_MS 지나면 모드 아이콘 1회 재기록.
-     * page 27(STDE) 은 표시 시 DISP_COMM_MODE 를 auto-load 하지 않고 활성 중 라이브 쓰기만 반영
-     * (analysis/2026-05-31-std-comm-page27-display-port-faithful.md). set_page 직후 쓰기(render_comm_tail
-     * 호출 1)는 이 보드에서 유실됐다 — 페이지가 그려진 뒤 한 번 더 쓴다. 값은 render_comm_tail 과 동일 소스
-     * (temp_comm_mode) 라 표시 = shadow = cfg. 재초기화 루프 가드(200 ms) 안쪽이라 SYS_PIC_NOW 와 겹치지 않는다. */
-    lcd_app_state_t *st = app_lcd_state();
-    if (st->comm_icon_reassert_pending != 0u &&
-        (uint32_t)(now - st->last_set_page_ms) >= LCD_COMM_ICON_REASSERT_MS) {
-        st->comm_icon_reassert_pending = 0u;
-        if (st->lcd_status == LCD_SETUP_MHC || st->lcd_status == LCD_SETUP_STDC ||
-            st->lcd_status == LCD_SETUP_MHE || st->lcd_status == LCD_SETUP_STDE) {
-            app_lcd_comm_icon_refresh(st->lcd_status);
-        }
-    }
-
     /* Advance the display step machine on a 4 ms cadence (spec §11) — samd20's
      * 10-step job_state on odd ticks of a 2 ms timer ⇒ ~4 ms/step. One VP-group
      * per call; the machine wraps 0..9 internally. */
     static uint32_t prev_ms = 0;
+    uint32_t now = sys_tick_get_ms();
 
     if ((uint32_t)(now - prev_ms) >= 4) {
         prev_ms = now;
