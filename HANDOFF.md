@@ -1,4 +1,18 @@
-# Handoff: 통신문서 · 바이트 동일 리팩토링(PR #1) · FC06→LCD 에코 + F1 코드 완료 — 플래시·벤치 대기
+# Handoff: 에코 + F1 빌드 보드 플래시 완료 · COMM 아이콘 결함 = 패널 자산(DGUS 수정으로 해결) · 벤치 대기
+
+**Generated**: 2026-09-13 (보드 세션 — 플래시 3회, DGUS 자산 수정은 사용자)
+**Branch**: `feat/modbus-write-lcd-echo` tip `3be6a5d`(PR #1 `3f82c06` 위 13 커밋: 에코 3 · docs 2 · 날짜 · F1 spec+fix · 세션마감 · B fix→**revert** · B spec/조사 docs · CLAUDE.md 보관 규칙). worktree `.claude/worktrees/feat-modbus-write-lcd-echo` 유지
+**Board**: **REMOTE `V3.1.0R!_260911` = `3be6a5d` 빌드**, `Verified OK` 2026-09-13. 패널 자산은 사용자가 DGUS 에서 수정 — "버전이 잘못되었었던듯"(구버전 자산)
+**Status**: ① 재부팅 후 COMM 페이지 모드 아이콘 "시리얼" — 조사+실기 3단계+원격기 회신으로 **펌웨어·FRAM·원격기 정상, 패널 자산 한 지점** 확정. 펌웨어 B 시도 효과 없음 → 원복. 사용자 DGUS 수정으로 해결 ② 양산 바이너리 보관 규칙 `releases/<버전>/` CLAUDE.md 기록(원격기와 공통, 파일명 `!` 미포함) ③ 벤치 미착수
+
+> **★ 다음 세션 진입 순서 (보드 세션)**
+> 1. `docs/superpowers/RESUME.md` 최상단(2026-09-13) — 열린 항목 2개(DGUS 변경 내용 기록 · `hw/lcd/dgus/` 자산 갱신) + 벤치 순서
+> 2. `plans/2026-09-11-modbus-write-lcd-echo.md` Task 5 벤치 표 + RESUME 의 추가 항목 4개
+> 3. `plans/2026-09-06-hold-to-run-bench-results.md` §4 · `plans/2026-09-05-bench-results.md` §4 — 기존 함정
+> 4. 조사 정본 3건: `research/2026-09-11-setup-sync-investigation.md` · `2026-09-11-safty-horn-save-investigation.md` · `2026-09-12-comm-mode-display-investigation.md`(종결 블록)
+---
+
+## 2026-09-11 — 에코 + F1 코드 완료 (이전 세션 헤더 보존)
 
 **Generated**: 2026-09-11 (비보드 세션 — ST-LINK 미연결로 플래시 불가)
 **Branches**: `refactor/byte-identical` tip `3f82c06` = **PR #1** https://github.com/shuug2/gds_us_ctrl/pull/1 (`.bin` 시작 커밋과 바이트 동일, 벤치 불요) → 그 위 `feat/modbus-write-lcd-echo` tip `6ec5b78`(9 커밋, worktree `.claude/worktrees/feat-modbus-write-lcd-echo`). main 로컬 `4928ad9`(docs 2 미푸시), origin/main `b61ef0f`
