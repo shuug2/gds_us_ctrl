@@ -6,7 +6,7 @@
 **Status**: ① 재부팅 후 COMM 페이지 모드 아이콘 "시리얼" — 조사+실기 3단계+원격기 회신으로 **펌웨어·FRAM·원격기 정상, 패널 자산 한 지점** 확정. 펌웨어 B 시도 효과 없음 → 원복. 사용자 DGUS 수정으로 해결 ② 양산 바이너리 보관 규칙 `releases/<버전>/` CLAUDE.md 기록(원격기와 공통, 파일명 `!` 미포함) ③ 벤치 미착수
 
 > **★ 다음 세션 진입 순서 (보드 세션)**
-> 1. `docs/superpowers/RESUME.md` 최상단(2026-09-13) — 열린 항목 2개(DGUS 변경 내용 기록 · `hw/lcd/dgus/` 자산 갱신) + 벤치 순서
+> 1. `docs/superpowers/RESUME.md` 최상단(2026-09-13) — 열린 항목 1개(패널 자산 == 저장소 `hw/lcd/dgus/` 확인, 다르면 갱신) + 벤치 순서
 > 2. `plans/2026-09-11-modbus-write-lcd-echo.md` Task 5 벤치 표 + RESUME 의 추가 항목 4개
 > 3. `plans/2026-09-06-hold-to-run-bench-results.md` §4 · `plans/2026-09-05-bench-results.md` §4 — 기존 함정
 > 4. 조사 정본 3건: `research/2026-09-11-setup-sync-investigation.md` · `2026-09-11-safty-horn-save-investigation.md` · `2026-09-12-comm-mode-display-investigation.md`(종결 블록)
