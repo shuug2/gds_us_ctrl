@@ -154,9 +154,12 @@ static inline __attribute__((always_inline)) void render_comm_page(const app_con
     }
 }
 
-/* change_page 본체 — comm 페이지 set_page 후 DISP_COMM_MODE/EN_DHCP 재기록 (외곽 페이지 판정은 호출자) */
-static inline __attribute__((always_inline)) void render_comm_tail(uint8_t page, const lcd_app_state_t *state)
+/* comm 페이지 DISP_COMM_MODE/EN_DHCP 재기록 (외곽 페이지 판정은 호출자).
+ * change_page 의 set_page 직후 Fix C 와 app_lcd_tick 의 지연 재기록(B)이 공유. */
+void app_lcd_comm_icon_refresh(uint8_t page)
 {
+    const lcd_app_state_t *state = app_lcd_state();
+
     dgus_write_u16(DISP_COMM_MODE, (state->temp_comm_mode == 0) ? 0u : 1u);
     if (page == LCD_SETUP_MHE || page == LCD_SETUP_STDE) {
         dgus_write_u16(DISP_EN_DHCP,
@@ -232,7 +235,8 @@ void app_lcd_change_page(uint8_t page)
      * See analysis/2026-05-31-std-comm-page27-display-port-faithful.md. */
     if (page == LCD_SETUP_MHC || page == LCD_SETUP_STDC ||
         page == LCD_SETUP_MHE || page == LCD_SETUP_STDE) {
-        render_comm_tail(page, state);
+        app_lcd_comm_icon_refresh(page);               /* 기존 Fix C — 유지 */
+        state->comm_icon_reassert_pending = 1u;        /* B: 지연 재기록 무장 */
     }
 #ifdef LCD_TRACE_RX
     /* comm-page display diagnosis: page id + seeded shadow + persisted cfg.

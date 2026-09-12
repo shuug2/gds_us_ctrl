@@ -81,6 +81,8 @@ enum { US_IDLE = 0, US_REMOTE = 1, US_TOUCH = 2, US_COMM = 3, US_CYCLE = 4 };
 #define LCD_ETHER_INPUT_NM    1u
 #define LCD_ETHER_INPUT_GW    2u
 
+#define LCD_COMM_ICON_REASSERT_MS  100u   /* set_page 뒤 아이콘 재기록 지연. 05-31: 활성 페이지 라이브 쓰기만 반영 → 페이지가 그려진 뒤 써야 한다 */
+
 /* Transient runtime state owned by the LCD subsystem (spec §4.2).
  * Config/limit values live in app_config_t (g_cfg); this holds only what is
  * NOT persisted: current page, mode/status, setup-edit shadows, ether FSM. */
@@ -114,6 +116,7 @@ typedef struct {
     uint8_t  ether_temp_ip[4];          /* staging during one field's edit */
 
     uint32_t last_set_page_ms;  /* SYS_PIC_NOW loop guard (spec §10) */
+    uint8_t  comm_icon_reassert_pending;  /* 1 = comm 페이지 set_page 뒤 지연 재기록 대기 (B, 2026-09-13) */
     bool     boot_complete;     /* honor SYS_PIC_NOW re-init only after app_init */
 } lcd_app_state_t;
 
@@ -162,6 +165,7 @@ bool app_lcd_ether_dirty_take(void);
 /* Subsystem entry points (defined in app_lcd_render/input/disp — Tasks 5-9). */
 void app_lcd_change_page(uint8_t page);               /* render + set_page (spec §6) */
 void app_lcd_run_std_refresh(void);                   /* STD RUN 텍스트·수치 재기록, set_page 없음 (Modbus 에코 공용) */
+void app_lcd_comm_icon_refresh(uint8_t page);         /* COMM 모드 아이콘(+EN_DHCP) 재기록, set_page 없음 (B 지연 재기록 공용) */
 void app_lcd_input_dispatch(const dgus_frame_t *f);   /* panel touch/key handler (spec §7) */
 void app_lcd_tick(void);                              /* periodic display step (spec §11) */
 void app_lcd_var_init(void);                          /* panel-var seed (boot / SYS_PIC_NOW) */

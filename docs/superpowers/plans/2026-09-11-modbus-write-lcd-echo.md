@@ -467,6 +467,8 @@ Expected: 51개 정수. `snap[0x31] == 0xFA01`, `snap[0x32] == 1`, `snap[0x2B] =
 | R-3 | RUN_STD | 별 터미널(프롬프트 종료 후, 소켓 1개): `python3 docs/superpowers/tools/mb_hold.py 192.168.1.199 150 2` 15 s → Ctrl-C | keep 중 `US=1` 연속, 손 뗌 후 `+5xx ms US=0`(≈600) | ⬜ |
 | R-4 | RUN_STD | `for _ in range(5): t=time.monotonic(); m.write(0x08, 1500); print(round((time.monotonic()-t)*1000,1))` | 5회 전부 **< 50 ms** | ⬜ |
 | R-5 | STD2D | LCD 터치로 D 칸 = 321 확정 → `m.r1(0x0A)` | `321`(방향 ② 무변경) | ⬜ |
+| E-17 | **전원 재투입** 후 COMM 페이지 첫 진입(STD 모델 = page 27 / MULTI = 25) | Modbus 조작 없음 — LCD 로 SETUP → COMM 진입 후 아이콘 육안 | 진입 **≤0.5 s** 안에 모드 아이콘이 **이더넷**(cfg `comm_mode` 와 일치) + `DISP_EN_DHCP` 체크 상태도 cfg 대로. MULTI page 25 무회귀. 실패 시 `LCD_COMM_ICON_REASSERT_MS` 를 200 으로 올려 **1회만** 재빌드·재시험(spec §3.1) | ⬜ |
+| E-17b | COMM 진입 **직후 100 ms 안에** 다른 SETUP 페이지로 이탈 | 진입하자마자 뒤로/다른 SETUP 버튼 탭 | 이탈한 페이지에 모드 아이콘 잔상·오표시 없음(무장만 해제, 쓰기 없음) | ⬜ |
 | X | — | `for a in [0x06,0x07,0x08,0x09,0x0A,0x0B,0x0C,0x0D,0x0E,0x0F,0x10,0x11,0x12,0x13,0x14,0x17,0x18,0x2E,0x2F,0x30]: m.write(a, snap[a])` → `m.read(0,51)[6:0x19] == snap[6:0x19]` | `True`. LCD 는 CANCEL 로 런 페이지. horn 0 | ⬜ |
 
 - [ ] **Step 6: 결과 문서 + 마감**
