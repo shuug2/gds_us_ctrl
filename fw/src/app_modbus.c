@@ -454,69 +454,83 @@ void app_modbus_apply_writes(mb_link_t link)
         v = g_mb.holding[MB_REG_DELAY1];
         if (v > 500u) { v = 500u; }
         cfg->limit_delay_time1 = v;
+        dgus_write_u16(LV_DM_DELAY, cfg->limit_delay_time1);   /* LCD 에코 — SETUP_STD2D/RUN_STD (spec 2026-09-11 §3.1) */
         save = true;
     } else if (g_mb.holding[MB_REG_DELAY2] != cfg->limit_delay_time2) {
         v = g_mb.holding[MB_REG_DELAY2];
         if (v > 500u) { v = 500u; }
         cfg->limit_delay_time2 = v;
+        dgus_write_u16(LV_DM_WELD, cfg->limit_delay_time2);
         save = true;
     } else if (g_mb.holding[MB_REG_DELAY3] != cfg->limit_delay_time3) {
         v = g_mb.holding[MB_REG_DELAY3];
         if (v > 2000u) { v = 2000u; }
         cfg->limit_delay_time3 = v;     /* samd20 saved this to ADDR_TRIGGER2 —
                                          * copy-paste bug, fixed by save_all */
+        dgus_write_u16(LV_DM_HOLD, cfg->limit_delay_time3);
         save = true;
     } else if (g_mb.holding[MB_REG_TRIGGER2] != cfg->limit_trigger_time2) {
         v = g_mb.holding[MB_REG_TRIGGER2];
         if (v > 500u) { v = 500u; }
         cfg->limit_trigger_time2 = v;   /* samd20 saved to ADDR_DELAY2 — ditto */
+        dgus_write_u16(LV_TM_WELD, cfg->limit_trigger_time2);
         save = true;
     } else if (g_mb.holding[MB_REG_TRIGGER3] != cfg->limit_trigger_time3) {
         v = g_mb.holding[MB_REG_TRIGGER3];
         if (v > 2000u) { v = 2000u; }
         cfg->limit_trigger_time3 = v;
+        dgus_write_u16(LV_TM_HOLD, cfg->limit_trigger_time3);
         save = true;
     } else if (g_mb.holding[MB_REG_OUT_POWER] != cfg->output_power) {
         v = g_mb.holding[MB_REG_OUT_POWER];
         if (v > 100u) { v = 100u; }
         else if (v < 50u) { v = 50u; }
         cfg->output_power = (uint8_t)v;
+        dgus_write_u16(LV_OUT_POWER, cfg->output_power);   /* 표시만 — pot 은 START/SAVE/페이지 진입 때 (spec §2.2) */
         save = true;
     } else if (g_mb.holding[MB_REG_ON_TIME] != cfg->limit_on_time) {
         v = g_mb.holding[MB_REG_ON_TIME];
         if (v > 2000u) { v = 2000u; }
         cfg->limit_on_time = v;
+        dgus_write_u16(LV_MAX_ON_TIME, cfg->limit_on_time);
         save = true;
     } else if (g_mb.holding[MB_REG_ENERGY] != (uint16_t)cfg->limit_energy) {
         cfg->limit_energy = (uint32_t)g_mb.holding[MB_REG_ENERGY];
+        dgus_write_u32(LV_ENERGY_VAL,  cfg->limit_energy);             /* render_setup_main :102-103 과 동형 */
+        dgus_write_u16(LV_ENERGY_EDIT, (uint16_t)cfg->limit_energy);
         save = true;
     } else if (g_mb.holding[MB_REG_MULTI_T1] != cfg->limit_mo_time1) {
         v = g_mb.holding[MB_REG_MULTI_T1];
         if (v > 2000u) { v = 2000u; }
         cfg->limit_mo_time1 = v;
+        dgus_write_u16(LV_MO_TIME1, cfg->limit_mo_time1);
         save = true;
     } else if (g_mb.holding[MB_REG_MULTI_T2] != cfg->limit_mo_time2) {
         v = g_mb.holding[MB_REG_MULTI_T2];
         if (v > 2000u) { v = 2000u; }
         cfg->limit_mo_time2 = v;
+        dgus_write_u16(LV_MO_TIME2, cfg->limit_mo_time2);
         save = true;
     } else if (g_mb.holding[MB_REG_MULTI_O1] != cfg->limit_mo_out1) {
         v = g_mb.holding[MB_REG_MULTI_O1];
         if (v > 100u) { v = 100u; }
         else if (v < 50u) { v = 50u; }
         cfg->limit_mo_out1 = v;
+        dgus_write_u16(LV_MO_OUT1, cfg->limit_mo_out1);
         save = true;
     } else if (g_mb.holding[MB_REG_MULTI_O2] != cfg->limit_mo_out2) {
         v = g_mb.holding[MB_REG_MULTI_O2];
         if (v > 100u) { v = 100u; }
         else if (v < 50u) { v = 50u; }
         cfg->limit_mo_out2 = v;
+        dgus_write_u16(LV_MO_OUT2, cfg->limit_mo_out2);
         save = true;
     } else if (g_mb.holding[MB_REG_TIMEOVER] != cfg->limit_out_time) {
         v = g_mb.holding[MB_REG_TIMEOVER];
         if (v > 10u) { v = 10u; }
         cfg->limit_out_time = v;        /* samd20 wrote the clamp back into the
                                          * reg; our per-tick mirror does that */
+        dgus_write_u16(LV_LIMIT_OUT_T, cfg->limit_out_time);
         save = true;
     } else if (g_mb.holding[MB_REG_RUN_MODE] != cfg->run_mode) {
         cfg->run_mode = (uint8_t)g_mb.holding[MB_REG_RUN_MODE];   /* no clamp
@@ -557,6 +571,7 @@ void app_modbus_apply_writes(mb_link_t link)
          * 안, legacy 3459/3468). horn 모드가 켜지면 모든 소스의 START 가 차단되며, 그 사실은 STATUS 의
          * HORN 비트로 원격에서 읽힌다. */
         app_horn_set_mode(g_mb.holding[MB_REG_HORN_CMD] != 0u);
+        dgus_write_u16(DISP_HORNDOWN, (uint16_t)app_horn_mode_active());   /* SETUP1 체크박스 — 진입 시드 app_lcd_input.c:458 와 동형. temp_horndown(shadow)은 안 건드린다 */
     } else if (g_mb.holding[MB_REG_MODEL_FREQ] != cfg->model_freq) {
         /* B-5 모델 주파수. LCD 편집 경로(app_lcd_input.c:447-450)와 **정확히 동형**: cfg 설정 +
          * 모델명 문자열 갱신이 전부다. sys_mode·런페이지·출력바 임계(ref_lv_*)는 여기서 재파생하지
@@ -566,6 +581,7 @@ void app_modbus_apply_writes(mb_link_t link)
          * else 분기를 갖는다. */
         cfg->model_freq = (uint8_t)g_mb.holding[MB_REG_MODEL_FREQ];
         app_lcd_send_model_str(cfg->model_freq, cfg->model_type);
+        dgus_write_u16(MODEL_FREQ, cfg->model_freq);   /* MODEL_SETUP 선택 VP — enter_model_setup :326 와 동형 */
         save = true;
     } else if (g_mb.holding[MB_REG_MODEL_TYPE] != cfg->model_type) {
         /* B-5 모델 타입. 위와 동형이나 🔴 **부작용이 하나 더 있다**: PC11 의 의미가 model_type 으로
@@ -582,14 +598,17 @@ void app_modbus_apply_writes(mb_link_t link)
          * app_estop_active() || us_on_status 로 막는 것이 그 자리다. */
         cfg->model_type = (uint8_t)g_mb.holding[MB_REG_MODEL_TYPE];
         app_lcd_send_model_str(cfg->model_freq, cfg->model_type);
+        dgus_write_u16(MODEL_TYPE, cfg->model_type);   /* :327 와 동형. PC11 의미 변경(위 주석)과 무관 */
         save = true;
     } else if (g_mb.holding[MB_REG_CAL_VAL] != (uint16_t)cfg->cal_val) {
         /* 클램프된 쓰기는 다음 미러가 되돌리므로 이 체인을 재발화시키지 않는다
          * (기존 클램프 분기들과 같은 형태). 원격기는 read-back 으로 클램프를 본다. */
         cfg->cal_val = cfg_cal_from_wire(g_mb.holding[MB_REG_CAL_VAL]);
+        dgus_write_u16(VAR_CAL_VAL, (uint16_t)cfg->cal_val);   /* MODEL_SETUP — raw int16 캐스트, enter_model_setup :328 와 동형 (÷100 은 DGUS 자산 몫) */
         save = true;
     } else if (g_mb.holding[MB_REG_FREQ_CAL_VAL] != (uint16_t)cfg->freq_cal_val) {
         cfg->freq_cal_val = cfg_cal_from_wire(g_mb.holding[MB_REG_FREQ_CAL_VAL]);
+        dgus_write_u16(VAR_FREQ_CAL_VAL, (uint16_t)cfg->freq_cal_val);
         save = true;
     } else if (mb_work_cnt_reset_req(&g_mb, cfg->work_cnt) != 0u) {
         /* CNTL=0 write = work counter reset (samd20 main.c:4539: cfg + FRAM + LCD refresh).
@@ -623,6 +642,10 @@ void app_modbus_apply_writes(mb_link_t link)
          * ~2 ms at 400 kHz nominal; the 50 ms/call I2C timeout governs the
          * worst case (bus hang). Same budget as the LCD DATA_SAVE path. */
         app_config_save_all(cfg);
+        /* STD RUN 페이지(9) 텍스트 D/W(E)/H·RUN_MODE 배지는 cfg 여러 필드의 함수라 항목별 에코로
+         * 못 맞춘다 — 페이지 렌더를 한 번 재사용한다(spec 2026-09-11 §3.2). ≤82 B ≈ 7.1 ms.
+         * 페이지 무관(VP RAM). hold 워치독 적층 579 → 587.7 ms < 600 (spec §4.3). */
+        app_lcd_run_std_refresh();
     }
     /* 다음 tick 시작의 mirror_live()(디코드 앞)가 holding 을 cfg 로 재동기한다:
      * 다음 read 는 클램프·정규화된 값을 보고, 클램프 잔여가 다음 메시지에서

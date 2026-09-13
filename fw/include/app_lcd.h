@@ -161,6 +161,7 @@ bool app_lcd_ether_dirty_take(void);
 
 /* Subsystem entry points (defined in app_lcd_render/input/disp — Tasks 5-9). */
 void app_lcd_change_page(uint8_t page);               /* render + set_page (spec §6) */
+void app_lcd_run_std_refresh(void);                   /* STD RUN 텍스트·수치 재기록, set_page 없음 (Modbus 에코 공용) */
 void app_lcd_input_dispatch(const dgus_frame_t *f);   /* panel touch/key handler (spec §7) */
 void app_lcd_tick(void);                              /* periodic display step (spec §11) */
 void app_lcd_var_init(void);                          /* panel-var seed (boot / SYS_PIC_NOW) */

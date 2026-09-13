@@ -96,3 +96,4 @@ ATSAMD20 + ATmega16 두 MCU로 분리되어 있던 초음파 컨트롤러를 **S
    **릴리즈 태그**(기준선 `hw-revA_fw-3.0.0` → **`hw-revA_fw-3.1.0`**; STD `V3.0.0_260905` / REMOTE `V3.1.0R!_260905`).
    🔴 단 3.1.0 은 **배포 금지** — PC8 인터록 극성 반전 상태다(`define.h` `REMOTE_EN_INTERLOCK_INVERTED`).
 7. **원격 hold-to-run 워치독** (2026-09-06, 원격기 요구 R-1~R-11) — START(0x1B) 값 2=hold 시작/3=유지, 유지 신호 600 ms 소실 → 자동 정지. 판별 `0x32 FEAT_CAP` bit0. 설계 `docs/superpowers/specs/2026-09-06-remote-hold-to-run-design.md`. **HW 벤치 대기**(spec §8 H-0~H-16, TCP 전용).
+8. **Modbus FC06 쓰기 → LCD VP 에코** (2026-09-11, 방법 A) — 원격이 쓴 SETUP 값·STD RUN 텍스트·HORN 체크박스·CAL/MODEL 선택이 LCD 표시 중 즉시 갱신. 레지스터 계약 무변경, staged comm 제외. 설계 `docs/superpowers/specs/2026-09-11-modbus-write-lcd-echo-design.md`. **HW 벤치 대기**(spec §5.2).

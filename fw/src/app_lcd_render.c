@@ -36,10 +36,16 @@
  * (main.c:3046) — 포트는 길이를 여기서 강제한다. */
 _Static_assert(sizeof(VERSION_MSG) - 1u == 20u, "VERSION_MSG must be exactly 20 chars");
 
-/* change_page 본체 — LCD_RUN_STD: DELAY/TRIGGER 별 D/W(E)/H 3줄 텍스트
- * + 수치 4필드(LV_DM_DELAY/DISP_RUN_MODE/DISP_SAFTY/LV_LIMIT_OUT_T) */
-static inline __attribute__((always_inline)) void render_run_std(const app_config_t *cfg, uint8_t *buf)
+/* STD RUN 페이지 텍스트·수치 재기록 — LCD_RUN_STD: DELAY/TRIGGER 별 D/W(E)/H 3줄 텍스트
+ * + 수치 4필드(LV_DM_DELAY/DISP_RUN_MODE/DISP_SAFTY/LV_LIMIT_OUT_T). set_page 는 하지 않는다.
+ * 호출처 = app_lcd_change_page(페이지 진입) + app_modbus_apply_writes(FC06 cfg 저장 뒤,
+ * spec 2026-09-11 §3.2). 페이지 게이트 없음 — 데이터/텍스트 VP 는 페이지 밖에서 써도 VP RAM 에
+ * 남고, 경고→런 복귀 5곳(app_lcd_input.c:103/126/130/151/266)이 set_page 만 하므로 게이트가
+ * 있으면 경고 중 도착한 원격 쓰기가 복귀 뒤 stale 로 남는다. */
+void app_lcd_run_std_refresh(void)
 {
+    const app_config_t *cfg = app_lcd_cfg();
+    uint8_t buf[20];            /* line-build scratch (samd20 global lcd_temp_buf) */
     uint8_t n;                  /* formatter return length (samd20 'temp') */
     dgus_write_u16(LV_DM_DELAY,    cfg->limit_delay_time1);
     dgus_write_u16(DISP_RUN_MODE,  cfg->run_mode);
@@ -168,7 +174,6 @@ void app_lcd_change_page(uint8_t page)
     lcd_app_state_t *state = app_lcd_state();
 
     uint8_t  addr_str[4];       /* conv_addr2str field (samd20 'temp_str') */
-    uint8_t  buf[20];           /* line-build scratch (samd20 global lcd_temp_buf) */
     char     ipbuf[16];         /* ip_to_string scratch */
 
     /* --- unconditional top (main.c:2947-2955) --- */
@@ -176,7 +181,7 @@ void app_lcd_change_page(uint8_t page)
     dgus_write_u16(DISP_MULTI_EN,  cfg->multi_ctrl  ? 1u : 0u);
 
     if (page == LCD_RUN_STD) {
-        render_run_std(cfg, buf);
+        app_lcd_run_std_refresh();
     } else if (page == LCD_SETUP_HAND || page == LCD_SETUP_MULTI || page == LCD_SETUP_STD1) {
         render_setup_main(cfg, state);
     } else if (page == LCD_SETUP_STD2D) {

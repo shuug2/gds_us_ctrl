@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### 2026-09-11 — feat(modbus/lcd): FC06 쓰기 → LCD VP 에코 — SETUP 숫자 13분기 + STD RUN 텍스트 + HORN/CAL/MODEL — HW 벤치 대기
+
+- **무엇**: 원격기가 FC06 으로 SETUP 값을 쓰면 컨트롤러 LCD 가 그 페이지에 머무는 동안 옛 숫자를 보이던 것(조사 `research/2026-09-11-setup-sync-investigation.md` §A)을 고쳤다. `apply_writes` 의 cfg 분기마다 기존 3개 에코(`DISP_ENERGY_EN/MULTI_EN/SAFTY`)와 **동형**으로 `dgus_write_u16(VP, cfg->…)` 1줄: DELAY1/2/3 · TRIGGER2/3 · OUT_POWER · ON_TIME · ENERGY(u32+u16) · MULTI_T1/T2/O1/O2 · TIMEOVER(14 VP 쓰기). STD RUN 페이지(9)의 `D/W(E)/H`·RUN_MODE 배지는 `render_run_std` 를 공개 함수 `app_lcd_run_std_refresh()` 로 승격해 `if (save)` 뒤 1회 재기록(set_page 없음, 페이지 게이트 없음). HORN_CMD → `DISP_HORNDOWN`, CAL → `VAR_*CAL_VAL`, MODEL → 선택 VP 도 에코.
+- **사용자 결정(방법 A)**: 페이지 재렌더(C-2)·주기 재쓰기(C-3) 기각. LCD 편집 중 충돌은 범위 밖. staged comm(`0x1E~0x29`) 은 COMM 페이지가 shadow 기반이라 **제외**. 이후 결정 2건: HORN·CAL 2 · MODEL 2 를 묶은 **Task 3 전부 포함**, ENERGY 는 페이지 렌더와 같은 **raw 에코**(부팅 시드 `/10` 불일치는 고치지 않고 벤치에서 기록만).
+- **의도적 legacy 이탈**: samd20 `update_holding_reg(1)` 은 3곳만 에코(`ref/samd20/main.c:4520/4530/4536`). "LCD 에 없는 규칙을 원격에만 발명 금지" 원칙과 무관 — 원격 제약이 아니라 LCD 표시를 cfg 에 맞추는 것.
+- **계약 무변경**: 레지스터 주소·의미·클램프·저장·CAP 전부 그대로. 원격기 조치 없음(벤치 PASS 후 통보).
+- **지연**: apply 1회 최악 100 B ≈ 8.7 ms(115200) → hold 워치독 적층 579 → **587.7 ms < 600**. UART wedge 시 프레임당 10 ms 캡은 `change_page` 와 같은 급.
+- **FLASH** ≈ +180 B(실측: STD text 66,124→66,304 / REMOTE text 66,440→66,620; Task1 +120 · Task2 +8 · Task3 +52). host 17 PASS · STD/REMOTE 경고 0. **HW 벤치 대기** — 항목 = spec §5.2 E-0~E-14·R-1~R-5, 결과는 `plans/2026-09-11-modbus-write-lcd-echo-bench-results.md`. 통과 시 태그 `hw-revA_fw-stage-lcd-echo`.
+- 관찰(범위 밖, 무수정): `LV_ENERGY_EDIT` 부팅 시드가 `/10`(`app_lcd.c:240`)이고 페이지 렌더는 raw(`render.c:103`) — 기존 불일치. spec = `specs/2026-09-11-modbus-write-lcd-echo-design.md`, plan = `plans/2026-09-11-modbus-write-lcd-echo.md`.
+- **fix(lcd) F1 — SETUP1 진입 horn shadow 시드**(같은 벤치 빌드): 진입 시 체크박스 VP 는 현재 horn 모드로 그리면서 shadow `temp_horndown` 은 0 리셋해(`app_lcd_input.c:459`), horn 이 이미 ON 인 상태에서 다른 항목만 바꾸고 SAVE 하면 **horn 모드가 실제로 꺼졌다**(SOL·START 게이트·STATUS bit6). `f_safty` 는 무관. shadow 를 `app_horn_mode_active()` 로 시드해 "화면 ✓ = SAVE 적용값". **legacy 복원** — samd20 SETUP_PARAM 진입(`main.c:3754-3771`)은 temp 무접촉이었고 포트 주석의 `3617-3622` 는 CANCEL 분기 오인용(`519d908`, 2026-07-18). 원격 `0x30=1` 로 켠 horn 도 LCD SAVE 에 살아남아 2026-09-06 벤치 함정("SETUP 저장이 horn 재전송") 원인 제거. CANCEL 의 temp=0(`comm.c:442`) 은 legacy 동일이라 유지. 조사 `research/2026-09-11-safty-horn-save-investigation.md`, spec `specs/2026-09-11-horn-shadow-seed-fix-design.md`. 벤치 E-11b 기대 변경 + E-11c 신설.
+
 ### 2026-09-09 — refactor: 바이트 동일 리팩토링 — 50줄 초과 함수 38→13 · app_modbus.c 815→792 · .bin 무변경
 
 - **무엇**: 함수 안 장문 주석을 함수 헤더로 옮기고(22함수 편집 / 23함수 검토, 코드 줄 무변경), 직선 본체를 `static inline __attribute__((always_inline)) void` 헬퍼로 뽑았다(**27개 랜딩**: `mirror_live` 3 · `usart6_mb_open` 2 · `apply_writes` 3 · `lcd_input_dispatch` 3 · FSM step `weld_fsm_step` 4 · `osc_init_fsm_step` 4 · `seek_reset_fsm_step` 2 · 조건부 6). else-if 체인·switch case·파일 분할은 하지 않았다(감사 실측 ✗). 외부 계약(Modbus·LCD)·거동 변화 0.

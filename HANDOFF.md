@@ -1,4 +1,33 @@
-# Handoff: 원격 hold-to-run 워치독 — 설계·구현·HW 벤치·머지 하루 완료 + 릴리즈 3.1.0 컷
+# Handoff: 에코 + F1 빌드 보드 플래시 완료 · COMM 아이콘 결함 = 패널 자산(DGUS 수정으로 해결) · 벤치 대기
+
+**Generated**: 2026-09-13 (보드 세션 — 플래시 3회, DGUS 자산 수정은 사용자)
+**Branch**: `feat/modbus-write-lcd-echo` tip `3be6a5d`(PR #1 `3f82c06` 위 13 커밋: 에코 3 · docs 2 · 날짜 · F1 spec+fix · 세션마감 · B fix→**revert** · B spec/조사 docs · CLAUDE.md 보관 규칙). worktree `.claude/worktrees/feat-modbus-write-lcd-echo` 유지
+**Board**: **REMOTE `V3.1.0R!_260911` = `3be6a5d` 빌드**, `Verified OK` 2026-09-13. 패널 자산은 사용자가 DGUS 에서 수정 — "버전이 잘못되었었던듯"(구버전 자산)
+**Status**: ① 재부팅 후 COMM 페이지 모드 아이콘 "시리얼" — 조사+실기 3단계+원격기 회신으로 **펌웨어·FRAM·원격기 정상, 패널 자산 한 지점** 확정. 펌웨어 B 시도 효과 없음 → 원복. 사용자 DGUS 수정으로 해결 ② 양산 바이너리 보관 규칙 `releases/<버전>/` CLAUDE.md 기록(원격기와 공통, 파일명 `!` 미포함) ③ 벤치 미착수
+**Releases**: `releases/README.md` = 공통 SWD 플래시 가이드(CubeProgrammer CLI / OpenOCD / J-Link · SHA 대조 · LCD 버전 판정 · 실패 표 · 보관 절차 명령 + 버전 README 템플릿), 원격기 `gds_us_remote/releases/` 와 같은 목차(2026-09-13 원격기 세션 요청). **첫 보관본 `releases/V3.1.0R_260911/` 생성(2026-09-13, 사용자 지시로 벤치 전)** — REMOTE `.bin` 만(STD 미검증 제외, `.elf` 제외), 클린 빌드 해시 `2a813206…` = 보드 플래시 이미지와 동일 → 재플래시 불요. **태그 미발행·벤치 미통과**를 버전 README 에 명기. 벤치가 코드를 바꾸면 새 날짜 폴더로 대체, PASS 후 태그 발행 시 README 표의 태그 칸만 채운다(원격기에 **태그 발행·폴더 대체 둘 다** 통보 — 그쪽 CLAUDE.md §7 서술 갱신 대기, remote HANDOFF `296c23e` 에 현 상태 기록됨). 양산 플래시는 반드시 보관본으로, `fw/build*/` 금지
+
+> **★ 다음 세션 진입 순서 (보드 세션)**
+> 1. `docs/superpowers/RESUME.md` 최상단(2026-09-13) — 열린 항목 1개(패널 자산 == 저장소 `hw/lcd/dgus/` 확인, 다르면 갱신) + 벤치 순서
+> 2. `plans/2026-09-11-modbus-write-lcd-echo.md` Task 5 벤치 표 + RESUME 의 추가 항목 4개
+> 3. `plans/2026-09-06-hold-to-run-bench-results.md` §4 · `plans/2026-09-05-bench-results.md` §4 — 기존 함정
+> 4. 조사 정본 3건: `research/2026-09-11-setup-sync-investigation.md` · `2026-09-11-safty-horn-save-investigation.md` · `2026-09-12-comm-mode-display-investigation.md`(종결 블록)
+---
+
+## 2026-09-11 — 에코 + F1 코드 완료 (이전 세션 헤더 보존)
+
+**Generated**: 2026-09-11 (비보드 세션 — ST-LINK 미연결로 플래시 불가)
+**Branches**: `refactor/byte-identical` tip `3f82c06` = **PR #1** https://github.com/shuug2/gds_us_ctrl/pull/1 (`.bin` 시작 커밋과 바이트 동일, 벤치 불요) → 그 위 `feat/modbus-write-lcd-echo` tip `6ec5b78`(9 커밋, worktree `.claude/worktrees/feat-modbus-write-lcd-echo`). main 로컬 `4928ad9`(docs 2 미푸시), origin/main `b61ef0f`
+**Board**: 여전히 REMOTE `V3.1.0R!_260906` 바이너리(09-09 재플래시 = PR #1 빌드, 동일 바이트). **에코+F1 빌드(`_260911`) 미플래시**
+**Status**: ① 통신 프로토콜 문서 V3.0(상세 `docs/comm_protocol.md` / PLC 용 `comm_protocol_plc.md`+PDF) — main 체크아웃 미추적 ② 리팩토링: 50줄 초과 38→13, 헬퍼 27 랜딩/10 보류, 13 커밋 내부 리뷰 12회 ③ 에코: 원격 FC06 쓰기 시 LCD SETUP 숫자·STD RUN 텍스트·HORN/CAL/MODEL 즉시 갱신(19 VP, 방법 A, hold 예산 587.7<600) ④ **F1**: Safe+Horn 동시 SAVE 시 horn 모드가 **실제로 꺼지던** 결함 — 진입 shadow 시드 1줄(legacy 복원, 09-06 벤치 "SETUP 저장이 horn 재전송" 함정 원인 제거)
+
+> **★ 다음 세션 진입 순서 (보드 세션)**
+> 1. `docs/superpowers/RESUME.md` 최상단(2026-09-11) — 플래시·벤치·머지 순서 한 화면
+> 2. `plans/2026-09-11-modbus-write-lcd-echo.md` Task 5 — 벤치 표(E-11b/c 포함) + 환경 규칙. 추가 항목 E-13b/E-15/E-16/R-4b 는 RESUME
+> 3. `plans/2026-09-06-hold-to-run-bench-results.md` §4 · `plans/2026-09-05-bench-results.md` §4 — 기존 함정
+> 4. 조사 정본 `research/2026-09-11-setup-sync-investigation.md` · `research/2026-09-11-safty-horn-save-investigation.md`
+---
+
+## 2026-09-06 — 원격 hold-to-run 워치독 (이전 세션 헤더 보존)
 
 **Generated**: 2026-09-06 (보드 세션, `gds_us_remote` 병행 — 원격기 실기 통과까지)
 **Branch**: `main` `b8d33ee` — 머지 `9b8e53b`(`--no-ff`), 태그 `hw-revA_fw-stage-hold-wdt` · `hw-revA_fw-3.1.0`, origin 동기, **미푸시 0**, feature 브랜치 삭제

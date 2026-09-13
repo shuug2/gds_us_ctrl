@@ -120,6 +120,14 @@ env -u STM32_TOOLCHAIN cmake --build build --target flash     # 플래시
 ⚠ Modbus 소비자의 capability 판별은 버전 문자열이 아니다(버전 레지스터 없음, LCD 전용) —
 `0x31 CFG_CAP` / `0x2A REMOTE_CAP` 이 그 일을 한다. 그래서 STD 번호 동결이 소비자를 오도하지 않는다.
 
+### 양산 바이너리 보관 (`releases/`, 2026-09-13 — 원격기 `gds_us_remote` 와 공통 규칙)
+
+HW 벤치 PASS 로 태그가 붙는 빌드는 **저장소 안 `releases/<버전문자열>/`** 에 보관한다. 버전문자열 = `define.h` 의 `VERSION_MSG` 에서 공백을 뗀 것(`V3.1.0R_260911`). 파일명 규칙 = **`gds_us_ctrl_v<버전>.bin`** — 극성 반전 표식 `!` 는 파일명에 넣지 않고(`gds_us_ctrl_v3.1.0R_260911.bin`) **README 에 "인터록 반전판(`REMOTE_EN_INTERLOCK_INVERTED 1`), 배포 금지" 를 명기**한다(사용자 결정 ①-b). STD 빌드가 함께 검증됐으면 같은 폴더에 `gds_us_ctrl_v3.0.0_260911.bin` 로 나란히.
+
+**공통 플래시 가이드·절차 명령·버전 README 템플릿 = `releases/README.md`**(원격기 `gds_us_remote/releases/README.md` 와 같은 목차). 폴더 구성: `.bin`(플래시에 쓰는 것) · `.elf`(심볼, 선택) · `stm32f410.cfg` 복사본 · `SHA256SUMS` · `README.md`(태그 · 커밋 · `arm-none-eabi-gcc --version` · 빌드 명령 `MODEL=remote ./fw.sh` · 플래시 명령 `./fw.sh flash` 또는 openocd 한 줄 · 재현 확인 `shasum -a 256 -c SHA256SUMS` · 이 릴리스에 든 것 · **배포 금지 여부**).
+
+절차: ① 태그(`hw-revA_fw-…`) ② `rm -rf fw/build fw/build-remote` 클린 빌드 ③ `define.h` 날짜 == 태그 시점 확인(우리는 `git describe` 를 안 쓰므로 접미사 문제는 없지만 날짜 불일치는 사람이 잡아야 한다) ④ `releases/<버전>/` 에 복사·개명 ⑤ `SHA256SUMS` ⑥ **그 보관본을 보드에 플래시해 LCD 버전 육안** ⑦ 보관 폴더 커밋(태그보다 뒤 커밋이 정상) ⑧ 푸시. 양산 플래시는 반드시 보관본으로. 저장소 크기 부담이 되면 GitHub Release 자산으로 옮긴다(원격기와 같은 결정).
+
 ---
 
 ## 작업 시 주의사항
@@ -140,6 +148,10 @@ env -u STM32_TOOLCHAIN cmake --build build --target flash     # 플래시
 **먼저 `docs/NEXT_STEPS.md`를 읽고 진행 상황과 다음 작업을 확인.**
 
 🔴🔴 **배포 금지 (2026-09-05~)**: `8f33c5f` 이후 **PC8 인터록 극성이 반전**돼 있다(미실장 HIGH=허용). **단선·커넥터 탈락이 "허용" 이 되어 인터록 보호가 없다.** `gds_us_remote` 의 "STD 에도 원격 기동 / 확인 없이 탭" 결정과 합쳐지면 **원격 START = 탭 한 번 + 물리 인터록 없음**이다. 해제 조건 = **PC8 실장 PCB + 극성 원복(`fw/include/define.h` `REMOTE_EN_INTERLOCK_INVERTED` → `0`) + A-1·A-5·A-13 재시험 PASS**. 상세 = `HANDOFF.md` 최상단.
+
+**현재 진행 (2026-09-13, 마감)**: **보드 = `feat/modbus-write-lcd-echo` tip `3be6a5d` 빌드(`V3.1.0R!_260911`, 에코 19 VP + STD RUN 재기록 + F1) 플래시 완료, 벤치 미착수.** COMM 페이지 모드 아이콘 "시리얼" 표시는 조사·실기·원격기 회신으로 **패널 자산 결함**으로 확정(펌웨어 B 시도 `9fc94df` 효과 없음 → 원복 `3be6a5d`), **사용자가 DGUS 에서 수정해 해결** — 사용자 "버전이 잘못되었었던듯" = 패널 자산 구버전. ⚠ 패널본 == 저장소 `hw/lcd/dgus/` 확인(다음 세션 첫 항목). 양산 바이너리 보관 규칙 신설(위 태깅 규칙 절 — `releases/<버전>/`, 첫 보관본 = 이번 벤치 PASS 태그). 진입 = `docs/superpowers/RESUME.md` 최상단 → 벤치(plan Task 5 표 + E-13b/15/16/R-4b; E-17 삭제) → 주석 정정 커밋 → PR #1 머지 → PR #2 → 태그 → `releases/V3.1.0R_260911/` → 원격기 통보. 아래 블록은 이전 세션.
+
+**현재 진행 (2026-09-11, 마감)**: **열린 브랜치 2개(스택), 플래시·벤치 대기.** ① `refactor/byte-identical` = **PR #1**(두 모델 `.bin` 바이트 동일 → 벤치 불요, 50줄 초과 38→13, 도구 `fw/tools/bin-same.sh`·`funclen.py`) ② `feat/modbus-write-lcd-echo`(①위, tip `6ec5b78`) = **원격 FC06 쓰기 → LCD VP 에코**(19 VP + STD RUN 텍스트 재기록) + **F1** SETUP1 진입 horn shadow 시드(Safe+Horn 동시 SAVE 시 horn 모드가 실제로 꺼지던 결함 — 09-06 "벤치 중 LCD 만지지 말 것" 함정의 원인). 코드·리뷰 완료, **미플래시**(보드 = `_260906` 바이너리). 진입 = `docs/superpowers/RESUME.md` 최상단 → 플래시 `V3.1.0R!_260911` → 벤치(plan Task 5 표 + E-13b/15/16/R-4b) → 주석 정정 커밋 → PR #1 머지 → PR #2 → 태그 `hw-revA_fw-stage-lcd-echo` → 원격기 통보. 통신 프로토콜 문서 `docs/comm_protocol*.md`/`.pdf` 는 main 체크아웃 미추적(커밋 결정 필요). 아래 블록은 이전 세션.
 
 **현재 진행 (2026-09-06, 마감)**: **원격 hold-to-run 워치독 — 설계→구현→HW 벤치→머지 완료.** main `b8d33ee`(머지 `9b8e53b`, 태그 `hw-revA_fw-stage-hold-wdt`), origin 동기, 브랜치 정리. 보드 = **REMOTE `V3.1.0R!_260906`**(`96dc7d5` 빌드, LCD 에 `!` 표식), cfg 무변경, horn OFF. 배포 금지(PC8)는 그대로. 같은 날 **릴리즈 3.1.0 컷**(위 태깅 규칙 신설). 진입 = `docs/superpowers/RESUME.md` 최상단 블록 + `HANDOFF.md`. ⚠ **벤치 중 LCD 를 만지지 말 것** — SETUP 저장이 horn down 을 재전송해 START 가 게이트에 막힌다(bench-results 2026-09-06 §4-5). 아래 블록은 이전 세션.
 
