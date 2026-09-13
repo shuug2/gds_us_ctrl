@@ -68,9 +68,7 @@ uint8_t energy2str(uint32_t src, uint8_t *dest)
 {
     uint8_t  nibble, first_zero, pos;
     uint16_t temp_i;
-
     first_zero = pos = 0;
-
     nibble = (uint8_t)(src / 100000);
     src    = src % 100000;
     if (nibble != 0) {
@@ -114,7 +112,6 @@ uint8_t energy2str(uint32_t src, uint8_t *dest)
 
     dest[pos++] = (uint8_t)(temp_i + '0');
     dest[pos++] = '\0';
-
     return pos;
 }
 

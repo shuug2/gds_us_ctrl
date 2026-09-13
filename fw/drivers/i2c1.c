@@ -22,12 +22,13 @@ static void unstick_delay(void)
     for (volatile uint32_t i = 0u; i < 240u; i++) { }
 }
 
-/* I2C 버스 stuck 복구 */
+/* I2C 버스 stuck 복구.
+ * [개요] SDA(PB7) stuck-low 복구: SCL(PB6) GPIO-OD 9클럭 + STOP (감사 H2).
+ * HAL_I2C_Init 전, GPIO clock enable 후에만 호출. 실패해도 진행 —
+ * 이후 트랜잭션 실패는 s_err_count로 드러남.
+ */
 static void i2c1_bus_unstick(void)
 {
-    /* SDA(PB7) stuck-low 복구: SCL(PB6) GPIO-OD 9클럭 + STOP (감사 H2).
-     * HAL_I2C_Init 전, GPIO clock enable 후에만 호출. 실패해도 진행 —
-     * 이후 트랜잭션 실패는 s_err_count로 드러남. */
     GPIO_InitTypeDef g = {0};
 
     /* SDA=input으로 버스 상태 관찰, SCL=OD output(idle high) */

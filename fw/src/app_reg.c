@@ -164,31 +164,74 @@ void app_reg_raise_ovtime(void)
     g_reg.error_status |= ERR_OVTIME;
 }
 
-/* US 명령 디스패치 */
+/* US 명령 디스패치.
+ * [START] M16-faithful: commands are ignored during the boot warm-up (Timer1
+ * ISR skips the PINA dispatcher app_0x06d2 while g_main_state!=0,
+ * disasm @0x041E); after warm-up RUN is an immediate level-follow
+ * gate (no per-START ramp). == US_IDLE strict guard for BOTH sources
+ * (intentional deviation from samd20's comm !=US_REMOTE takeover,
+ * approved spec §4 — REMOTE arbitration is a later slice).
+ * [START swallow] V30 RUN button sends data=0 on BOTH edges: after an on-time
+ * ceiling stop, the still-held button's release arrives mapped
+ * as START (input layer sees IDLE). Consume it once instead of
+ * restarting the run. Touch-only: a COMM START is a register
+ * write with no release back-mapping (spec §4).
+ * [START guard] guard 4-조건 공용화 (slice4): app_reg_start_allowed()가 단일 진실
+ * 원천. 외측 if의 main_state/US_IDLE 재검사는 중복-참(무해).
+ * swallow consume은 위에 유지 (advisor 비대칭 — spec §4.3).
+ * [START on_time] samd20 zeroes us_on_time_200m at the run-start edge (main.c:4306);
+ * the live compute would reach 0 on the first active publish anyway,
+ * but zeroing here closes the <=2ms window where a disp read could
+ * pair the old time value with the new run status.
+ * [START energy] 에너지 적분 run-start 리셋 (samd20 main.c:1340/1366/1555 — 전부
+ * run-start 엣지). curr_energy 직접 0으로 read-window 닫음. slice2 §2.2.
+ * [RUN_RELEASE] ⚠️ **의도적 samd20 이탈 (2026-08-17, 사용자 결정 B).**
+ * 원본은 source-matched stop 이었다 — "a COMM STOP cannot kill a touch
+ * run and vice versa" (samd20 main.c:3699/4180 touch, 4405 comm).
+ * 그 결과 **원격(Modbus=COMM) STOP 이 패널(TOUCH) 운전을 못 세웠고**,
+ * FC06 에코·레지스터 소거까지 정상이라 원격기는 성공한 전송과 구분할
+ * 수 없었다(gds_us_remote 실측 2026-08-16,
+ * `docs/superpowers/specs/2026-08-16-source-matched-stop.md`).
+ * 정지는 방향이 안전 측이므로 **주체와 무관하게** 운전을 내린다.
+ *
+ * 이 대칭의 대가 — 2026-08-17 실보드 벤치로 확정(V-3~V-5), 사용자가
+ * 받아들여 대칭 유지:
+ *  ① 패널 RUN 버튼 release 가 COMM 운전을 정지시킨다 — **실측 확인**
+ *     (탭 2회 재현, 무접촉 통제군 15/20s 무정지로 대조).
+ *  ② `app_lcd_input_run_key_reanchor` 경로는 **조작자의 수동 페이지
+ *     이동에서는 안 불린다**(실측: 이동해도 운전 지속). 호출처는
+ *     app_lcd_set_estop(true) / app_lcd_disp.c show_error / SYS_PIC_NOW
+ *     패널 리셋 3곳뿐이고, E-stop 은 app_input.c 가, OVLD 는
+ *     app_overload.c 가 원래도 us_run_status 를 src 로 읽어 소스 무관
+ *     정지 중이다 → **신규 동작은 OVTIME·OUTERR 표시 전환과 패널
+ *     리셋뿐**. 셋 다 고장·UI 상실 상황이라 정지가 옳다.
+ *  ③ 래치값은 소스 무관으로 갱신된다 — COMM 기동 + TOUCH 정지에서도
+ *     last_* 가 방금 끝난 운전 값을 담는다(실측).
+ *
+ * 부수 효과(의도됨): 아래 `else if` 가 이제 **us_run_status == IDLE**
+ * 일 때만 도달한다 — 그 분기 주석이 원래 말하던 "arriving while IDLE"
+ * 조건과 정확히 일치한다. 구판에서는 COMM 운전 중 TOUCH release 가
+ * 이 분기로 새어 swallow_start 를 지웠다.
+ * [RUN_RELEASE idle] Any touch RUN_RELEASE arriving while IDLE after a ceiling stop
+ * resyncs the press/release pairing so the next genuine press is
+ * not eaten: legacy data=4 release, or SYS_PIC_NOW re-init (panel
+ * reset means the physical release will never arrive).
+ * [SEEK/RESET] SEEK/RESET 효과를 app_seek_reset FSM에 위임 (이전 no-op 교체, spec §4).
+ * RUN 중이면 FSM이 run_active 직교로 자체 무시. samd20 comm RESET src
+ * quirk + 에러 표시 클리어는 입력 레이어(app_lcd_input.c)/에러 머신.
+ * warm-up(main_state) 게이팅 불요 — samd20 충실, spec §3.4 (SEEK/RESET은
+ * START과 별도 경로; FSM 자체 타임아웃으로 해제, cpp-review Minor 3).
+ */
 void app_reg_command(us_cmd_t cmd, uint8_t src)
 {
     switch (cmd) {
     case US_CMD_START:
-        /* M16-faithful: commands are ignored during the boot warm-up (Timer1
-         * ISR skips the PINA dispatcher app_0x06d2 while g_main_state!=0,
-         * disasm @0x041E); after warm-up RUN is an immediate level-follow
-         * gate (no per-START ramp). == US_IDLE strict guard for BOTH sources
-         * (intentional deviation from samd20's comm !=US_REMOTE takeover,
-         * approved spec §4 — REMOTE arbitration is a later slice). */
         if ((g_reg.main_state == 0u) &&
             (g_reg.us_run_status == (uint8_t)US_IDLE)) {
             if ((src == (uint8_t)US_TOUCH) && (g_reg.swallow_start != 0u)) {
-                /* V30 RUN button sends data=0 on BOTH edges: after an on-time
-                 * ceiling stop, the still-held button's release arrives mapped
-                 * as START (input layer sees IDLE). Consume it once instead of
-                 * restarting the run. Touch-only: a COMM START is a register
-                 * write with no release back-mapping (spec §4). */
                 g_reg.swallow_start = 0u;
                 break;
             }
-            /* guard 4-조건 공용화 (slice4): app_reg_start_allowed()가 단일 진실
-             * 원천. 외측 if의 main_state/US_IDLE 재검사는 중복-참(무해).
-             * swallow consume은 위에 유지 (advisor 비대칭 — spec §4.3). */
             if (!app_reg_start_allowed()) {
                 break;
             }
@@ -196,45 +239,12 @@ void app_reg_command(us_cmd_t cmd, uint8_t src)
             g_reg.max_power     = 0u;
             g_reg.max_amp       = 0u;    /* samd20 comm START zeroes max_amp too */
             g_reg.run_start_ms  = sys_tick_get_ms();
-            /* samd20 zeroes us_on_time_200m at the run-start edge (main.c:4306);
-             * the live compute would reach 0 on the first active publish anyway,
-             * but zeroing here closes the <=2ms window where a disp read could
-             * pair the old time value with the new run status. */
             g_measure.us_on_time_200m = 0u;
-            /* 에너지 적분 run-start 리셋 (samd20 main.c:1340/1366/1555 — 전부
-             * run-start 엣지). curr_energy 직접 0으로 read-window 닫음. slice2 §2.2. */
             g_reg.acc_energy      = 0u;
             g_measure.curr_energy = 0u;
         }
         break;
     case US_CMD_RUN_RELEASE:
-        /* ⚠️ **의도적 samd20 이탈 (2026-08-17, 사용자 결정 B).**
-         * 원본은 source-matched stop 이었다 — "a COMM STOP cannot kill a touch
-         * run and vice versa" (samd20 main.c:3699/4180 touch, 4405 comm).
-         * 그 결과 **원격(Modbus=COMM) STOP 이 패널(TOUCH) 운전을 못 세웠고**,
-         * FC06 에코·레지스터 소거까지 정상이라 원격기는 성공한 전송과 구분할
-         * 수 없었다(gds_us_remote 실측 2026-08-16,
-         * `docs/superpowers/specs/2026-08-16-source-matched-stop.md`).
-         * 정지는 방향이 안전 측이므로 **주체와 무관하게** 운전을 내린다.
-         *
-         * 이 대칭의 대가 — 2026-08-17 실보드 벤치로 확정(V-3~V-5), 사용자가
-         * 받아들여 대칭 유지:
-         *  ① 패널 RUN 버튼 release 가 COMM 운전을 정지시킨다 — **실측 확인**
-         *     (탭 2회 재현, 무접촉 통제군 15/20s 무정지로 대조).
-         *  ② `app_lcd_input_run_key_reanchor` 경로는 **조작자의 수동 페이지
-         *     이동에서는 안 불린다**(실측: 이동해도 운전 지속). 호출처는
-         *     app_lcd_set_estop(true) / app_lcd_disp.c show_error / SYS_PIC_NOW
-         *     패널 리셋 3곳뿐이고, E-stop 은 app_input.c 가, OVLD 는
-         *     app_overload.c 가 원래도 us_run_status 를 src 로 읽어 소스 무관
-         *     정지 중이다 → **신규 동작은 OVTIME·OUTERR 표시 전환과 패널
-         *     리셋뿐**. 셋 다 고장·UI 상실 상황이라 정지가 옳다.
-         *  ③ 래치값은 소스 무관으로 갱신된다 — COMM 기동 + TOUCH 정지에서도
-         *     last_* 가 방금 끝난 운전 값을 담는다(실측).
-         *
-         * 부수 효과(의도됨): 아래 `else if` 가 이제 **us_run_status == IDLE**
-         * 일 때만 도달한다 — 그 분기 주석이 원래 말하던 "arriving while IDLE"
-         * 조건과 정확히 일치한다. 구판에서는 COMM 운전 중 TOUCH release 가
-         * 이 분기로 새어 swallow_start 를 지웠다. */
         if (g_reg.us_run_status != (uint8_t)US_IDLE) {
             g_reg.last_power    = g_reg.max_power;
             g_reg.last_amp      = g_reg.max_amp;
@@ -242,20 +252,11 @@ void app_reg_command(us_cmd_t cmd, uint8_t src)
             g_reg.last_freq     = g_measure.curr_freq;   /* freq 래치 — last_energy 패턴(max 없음) */
             g_reg.us_run_status = (uint8_t)US_IDLE;
         } else if ((src == (uint8_t)US_TOUCH) && (g_reg.swallow_start != 0u)) {
-            /* Any touch RUN_RELEASE arriving while IDLE after a ceiling stop
-             * resyncs the press/release pairing so the next genuine press is
-             * not eaten: legacy data=4 release, or SYS_PIC_NOW re-init (panel
-             * reset means the physical release will never arrive). */
             g_reg.swallow_start = 0u;
         }
         break;
     case US_CMD_SEEK:
     case US_CMD_RESET:
-        /* SEEK/RESET 효과를 app_seek_reset FSM에 위임 (이전 no-op 교체, spec §4).
-         * RUN 중이면 FSM이 run_active 직교로 자체 무시. samd20 comm RESET src
-         * quirk + 에러 표시 클리어는 입력 레이어(app_lcd_input.c)/에러 머신.
-         * warm-up(main_state) 게이팅 불요 — samd20 충실, spec §3.4 (SEEK/RESET은
-         * START과 별도 경로; FSM 자체 타임아웃으로 해제, cpp-review Minor 3). */
         if (cmd == US_CMD_RESET) {
             g_reg.error_status = 0u;   /* samd20 RESET이 error_status 클리어 (main.c:3719) */
         }
@@ -467,17 +468,23 @@ static void reg_check_auto_terminate(uint32_t now, const reg_run_limits_t *lim)
     }
 }
 
-/* 레귤레이션 주기 tick */
+/* 레귤레이션 주기 tick.
+ * [warm-up] ~10 ms boot warm-up cadence (M16 Timer1 0xFFB1 equiv, cad-C8). M16-faithful:
+ * runs exactly once, from boot, unconditionally (ramp counter zeroed only at
+ * app_0x1226 entry); one-way handoff to lookup regulation at RAMP_DONE_COUNT
+ * (@0x137C). During warm-up the output stays 0 — on the M16 only the
+ * physically unconnected 7-seg pattern vars animate (g_019F/A0/A1).
+ * [setpoint MUX] Output setpoint MUX (M16-faithful): boot warm-up and idle force 0; while
+ * running the slice-1 scale of the latest ch0_avg applies immediately
+ * (no per-START ramp — see app_reg_command).
+ * [publish] Publish runs only on the ~2 ms gate above: a ceiling/release stop that
+ * fires earlier in this same call reaches g_measure up to ~2 ms later —
+ * bounded and invisible (disp renders each VP-group at a ~40 ms cadence).
+ */
 void app_reg_tick(const reg_run_limits_t *lim)
 {
     uint32_t now = sys_tick_get_ms();
     g_reg.cal_val = lim->cal_val;   /* 표시 전류 보정값 주입 (reg_publish_measure 사용) */
-
-    /* ~10 ms boot warm-up cadence (M16 Timer1 0xFFB1 equiv, cad-C8). M16-faithful:
-     * runs exactly once, from boot, unconditionally (ramp counter zeroed only at
-     * app_0x1226 entry); one-way handoff to lookup regulation at RAMP_DONE_COUNT
-     * (@0x137C). During warm-up the output stays 0 — on the M16 only the
-     * physically unconnected 7-seg pattern vars animate (g_019F/A0/A1). */
     if ((uint32_t)(now - g_reg.prev_ramp_ms) >= REG_RAMP_MS) {
         g_reg.prev_ramp_ms = now;
         if (g_reg.main_state == 1u) {
@@ -500,10 +507,6 @@ void app_reg_tick(const reg_run_limits_t *lim)
         return;
     }
     g_reg.prev_ms = now;
-
-    /* Output setpoint MUX (M16-faithful): boot warm-up and idle force 0; while
-     * running the slice-1 scale of the latest ch0_avg applies immediately
-     * (no per-START ramp — see app_reg_command). */
     uint16_t sel;
     if ((g_reg.main_state == 1u) ||
         (g_reg.us_run_status == (uint8_t)US_IDLE)) {
@@ -513,10 +516,6 @@ void app_reg_tick(const reg_run_limits_t *lim)
     }
     g_reg.adc_scaled_value = sel;
     g_reg.band             = reg_output_level(sel);
-
-    /* Publish runs only on the ~2 ms gate above: a ceiling/release stop that
-     * fires earlier in this same call reaches g_measure up to ~2 ms later —
-     * bounded and invisible (disp renders each VP-group at a ~40 ms cadence). */
     reg_publish_measure(now, lim->freq_cal_val);
 
 #ifdef REG_TRACE

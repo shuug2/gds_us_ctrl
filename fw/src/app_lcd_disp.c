@@ -47,25 +47,26 @@
 static uint16_t level_buf[20];
 static uint16_t time_buf[20];
 
-/* 출력 파워 바 계산 */
+/* 출력 파워 바 계산.
+ * [fill 규칙] Output-power bar fill (port of send_outpower_data step==0, main.c:2616-2661).
+ *
+ * Thresholds (state->ref_lv_1/10/20) seed from model_freq in app_lcd_init_mode.
+ * Set-point marker lands at slot (output_power * 20 / 100), clamped to 19.
+ *
+ *   curr_amp <= 10            -> all 20 slots 0
+ *   curr_amp >  10            -> slot[0]=1
+ *     curr_amp <= ref_lv_1    -> slots[1..19]=0
+ *     curr_amp >  ref_lv_1
+ *       curr_amp <= ref_lv_10 -> slots[2..2+t-1]=1 where t=(amp-ref_lv_1)*8/(ref_lv_10-ref_lv_1)
+ *       curr_amp >  ref_lv_10
+ *         curr_amp >= ref_lv_20 -> slots[1..19]=1 (full)
+ *         else                  -> slots[2..9]=1 and slots[10..10+t-1]=1
+ *                                  where t=(amp-ref_lv_10)*10/(ref_lv_20-ref_lv_10)
+ * Then unconditionally: marker slot = 1.
+ */
 static void disp_compute_output(uint16_t curr_amp, uint8_t out_power,
                                 const lcd_app_state_t *st)
 {
-    /* Output-power bar fill (port of send_outpower_data step==0, main.c:2616-2661).
-     *
-     * Thresholds (state->ref_lv_1/10/20) seed from model_freq in app_lcd_init_mode.
-     * Set-point marker lands at slot (output_power * 20 / 100), clamped to 19.
-     *
-     *   curr_amp <= 10            -> all 20 slots 0
-     *   curr_amp >  10            -> slot[0]=1
-     *     curr_amp <= ref_lv_1    -> slots[1..19]=0
-     *     curr_amp >  ref_lv_1
-     *       curr_amp <= ref_lv_10 -> slots[2..2+t-1]=1 where t=(amp-ref_lv_1)*8/(ref_lv_10-ref_lv_1)
-     *       curr_amp >  ref_lv_10
-     *         curr_amp >= ref_lv_20 -> slots[1..19]=1 (full)
-     *         else                  -> slots[2..9]=1 and slots[10..10+t-1]=1
-     *                                  where t=(amp-ref_lv_10)*10/(ref_lv_20-ref_lv_10)
-     * Then unconditionally: marker slot = 1. */
     uint8_t  i;
     uint8_t  marker;
     uint16_t span;          /* threshold gap, guarded != 0 before dividing */
@@ -167,43 +168,42 @@ static void disp_send_val(const lcd_measure_t *m)
     dgus_write_u16(VAR_ENERGY, (uint16_t)energy);       /* samd20 casts u32 → u16 */
 }
 
-/* 표시 step 머신 1회 */
+/* 표시 step 머신 1회.
+ * [step 표] Step machine — one VP-group per call, 0..9 then wrap (spec §11).
+ * Faithful port of the samd20 job_state display dispatch (main.c:5110-5202):
+ *
+ *   step 0   : compute LV_OUTPUT bar (send_outpower_data step==0)
+ *   step 1-4 : LV_OUTPUT[0..19] in 4×5 chunks
+ *   step 5   : compute LV_TIME bar (send_outtime_data step==5)
+ *   step 6   : LV_TIME[0..4]
+ *   step 7   : send_val_data (VAR_*) AND LV_TIME[5..9]   <- both, like samd20 case 7
+ *   step 8   : LV_TIME[10..14]
+ *   step 9   : LV_TIME[15..19], wrap to 0
+ *
+ * samd20 gates the time bar on sig_run_status (curr us_on_time_200m vs last_time);
+ * lcd_measure_t carries no last_time, so we feed us_on_time_200m on both paths (per
+ * the task spec; stub → 0 → empty bar). DISP_REMOTE/modbus_status (samd20 case 9)
+ * is supplied since 2026-07-08 via app_modbus_remote_active() (edge-driven below).
+ * [ICON_RUN] slice 2b: drive ICON_RUN on us_run_status running-ness edges (write once on
+ * change, not every 4 ms step). samd20 sets ICON_RUN in the sig_run_status edge
+ * handler (main.c:4302); here disp renders the FSM state app_reg publishes.
+ * [DISP_REMOTE] DISP_REMOTE (samd20 case 9, main.c:5187-5199): Modbus 요청이 흐르는 동안
+ * REMOTE icon ON, 마지막 요청 후 1 s에 OFF. Stage C에서 이연했던 공급을
+ * 채움 (2026-07-08). ICON_RUN과 같은 write-on-change 패턴.
+ */
 void app_lcd_disp_step(void)
 {
-    /* Step machine — one VP-group per call, 0..9 then wrap (spec §11).
-     * Faithful port of the samd20 job_state display dispatch (main.c:5110-5202):
-     *
-     *   step 0   : compute LV_OUTPUT bar (send_outpower_data step==0)
-     *   step 1-4 : LV_OUTPUT[0..19] in 4×5 chunks
-     *   step 5   : compute LV_TIME bar (send_outtime_data step==5)
-     *   step 6   : LV_TIME[0..4]
-     *   step 7   : send_val_data (VAR_*) AND LV_TIME[5..9]   <- both, like samd20 case 7
-     *   step 8   : LV_TIME[10..14]
-     *   step 9   : LV_TIME[15..19], wrap to 0
-     *
-     * samd20 gates the time bar on sig_run_status (curr us_on_time_200m vs last_time);
-     * lcd_measure_t carries no last_time, so we feed us_on_time_200m on both paths (per
-     * the task spec; stub → 0 → empty bar). DISP_REMOTE/modbus_status (samd20 case 9)
-     * is supplied since 2026-07-08 via app_modbus_remote_active() (edge-driven below). */
     static uint8_t s = 0u;       /* not named `step` to avoid -Wshadow vs samd20 param */
     static bool prev_run_on = false;   /* slice 2b: ICON_RUN edge tracker */
 
     const lcd_measure_t   *m  = app_lcd_measure();
     const lcd_app_state_t *st = app_lcd_state();
     const app_config_t    *cfg = app_lcd_cfg();
-
-    /* slice 2b: drive ICON_RUN on us_run_status running-ness edges (write once on
-     * change, not every 4 ms step). samd20 sets ICON_RUN in the sig_run_status edge
-     * handler (main.c:4302); here disp renders the FSM state app_reg publishes. */
     bool run_on = (m->us_run_status != US_IDLE);
     if (run_on != prev_run_on) {
         dgus_write_u16(ICON_RUN, run_on ? 1u : 0u);
         prev_run_on = run_on;
     }
-
-    /* DISP_REMOTE (samd20 case 9, main.c:5187-5199): Modbus 요청이 흐르는 동안
-     * REMOTE icon ON, 마지막 요청 후 1 s에 OFF. Stage C에서 이연했던 공급을
-     * 채움 (2026-07-08). ICON_RUN과 같은 write-on-change 패턴. */
     static bool prev_remote_on = false;
     bool remote_on = app_modbus_remote_active();
     if (remote_on != prev_remote_on) {

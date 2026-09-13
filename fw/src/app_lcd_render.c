@@ -36,6 +36,129 @@
  * (main.c:3046) — 포트는 길이를 여기서 강제한다. */
 _Static_assert(sizeof(VERSION_MSG) - 1u == 20u, "VERSION_MSG must be exactly 20 chars");
 
+/* change_page 본체 — LCD_RUN_STD: DELAY/TRIGGER 별 D/W(E)/H 3줄 텍스트
+ * + 수치 4필드(LV_DM_DELAY/DISP_RUN_MODE/DISP_SAFTY/LV_LIMIT_OUT_T) */
+static inline __attribute__((always_inline)) void render_run_std(const app_config_t *cfg, uint8_t *buf)
+{
+    uint8_t n;                  /* formatter return length (samd20 'temp') */
+    dgus_write_u16(LV_DM_DELAY,    cfg->limit_delay_time1);
+    dgus_write_u16(DISP_RUN_MODE,  cfg->run_mode);
+    dgus_write_u16(DISP_SAFTY,     cfg->f_safty);
+    dgus_write_u16(LV_LIMIT_OUT_T, cfg->limit_out_time);
+
+    if (cfg->run_mode == MODE_DELAY) {
+        buf[0] = 'D'; buf[1] = ' '; buf[2] = ':'; buf[3] = ' ';
+        n = time2str(cfg->limit_delay_time1, &buf[4]);
+        dgus_write_bytes(DISP_STD_DATA1, buf, (uint8_t)(n + 4));
+
+        if (cfg->energy_ctrl) {
+            buf[0] = 'E'; buf[1] = ' '; buf[2] = ':'; buf[3] = ' ';
+            n = energy2str(cfg->limit_energy, &buf[4]);
+            dgus_write_bytes(DISP_STD_DATA2, buf, (uint8_t)(n + 4));
+        } else {
+            buf[0] = 'W'; buf[1] = ' '; buf[2] = ':'; buf[3] = ' ';
+            if (cfg->multi_ctrl)
+                n = time2str((uint16_t)(cfg->limit_mo_time1 + cfg->limit_mo_time2), &buf[4]);
+            else
+                n = time2str(cfg->limit_delay_time2, &buf[4]);
+            dgus_write_bytes(DISP_STD_DATA2, buf, (uint8_t)(n + 4));
+        }
+
+        buf[0] = 'H'; buf[1] = ' '; buf[2] = ':'; buf[3] = ' ';
+        n = time2str(cfg->limit_delay_time3, &buf[4]);
+        dgus_write_bytes(DISP_STD_DATA3, buf, (uint8_t)(n + 4));
+    } else if (cfg->run_mode == MODE_TRIGGER) {
+        buf[0] = 'S'; buf[1] = 'E'; buf[2] = 'N'; buf[3] = 'S';
+        buf[4] = 'O'; buf[5] = 'R'; buf[6] = ' '; buf[7] = 'O';
+        buf[8] = 'F'; buf[9] = 'F'; buf[10] = '\0';
+        dgus_write_bytes(DISP_STD_DATA1, buf, 11);
+
+        if (cfg->energy_ctrl) {
+            buf[0] = 'E'; buf[1] = ' '; buf[2] = ':'; buf[3] = ' ';
+            n = energy2str(cfg->limit_energy, &buf[4]);
+            dgus_write_bytes(DISP_STD_DATA2, buf, (uint8_t)(n + 4));
+        } else {
+            buf[0] = 'W'; buf[1] = ' '; buf[2] = ':'; buf[3] = ' ';
+            if (cfg->multi_ctrl)
+                n = time2str((uint16_t)(cfg->limit_mo_time1 + cfg->limit_mo_time2), &buf[4]);
+            else
+                n = time2str(cfg->limit_trigger_time2, &buf[4]);
+            dgus_write_bytes(DISP_STD_DATA2, buf, (uint8_t)(n + 4));
+        }
+
+        buf[0] = 'H'; buf[1] = ' '; buf[2] = ':'; buf[3] = ' ';
+        n = time2str(cfg->limit_trigger_time3, &buf[4]);
+        dgus_write_bytes(DISP_STD_DATA3, buf, (uint8_t)(n + 4));
+    }
+}
+
+/* change_page 본체 — SETUP_HAND/MULTI/STD1: 버전·on_time·power(+pot)·energy + comm shadow 시드/센티널 */
+static inline __attribute__((always_inline)) void render_setup_main(const app_config_t *cfg, lcd_app_state_t *state)
+{
+    dgus_write_bytes(DISP_VERSION, (const uint8_t *)VERSION_MSG, 20);
+    dgus_write_u16(LV_MAX_ON_TIME, cfg->limit_on_time);
+    dgus_write_u16(LV_OUT_POWER,   cfg->output_power);
+    app_lcd_hook_set_pot(cfg->output_power);   /* samd20 inline I2C_POT write -> hook (실구동) */
+    dgus_write_u32(LV_ENERGY_VAL,  cfg->limit_energy);
+    dgus_write_u16(LV_ENERGY_EDIT, (uint16_t)cfg->limit_energy);
+    dgus_write_u16(DISP_ENERGY_EN, cfg->energy_ctrl ? 1u : 0u);
+    dgus_write_u16(LV_LIMIT_OUT_T, cfg->limit_out_time);
+    state->temp_parity_idx = cfg->comm_parity_idx;
+    state->temp_address    = cfg->comm_address;
+    state->temp_speed_idx  = cfg->comm_speed_idx;
+    state->temp_cnt_reset  = 0;
+    state->temp_comm_mode  = 0xff;
+}
+
+/* change_page 본체 — STDC/MHC·STDE/MHE 공통: comm 3필드 에코 + shadow + (첫 진입) ether 텍스트 시드 (두 분기에서 각각 호출) */
+static inline __attribute__((always_inline)) void render_comm_page(const app_config_t *cfg, lcd_app_state_t *state,
+                                                  uint8_t *addr_str, char *ipbuf)
+{
+    uint16_t i;
+    uint8_t  n;
+    dgus_write_u16(COMM_ADDR,   cfg->comm_address);
+    dgus_write_u16(COMM_SPEED,  cfg->comm_speed_idx);
+    dgus_write_u16(COMM_PARITY, cfg->comm_parity_idx);
+    state->temp_parity_idx = cfg->comm_parity_idx;
+    state->temp_address    = cfg->comm_address;
+    state->temp_speed_idx  = cfg->comm_speed_idx;
+    conv_addr2str(cfg->comm_address, addr_str);
+    dgus_write_bytes(COMM_ADDR_TXT, addr_str, 4);
+    dgus_write_bytes(COMM_SPEED_TXT, comm_speed_txt[cfg->comm_speed_idx], 6);
+    dgus_write_bytes(COMM_PARITY_TXT, comm_parity_txt[cfg->comm_parity_idx], 4);
+    if (state->temp_comm_mode == 0xff) {
+        state->temp_comm_mode = cfg->comm_mode;
+        for (i = 0; i < 4; i++) {
+            state->temp_ether_ip[i] = cfg->ether_ip[i];
+            state->temp_ether_nm[i] = cfg->ether_nm[i];
+            state->temp_ether_gw[i] = cfg->ether_gw[i];
+        }
+        n = ip_to_string(state->temp_ether_ip, ipbuf);
+        dgus_write_bytes(COMM_IP_TXT, (const uint8_t *)ipbuf, n);
+        n = ip_to_string(state->temp_ether_nm, ipbuf);
+        dgus_write_bytes(COMM_NM_TXT, (const uint8_t *)ipbuf, n);
+        n = ip_to_string(state->temp_ether_gw, ipbuf);
+        dgus_write_bytes(COMM_GW_TXT, (const uint8_t *)ipbuf, n);
+        state->ether_current_number   = 0;
+        state->ether_current_octet    = 0;
+        state->ether_has_input        = false;
+        state->ether_ip_input_complete = false;
+        state->ether_buffer_pos       = 0;
+        state->ether_what_input       = LCD_ETHER_INPUT_NONE;
+    }
+}
+
+/* change_page 본체 — comm 페이지 set_page 후 DISP_COMM_MODE/EN_DHCP 재기록 (외곽 페이지 판정은 호출자) */
+static inline __attribute__((always_inline)) void render_comm_tail(uint8_t page, const lcd_app_state_t *state)
+{
+    dgus_write_u16(DISP_COMM_MODE, (state->temp_comm_mode == 0) ? 0u : 1u);
+    if (page == LCD_SETUP_MHE || page == LCD_SETUP_STDE) {
+        dgus_write_u16(DISP_EN_DHCP,
+                       (state->temp_comm_mode == 0)
+                           ? 0u : (uint16_t)(state->temp_comm_mode - 1));
+    }
+}
+
 /* 페이지 렌더+전환 */
 void app_lcd_change_page(uint8_t page)
 {
@@ -44,8 +167,6 @@ void app_lcd_change_page(uint8_t page)
     app_config_t    *cfg   = app_lcd_cfg();
     lcd_app_state_t *state = app_lcd_state();
 
-    uint16_t i;
-    uint8_t  n;                 /* formatter return length (samd20 'temp') */
     uint8_t  addr_str[4];       /* conv_addr2str field (samd20 'temp_str') */
     uint8_t  buf[20];           /* line-build scratch (samd20 global lcd_temp_buf) */
     char     ipbuf[16];         /* ip_to_string scratch */
@@ -55,69 +176,9 @@ void app_lcd_change_page(uint8_t page)
     dgus_write_u16(DISP_MULTI_EN,  cfg->multi_ctrl  ? 1u : 0u);
 
     if (page == LCD_RUN_STD) {
-        dgus_write_u16(LV_DM_DELAY,    cfg->limit_delay_time1);
-        dgus_write_u16(DISP_RUN_MODE,  cfg->run_mode);
-        dgus_write_u16(DISP_SAFTY,     cfg->f_safty);
-        dgus_write_u16(LV_LIMIT_OUT_T, cfg->limit_out_time);
-
-        if (cfg->run_mode == MODE_DELAY) {
-            buf[0] = 'D'; buf[1] = ' '; buf[2] = ':'; buf[3] = ' ';
-            n = time2str(cfg->limit_delay_time1, &buf[4]);
-            dgus_write_bytes(DISP_STD_DATA1, buf, (uint8_t)(n + 4));
-
-            if (cfg->energy_ctrl) {
-                buf[0] = 'E'; buf[1] = ' '; buf[2] = ':'; buf[3] = ' ';
-                n = energy2str(cfg->limit_energy, &buf[4]);
-                dgus_write_bytes(DISP_STD_DATA2, buf, (uint8_t)(n + 4));
-            } else {
-                buf[0] = 'W'; buf[1] = ' '; buf[2] = ':'; buf[3] = ' ';
-                if (cfg->multi_ctrl)
-                    n = time2str((uint16_t)(cfg->limit_mo_time1 + cfg->limit_mo_time2), &buf[4]);
-                else
-                    n = time2str(cfg->limit_delay_time2, &buf[4]);
-                dgus_write_bytes(DISP_STD_DATA2, buf, (uint8_t)(n + 4));
-            }
-
-            buf[0] = 'H'; buf[1] = ' '; buf[2] = ':'; buf[3] = ' ';
-            n = time2str(cfg->limit_delay_time3, &buf[4]);
-            dgus_write_bytes(DISP_STD_DATA3, buf, (uint8_t)(n + 4));
-        } else if (cfg->run_mode == MODE_TRIGGER) {
-            buf[0] = 'S'; buf[1] = 'E'; buf[2] = 'N'; buf[3] = 'S';
-            buf[4] = 'O'; buf[5] = 'R'; buf[6] = ' '; buf[7] = 'O';
-            buf[8] = 'F'; buf[9] = 'F'; buf[10] = '\0';
-            dgus_write_bytes(DISP_STD_DATA1, buf, 11);
-
-            if (cfg->energy_ctrl) {
-                buf[0] = 'E'; buf[1] = ' '; buf[2] = ':'; buf[3] = ' ';
-                n = energy2str(cfg->limit_energy, &buf[4]);
-                dgus_write_bytes(DISP_STD_DATA2, buf, (uint8_t)(n + 4));
-            } else {
-                buf[0] = 'W'; buf[1] = ' '; buf[2] = ':'; buf[3] = ' ';
-                if (cfg->multi_ctrl)
-                    n = time2str((uint16_t)(cfg->limit_mo_time1 + cfg->limit_mo_time2), &buf[4]);
-                else
-                    n = time2str(cfg->limit_trigger_time2, &buf[4]);
-                dgus_write_bytes(DISP_STD_DATA2, buf, (uint8_t)(n + 4));
-            }
-
-            buf[0] = 'H'; buf[1] = ' '; buf[2] = ':'; buf[3] = ' ';
-            n = time2str(cfg->limit_trigger_time3, &buf[4]);
-            dgus_write_bytes(DISP_STD_DATA3, buf, (uint8_t)(n + 4));
-        }
+        render_run_std(cfg, buf);
     } else if (page == LCD_SETUP_HAND || page == LCD_SETUP_MULTI || page == LCD_SETUP_STD1) {
-        dgus_write_bytes(DISP_VERSION, (const uint8_t *)VERSION_MSG, 20);
-        dgus_write_u16(LV_MAX_ON_TIME, cfg->limit_on_time);
-        dgus_write_u16(LV_OUT_POWER,   cfg->output_power);
-        app_lcd_hook_set_pot(cfg->output_power);   /* samd20 inline I2C_POT write -> hook (실구동) */
-        dgus_write_u32(LV_ENERGY_VAL,  cfg->limit_energy);
-        dgus_write_u16(LV_ENERGY_EDIT, (uint16_t)cfg->limit_energy);
-        dgus_write_u16(DISP_ENERGY_EN, cfg->energy_ctrl ? 1u : 0u);
-        dgus_write_u16(LV_LIMIT_OUT_T, cfg->limit_out_time);
-        state->temp_parity_idx = cfg->comm_parity_idx;
-        state->temp_address    = cfg->comm_address;
-        state->temp_speed_idx  = cfg->comm_speed_idx;
-        state->temp_cnt_reset  = 0;
-        state->temp_comm_mode  = 0xff;
+        render_setup_main(cfg, state);
     } else if (page == LCD_SETUP_STD2D) {
         dgus_write_u16(LV_DM_DELAY, cfg->limit_delay_time1);
         dgus_write_u16(LV_DM_WELD,  cfg->limit_delay_time2);
@@ -135,71 +196,13 @@ void app_lcd_change_page(uint8_t page)
         dgus_write_u16(LV_MO_TIME2, cfg->limit_mo_time2);
         state->temp_comm_mode = 0xff;
     } else if (page == LCD_SETUP_STDC || page == LCD_SETUP_MHC) {
-        dgus_write_u16(COMM_ADDR,   cfg->comm_address);
-        dgus_write_u16(COMM_SPEED,  cfg->comm_speed_idx);
-        dgus_write_u16(COMM_PARITY, cfg->comm_parity_idx);
-        state->temp_parity_idx = cfg->comm_parity_idx;
-        state->temp_address    = cfg->comm_address;
-        state->temp_speed_idx  = cfg->comm_speed_idx;
-        conv_addr2str(cfg->comm_address, addr_str);
-        dgus_write_bytes(COMM_ADDR_TXT, addr_str, 4);
-        dgus_write_bytes(COMM_SPEED_TXT, comm_speed_txt[cfg->comm_speed_idx], 6);
-        dgus_write_bytes(COMM_PARITY_TXT, comm_parity_txt[cfg->comm_parity_idx], 4);
-        if (state->temp_comm_mode == 0xff) {
-            state->temp_comm_mode = cfg->comm_mode;
-            for (i = 0; i < 4; i++) {
-                state->temp_ether_ip[i] = cfg->ether_ip[i];
-                state->temp_ether_nm[i] = cfg->ether_nm[i];
-                state->temp_ether_gw[i] = cfg->ether_gw[i];
-            }
-            n = ip_to_string(state->temp_ether_ip, ipbuf);
-            dgus_write_bytes(COMM_IP_TXT, (const uint8_t *)ipbuf, n);
-            n = ip_to_string(state->temp_ether_nm, ipbuf);
-            dgus_write_bytes(COMM_NM_TXT, (const uint8_t *)ipbuf, n);
-            n = ip_to_string(state->temp_ether_gw, ipbuf);
-            dgus_write_bytes(COMM_GW_TXT, (const uint8_t *)ipbuf, n);
-            state->ether_current_number   = 0;
-            state->ether_current_octet    = 0;
-            state->ether_has_input        = false;
-            state->ether_ip_input_complete = false;
-            state->ether_buffer_pos       = 0;
-            state->ether_what_input       = LCD_ETHER_INPUT_NONE;
-        }
+        render_comm_page(cfg, state, addr_str, ipbuf);
         if (state->temp_comm_mode > 0)
             dgus_write_u16(DISP_COMM_MODE, 1);
         else
             dgus_write_u16(DISP_COMM_MODE, 0);
     } else if (page == LCD_SETUP_STDE || page == LCD_SETUP_MHE) {
-        dgus_write_u16(COMM_ADDR,   cfg->comm_address);
-        dgus_write_u16(COMM_SPEED,  cfg->comm_speed_idx);
-        dgus_write_u16(COMM_PARITY, cfg->comm_parity_idx);
-        state->temp_parity_idx = cfg->comm_parity_idx;
-        state->temp_address    = cfg->comm_address;
-        state->temp_speed_idx  = cfg->comm_speed_idx;
-        conv_addr2str(cfg->comm_address, addr_str);
-        dgus_write_bytes(COMM_ADDR_TXT, addr_str, 4);
-        dgus_write_bytes(COMM_SPEED_TXT, comm_speed_txt[cfg->comm_speed_idx], 6);
-        dgus_write_bytes(COMM_PARITY_TXT, comm_parity_txt[cfg->comm_parity_idx], 4);
-        if (state->temp_comm_mode == 0xff) {
-            state->temp_comm_mode = cfg->comm_mode;
-            for (i = 0; i < 4; i++) {
-                state->temp_ether_ip[i] = cfg->ether_ip[i];
-                state->temp_ether_nm[i] = cfg->ether_nm[i];
-                state->temp_ether_gw[i] = cfg->ether_gw[i];
-            }
-            n = ip_to_string(state->temp_ether_ip, ipbuf);
-            dgus_write_bytes(COMM_IP_TXT, (const uint8_t *)ipbuf, n);
-            n = ip_to_string(state->temp_ether_nm, ipbuf);
-            dgus_write_bytes(COMM_NM_TXT, (const uint8_t *)ipbuf, n);
-            n = ip_to_string(state->temp_ether_gw, ipbuf);
-            dgus_write_bytes(COMM_GW_TXT, (const uint8_t *)ipbuf, n);
-            state->ether_current_number   = 0;
-            state->ether_current_octet    = 0;
-            state->ether_has_input        = false;
-            state->ether_ip_input_complete = false;
-            state->ether_buffer_pos       = 0;
-            state->ether_what_input       = LCD_ETHER_INPUT_NONE;
-        }
+        render_comm_page(cfg, state, addr_str, ipbuf);
         if (state->temp_comm_mode == 0) {
             dgus_write_u16(DISP_COMM_MODE, 0);
             dgus_write_u16(DISP_EN_DHCP, 0);   /* fix D: clear stale DHCP check on serial */
@@ -224,12 +227,7 @@ void app_lcd_change_page(uint8_t page)
      * See analysis/2026-05-31-std-comm-page27-display-port-faithful.md. */
     if (page == LCD_SETUP_MHC || page == LCD_SETUP_STDC ||
         page == LCD_SETUP_MHE || page == LCD_SETUP_STDE) {
-        dgus_write_u16(DISP_COMM_MODE, (state->temp_comm_mode == 0) ? 0u : 1u);
-        if (page == LCD_SETUP_MHE || page == LCD_SETUP_STDE) {
-            dgus_write_u16(DISP_EN_DHCP,
-                           (state->temp_comm_mode == 0)
-                               ? 0u : (uint16_t)(state->temp_comm_mode - 1));
-        }
+        render_comm_tail(page, state);
     }
 #ifdef LCD_TRACE_RX
     /* comm-page display diagnosis: page id + seeded shadow + persisted cfg.

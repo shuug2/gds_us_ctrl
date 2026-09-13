@@ -194,7 +194,15 @@ void app_lcd_send_model_str(uint8_t freq, uint8_t type)
     dgus_write_bytes(MODEL_NAME, s, 11);
 }
 
-/* LCD 모드 초기화 */
+/* LCD 모드 초기화.
+ * [fix A 센티널] Arm the comm/ether shadow-load sentinel (fix A). The struct documents
+ * temp_comm_mode==0xFF as "not loaded yet" (app_lcd.h:86), but zero-init
+ * leaves it 0(=serial) at boot, so the first comm-page entry skips the
+ * seed-from-cfg gate (render.c:143/178) and the display shows stale state.
+ * samd20 relied on a setup-page entry to set 0xFF before any comm page;
+ * setting it here at boot (and on SYS_PIC_NOW re-init) makes the lifecycle
+ * coherent — consistent with the cancel-path re-arm (input.c:598).
+ */
 void app_lcd_init_mode(const app_config_t *cfg)
 {
     uint8_t          run_page = app_lcd_run_page(cfg);
@@ -205,14 +213,6 @@ void app_lcd_init_mode(const app_config_t *cfg)
     /* samd20 init_lcd_mode: lcd_status + sys_mode from model_type (main.c:3181-3189) */
     state->lcd_status = run_page;
     state->sys_mode   = cfg->model_type;
-
-    /* Arm the comm/ether shadow-load sentinel (fix A). The struct documents
-     * temp_comm_mode==0xFF as "not loaded yet" (app_lcd.h:86), but zero-init
-     * leaves it 0(=serial) at boot, so the first comm-page entry skips the
-     * seed-from-cfg gate (render.c:143/178) and the display shows stale state.
-     * samd20 relied on a setup-page entry to set 0xFF before any comm page;
-     * setting it here at boot (and on SYS_PIC_NOW re-init) makes the lifecycle
-     * coherent — consistent with the cancel-path re-arm (input.c:598). */
     state->temp_comm_mode = 0xFFu;
 
     /* output-bar thresholds from model_freq (main.c:3191-3211, verbatim) */

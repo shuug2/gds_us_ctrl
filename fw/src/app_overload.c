@@ -33,7 +33,20 @@ void app_overload_init(void)
 /* 과부하 활성 여부 */
 uint8_t app_overload_active(void) { return s_active; }
 
-/* 과부하 10ms tick 처리 */
+/* 과부하 10ms tick 처리.
+ * [active 블록] force-stop을 active 레벨에서 매 tick 재시도. app_reg_measure()->
+ * us_run_status는 app_reg_tick(step3) 발행 미러라 overload_tick(2.55)보다
+ * 1-iter lag — assert와 같은 10ms iter에 START가 들어오면 assert 시점엔
+ * stale IDLE이라 즉시정지를 놓치지만, 다음 active tick엔 미러가 갱신돼
+ * 잡힌다(지속성 과부하 = 레이스 노출 ≤1 tick≈10ms). 5번째 HIGH 직후 바로
+ * LOW되는 단발 1-tick transition은 active 재시도 기회가 없지만 de-assert
+ * 블록의 force-stop이 잡는다(아래; de-assert 시점엔 미러 fresh) → 모든
+ * 케이스에서 overload episode가 run을 남기지 않음. idempotent: IDLE되면 src=IDLE이라
+ * no-op이고, START는 active 동안 app_reg guard(app_overload_active)가 차단해
+ * 새 run이 없다. ⚠ PB3 릴레이는 dry-contact 상태신호일 뿐 초음파를 끊지
+ * 않으므로(사용자 HW 확정) 펌웨어 정지가 load-bearing — 이 재시도가 필요.
+ * weld 기계 사이클 abort는 별개(weld 물리트리거 dormant, 슬라이스 E/weld4).
+ */
 void app_overload_tick(void)
 {
     uint32_t now = sys_tick_get_ms();
@@ -55,18 +68,6 @@ void app_overload_tick(void)
     }
 
     if (s_active != 0u) {
-        /* force-stop을 active 레벨에서 매 tick 재시도. app_reg_measure()->
-         * us_run_status는 app_reg_tick(step3) 발행 미러라 overload_tick(2.55)보다
-         * 1-iter lag — assert와 같은 10ms iter에 START가 들어오면 assert 시점엔
-         * stale IDLE이라 즉시정지를 놓치지만, 다음 active tick엔 미러가 갱신돼
-         * 잡힌다(지속성 과부하 = 레이스 노출 ≤1 tick≈10ms). 5번째 HIGH 직후 바로
-         * LOW되는 단발 1-tick transition은 active 재시도 기회가 없지만 de-assert
-         * 블록의 force-stop이 잡는다(아래; de-assert 시점엔 미러 fresh) → 모든
-         * 케이스에서 overload episode가 run을 남기지 않음. idempotent: IDLE되면 src=IDLE이라
-         * no-op이고, START는 active 동안 app_reg guard(app_overload_active)가 차단해
-         * 새 run이 없다. ⚠ PB3 릴레이는 dry-contact 상태신호일 뿐 초음파를 끊지
-         * 않으므로(사용자 HW 확정) 펌웨어 정지가 load-bearing — 이 재시도가 필요.
-         * weld 기계 사이클 abort는 별개(weld 물리트리거 dormant, 슬라이스 E/weld4). */
         uint8_t src = app_reg_measure()->us_run_status;
         if (src != (uint8_t)US_IDLE) {
             app_reg_command(US_CMD_RUN_RELEASE, src);

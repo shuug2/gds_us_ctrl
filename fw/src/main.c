@@ -41,7 +41,12 @@ extern void board_init(void);    /* src/board.c */
 #define IWDG_RELOAD   624u
 _Static_assert(IWDG_RELOAD <= IWDG_RLR_RL, "IWDG reload exceeds 12-bit RLR");
 
-/* 부팅 초기화+슈퍼루프 */
+/* 부팅 초기화+슈퍼루프.
+ * [IWDG 기동] 워치독 기동 — 여기서부터 매 iter kick. 한 번 켜면 리셋 외 해제 불가(RM0401).
+ * freeze = gdb halt 중 카운터 정지(./fw.sh gdb 보호; 실행 중·미연결 시 무영향).
+ * Init 실패(HAL_TIMEOUT = LSI 무응답)는 조치 불가 — enable 은 이미 끝났고, LSI 가
+ * 죽었다면 IWDG 도 안 돈다.
+ */
 int main(void) {
     HAL_Init();
     clock_init();      /* 96 MHz */
@@ -79,11 +84,6 @@ int main(void) {
                         * server runs from app_modbus_tick() when comm_mode is
                         * ETH_STATIC or ETH_DHCP; slice 2b drives the DHCP client
                         * from app_eth_tick() in the superloop. */
-
-    /* 워치독 기동 — 여기서부터 매 iter kick. 한 번 켜면 리셋 외 해제 불가(RM0401).
-     * freeze = gdb halt 중 카운터 정지(./fw.sh gdb 보호; 실행 중·미연결 시 무영향).
-     * Init 실패(HAL_TIMEOUT = LSI 무응답)는 조치 불가 — enable 은 이미 끝났고, LSI 가
-     * 죽었다면 IWDG 도 안 돈다. */
     __HAL_DBGMCU_FREEZE_IWDG();
     hiwdg.Instance       = IWDG;
     hiwdg.Init.Prescaler = IWDG_PRESC;

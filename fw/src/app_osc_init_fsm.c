@@ -20,6 +20,66 @@ uint8_t osc_init_fsm_state(void)
     return s_state;
 }
 
+/* osc_init_fsm_step 본체 — case OSC_WAIT_H: PB12 H 디바운스 → WAIT_L, 미감지 900ms 폴백 */
+static inline __attribute__((always_inline)) void osc_step_wait_h(const osc_init_in_t *in)
+{
+    if (in->pb12) {
+        if (s_h_debounce < 0xFFu) { s_h_debounce++; }
+        if (s_h_debounce >= OSC_H_DEBOUNCE) {   /* 연속 H 샘플 → 스파이크 배제 */
+            s_state      = OSC_WAIT_L;
+            s_elapsed    = 0u;
+            s_h_debounce = 0u;
+        }
+    } else {
+        s_h_debounce = 0u;             /* H 끊김 → 디바운스 리셋 */
+        if (s_elapsed < 0xFFFFu) { s_elapsed++; }
+        if (s_elapsed >= OSC_WAIT_H_TIMEOUT) {  /* 보드 부재/고장 폴백 */
+            s_state   = OSC_WAIT_L;
+            s_elapsed = 0u;
+        }
+    }
+}
+
+/* osc_init_fsm_step 본체 — case OSC_WAIT_L: PB12 L → GAP, 미감지 900ms 폴백 */
+static inline __attribute__((always_inline)) void osc_step_wait_l(const osc_init_in_t *in)
+{
+    if (!in->pb12) {
+        s_state   = OSC_GAP;
+        s_elapsed = 0u;
+    } else {
+        if (s_elapsed < 0xFFFFu) { s_elapsed++; }
+        if (s_elapsed >= OSC_WAIT_L_TIMEOUT) {  /* 출력 안 떨어짐 폴백 */
+            s_state   = OSC_GAP;
+            s_elapsed = 0u;
+        }
+    }
+}
+
+/* osc_init_fsm_step 본체 — case OSC_RESET: RESET 펄스 레벨 유지, 만료 시 SEEK 펄스 시작 */
+static inline __attribute__((always_inline)) void osc_step_reset(osc_init_out_t *out)
+{
+    if (s_elapsed < 0xFFFFu) { s_elapsed++; }
+    if (s_elapsed >= OSC_RESET_TICKS) {
+        s_state          = OSC_SEEK;
+        s_elapsed        = 0u;
+        out->seek_signal = 1u;         /* SEEK 펄스 시작 엣지 (reset off) */
+    } else {
+        out->reset_signal = 1u;        /* 레벨 유지 */
+    }
+}
+
+/* osc_init_fsm_step 본체 — case OSC_SEEK: SEEK 펄스 레벨 유지, 만료 시 DONE */
+static inline __attribute__((always_inline)) void osc_step_seek(osc_init_out_t *out)
+{
+    if (s_elapsed < 0xFFFFu) { s_elapsed++; }
+    if (s_elapsed >= OSC_SEEK_TICKS) {
+        s_state   = OSC_DONE;
+        s_elapsed = 0u;                /* 완료 (seek off) */
+    } else {
+        out->seek_signal = 1u;         /* 레벨 유지 */
+    }
+}
+
 /* OSC init FSM 1틱 진행 */
 void osc_init_fsm_step(const osc_init_in_t *in, osc_init_out_t *out)
 {
@@ -27,34 +87,11 @@ void osc_init_fsm_step(const osc_init_in_t *in, osc_init_out_t *out)
 
     switch (s_state) {
     case OSC_WAIT_H:                       /* PB12 H(초음파 출력 시작) 대기 + 폴백 */
-        if (in->pb12) {
-            if (s_h_debounce < 0xFFu) { s_h_debounce++; }
-            if (s_h_debounce >= OSC_H_DEBOUNCE) {   /* 연속 H 샘플 → 스파이크 배제 */
-                s_state      = OSC_WAIT_L;
-                s_elapsed    = 0u;
-                s_h_debounce = 0u;
-            }
-        } else {
-            s_h_debounce = 0u;             /* H 끊김 → 디바운스 리셋 */
-            if (s_elapsed < 0xFFFFu) { s_elapsed++; }
-            if (s_elapsed >= OSC_WAIT_H_TIMEOUT) {  /* 보드 부재/고장 폴백 */
-                s_state   = OSC_WAIT_L;
-                s_elapsed = 0u;
-            }
-        }
+        osc_step_wait_h(in);
         break;
 
     case OSC_WAIT_L:                       /* PB12 L(출력 종료) 대기 + 폴백 */
-        if (!in->pb12) {
-            s_state   = OSC_GAP;
-            s_elapsed = 0u;
-        } else {
-            if (s_elapsed < 0xFFFFu) { s_elapsed++; }
-            if (s_elapsed >= OSC_WAIT_L_TIMEOUT) {  /* 출력 안 떨어짐 폴백 */
-                s_state   = OSC_GAP;
-                s_elapsed = 0u;
-            }
-        }
+        osc_step_wait_l(in);
         break;
 
     case OSC_GAP:                          /* 종료 후 150ms 갭 */
@@ -67,24 +104,11 @@ void osc_init_fsm_step(const osc_init_in_t *in, osc_init_out_t *out)
         break;
 
     case OSC_RESET:                        /* RESET 펄스 200ms */
-        if (s_elapsed < 0xFFFFu) { s_elapsed++; }
-        if (s_elapsed >= OSC_RESET_TICKS) {
-            s_state          = OSC_SEEK;
-            s_elapsed        = 0u;
-            out->seek_signal = 1u;         /* SEEK 펄스 시작 엣지 (reset off) */
-        } else {
-            out->reset_signal = 1u;        /* 레벨 유지 */
-        }
+        osc_step_reset(out);
         break;
 
     case OSC_SEEK:                         /* SEEK 펄스 100ms */
-        if (s_elapsed < 0xFFFFu) { s_elapsed++; }
-        if (s_elapsed >= OSC_SEEK_TICKS) {
-            s_state   = OSC_DONE;
-            s_elapsed = 0u;                /* 완료 (seek off) */
-        } else {
-            out->seek_signal = 1u;         /* 레벨 유지 */
-        }
+        osc_step_seek(out);
         break;
 
     case OSC_DONE:                         /* terminal: 재실행 없음, 출력 idle */

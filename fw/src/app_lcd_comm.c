@@ -125,7 +125,9 @@ void handle_comm_mode(uint16_t data16)
  * Mojibake comments in the source ignored; logic ported verbatim.
  *--------------------------------------------------------------*/
 
-/* IP 문자 입력 FSM */
+/* IP 문자 입력 FSM.
+ * [기타 키] any other key ignored (samd20)
+ */
 static void process_ip_char(uint8_t key)
 {
     lcd_app_state_t *state = app_lcd_state();
@@ -175,7 +177,6 @@ static void process_ip_char(uint8_t key)
         }
         state->ether_ip_input_complete = 1u;
     }
-    /* any other key ignored (samd20) */
 }
 
 /* ether 필드 선택 시드 */
@@ -274,14 +275,22 @@ static void commit_comm_serial_shadows(void)
     }
 }
 
-/* comm/ether 커밋 */
+/* comm/ether 커밋.
+ * [개요] Commit comm_mode + ether shadows → live cfg, firing the ether hook on
+ * ether OR comm_mode change (samd20 main.c:3327-3403 re-ran
+ * close_tcps+network_init on save — M7 restores that liveness). HAND does
+ * NOT do this; STD reaches here via the STD-persist deviation (fix-B 0xFF
+ * guard below covers its unseeded-shadow case).
+ * [fix B 가드] Guard (fix B): 0xFF = comm/ether shadows were never seeded from cfg this
+ * setup session (no comm-page visit). The shadows hold the sentinel/zero
+ * (boot) state, so committing would write comm_mode=0xFF + 0.0.0.0 ether
+ * over live cfg and persist garbage to FRAM. Skip = cfg unchanged.
+ * samd20 never hit this because STD save did not commit comm; the
+ * STD-persist deviation (data_save_commit STD branch) opened a live path:
+ * SAVE from a non-comm STD page (STD1/2/3, which set 0xFF on entry).
+ */
 static void commit_comm_mode_and_ether(void)
 {
-    /* Commit comm_mode + ether shadows → live cfg, firing the ether hook on
-     * ether OR comm_mode change (samd20 main.c:3327-3403 re-ran
-     * close_tcps+network_init on save — M7 restores that liveness). HAND does
-     * NOT do this; STD reaches here via the STD-persist deviation (fix-B 0xFF
-     * guard below covers its unseeded-shadow case). */
     lcd_app_state_t *state = app_lcd_state();
     app_config_t    *cfg   = app_lcd_cfg();
     bool ether_changed = false;
@@ -292,14 +301,6 @@ static void commit_comm_mode_and_ether(void)
     mon_printf("[lcd] commit cm temp=%u cfg=%u\r\n",
                (unsigned)state->temp_comm_mode, (unsigned)cfg->comm_mode);
 #endif
-
-    /* Guard (fix B): 0xFF = comm/ether shadows were never seeded from cfg this
-     * setup session (no comm-page visit). The shadows hold the sentinel/zero
-     * (boot) state, so committing would write comm_mode=0xFF + 0.0.0.0 ether
-     * over live cfg and persist garbage to FRAM. Skip = cfg unchanged.
-     * samd20 never hit this because STD save did not commit comm; the
-     * STD-persist deviation (data_save_commit STD branch) opened a live path:
-     * SAVE from a non-comm STD page (STD1/2/3, which set 0xFF on entry). */
     if (state->temp_comm_mode == 0xFFu) {
         return;
     }
@@ -342,7 +343,13 @@ static void commit_cnt_reset(void)
     }
 }
 
-/* DATA_SAVE 커밋 */
+/* DATA_SAVE 커밋.
+ * [STD path] STD path: out power DAC + cnt_reset + horndown + addr/speed/parity.
+ * samd20 (3455-3510) confined comm_mode/ether commit to MULTI, so STD
+ * saves dropped ether/comm_mode (quirk). Intentional deviation
+ * (2026-05-27, user): commit comm_mode/ether here too so STD persists
+ * them like MULTI.
+ */
 void data_save_commit(void)
 {
     /* DATA_SAVE == 1: commit live cfg → FRAM by current page group (spec §8.2). */
@@ -376,11 +383,6 @@ void data_save_commit(void)
                state->lcd_status == LCD_SETUP_STD3 ||
                state->lcd_status == LCD_SETUP_STDC ||
                state->lcd_status == LCD_SETUP_STDE) {
-        /* STD path: out power DAC + cnt_reset + horndown + addr/speed/parity.
-         * samd20 (3455-3510) confined comm_mode/ether commit to MULTI, so STD
-         * saves dropped ether/comm_mode (quirk). Intentional deviation
-         * (2026-05-27, user): commit comm_mode/ether here too so STD persists
-         * them like MULTI. */
         app_lcd_hook_set_pot(cfg->output_power);
         commit_cnt_reset();
         app_lcd_hook_horn(state->temp_horndown == 1u);   /* samd20 SOL_DN / SYS_HORN path */

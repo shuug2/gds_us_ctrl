@@ -182,14 +182,31 @@ void app_lcd_input_run_key_reanchor(void)
     s_run_key_down = 0u;
 }
 
-/* KEY_MULTI 키 처리 */
+/* KEY_MULTI 키 처리.
+ * [개요] KEY_MULTI (0x1080): 1=RESET / 2=SEEK / 3=RUN(press) / 4=RUN(release); the V30
+ * DGUS asset additionally returns 0=RUN on both edges (toggle-mapped — §4.4).
+ * Raise the ultrasonic command hook only (Stage D owns the us/sig/energy FSM).
+ * RUN press also writes the DAC. RESET in an OVLD/OUTERR error clears those bits,
+ * blanks the icons, and restores the run page (samd20 main.c:3633-3706).
+ * [data=0 토글] The V30 DGUS asset returns KEY_MULTI=0 on BOTH press and release for the
+ * RUN button (RESET=1/SEEK=2 are correct; data=0 is unique to RUN, HW-traced
+ * 2026-06-08). Each data=0 event IS one physical edge, so the s_run_key_down
+ * toggle reconstructs the press/release pairing exactly. Mapping by the live
+ * run state instead (pre-2026-07-08) inverted the pairing whenever app_reg
+ * silently rejected the mapped START (boot warm-up ~4 s, seek/reset chain,
+ * E-stop/overload/fault, back-to-back frames in one drain): the physical
+ * release then re-mapped to START and began an un-held run that nothing
+ * released (30 s safety cap only), and every further tap stop-then-
+ * restarted it — RUN looked dead until power cycle. With the toggle a
+ * rejected press simply pairs with a no-op RELEASE-while-IDLE (which also
+ * clears any armed swallow_start). Only a lost or duplicated edge frame
+ * can drift the toggle (the HW trace saw neither: one event per edge, no
+ * auto-repeat); SYS_PIC_NOW re-init (panel reset) re-anchors it. The legacy
+ * data=3/4 branches above stay for forward-compat if the asset is later
+ * fixed to send them. See spec §4.4.
+ */
 static void handle_key_multi(uint16_t data16)
 {
-    /* KEY_MULTI (0x1080): 1=RESET / 2=SEEK / 3=RUN(press) / 4=RUN(release); the V30
-     * DGUS asset additionally returns 0=RUN on both edges (toggle-mapped — §4.4).
-     * Raise the ultrasonic command hook only (Stage D owns the us/sig/energy FSM).
-     * RUN press also writes the DAC. RESET in an OVLD/OUTERR error clears those bits,
-     * blanks the icons, and restores the run page (samd20 main.c:3633-3706). */
     lcd_app_state_t *state = app_lcd_state();
     app_config_t    *cfg   = app_lcd_cfg();
 
@@ -220,22 +237,6 @@ static void handle_key_multi(uint16_t data16)
         app_lcd_hook_us_command(US_CMD_RUN_RELEASE);
         /* Stage D owns us/measure state; input only raises the command. */
     } else if (data16 == 0) {                           /* RUN (V30 panel: key value 0 on both edges) */
-        /* The V30 DGUS asset returns KEY_MULTI=0 on BOTH press and release for the
-         * RUN button (RESET=1/SEEK=2 are correct; data=0 is unique to RUN, HW-traced
-         * 2026-06-08). Each data=0 event IS one physical edge, so the s_run_key_down
-         * toggle reconstructs the press/release pairing exactly. Mapping by the live
-         * run state instead (pre-2026-07-08) inverted the pairing whenever app_reg
-         * silently rejected the mapped START (boot warm-up ~4 s, seek/reset chain,
-         * E-stop/overload/fault, back-to-back frames in one drain): the physical
-         * release then re-mapped to START and began an un-held run that nothing
-         * released (30 s safety cap only), and every further tap stop-then-
-         * restarted it — RUN looked dead until power cycle. With the toggle a
-         * rejected press simply pairs with a no-op RELEASE-while-IDLE (which also
-         * clears any armed swallow_start). Only a lost or duplicated edge frame
-         * can drift the toggle (the HW trace saw neither: one event per edge, no
-         * auto-repeat); SYS_PIC_NOW re-init (panel reset) re-anchors it. The legacy
-         * data=3/4 branches above stay for forward-compat if the asset is later
-         * fixed to send them. See spec §4.4. */
         s_run_key_down ^= 1u;
         if (s_run_key_down != 0u) {
             app_lcd_hook_us_command(US_CMD_START);
@@ -328,6 +329,38 @@ static void enter_model_setup(void)
     dgus_write_u16(VAR_FREQ_CAL_VAL, (uint16_t)cfg->freq_cal_val);
 }
 
+/* handle_std_setup_param 본체 — case 1: SETUP 페이지 1 로 (MH2/MHC/MHE 면 모델별 HAND/MULTI, 아니면 STD1; set_page 만) */
+static inline __attribute__((always_inline)) void goto_setup1(lcd_app_state_t *state, const app_config_t *cfg)
+{
+    if (state->lcd_status == LCD_SETUP_MH2 ||
+        state->lcd_status == LCD_SETUP_MHC ||
+        state->lcd_status == LCD_SETUP_MHE) {
+        if (cfg->model_type == 0)        state->lcd_status = LCD_SETUP_HAND;
+        else if (cfg->model_type == 1)   state->lcd_status = LCD_SETUP_MULTI;
+    } else {
+        state->lcd_status = LCD_SETUP_STD1;
+    }
+    dgus_set_page(state->lcd_status);               /* samd20 set_lcd_page only (no rebuild) */
+}
+
+/* handle_std_setup_param 본체 — case 2: SETUP 페이지 2 로 (STD 계열 → run_mode 별 STD2D/T, MH 계열 → MH2; change_page) */
+static inline __attribute__((always_inline)) void goto_setup2(lcd_app_state_t *state, const app_config_t *cfg)
+{
+    if (state->lcd_status == LCD_SETUP_STD1 ||
+        state->lcd_status == LCD_SETUP_STD3 ||
+        state->lcd_status == LCD_SETUP_STDC ||
+        state->lcd_status == LCD_SETUP_STDE) {
+        state->lcd_status = (cfg->run_mode == MODE_DELAY)
+                            ? LCD_SETUP_STD2D : LCD_SETUP_STD2T;
+    } else if (state->lcd_status == LCD_SETUP_MULTI ||
+               state->lcd_status == LCD_SETUP_HAND ||
+               state->lcd_status == LCD_SETUP_MHC ||
+               state->lcd_status == LCD_SETUP_MHE) {
+        state->lcd_status = LCD_SETUP_MH2;
+    }
+    app_lcd_change_page(state->lcd_status);
+}
+
 /* SETUP 페이지 내비 */
 static void handle_std_setup_param(uint16_t data16)
 {
@@ -338,29 +371,9 @@ static void handle_std_setup_param(uint16_t data16)
     app_config_t    *cfg   = app_lcd_cfg();
 
     if (data16 == 1) {                                  /* GOTO SETUP PAGE 1 */
-        if (state->lcd_status == LCD_SETUP_MH2 ||
-            state->lcd_status == LCD_SETUP_MHC ||
-            state->lcd_status == LCD_SETUP_MHE) {
-            if (cfg->model_type == 0)        state->lcd_status = LCD_SETUP_HAND;
-            else if (cfg->model_type == 1)   state->lcd_status = LCD_SETUP_MULTI;
-        } else {
-            state->lcd_status = LCD_SETUP_STD1;
-        }
-        dgus_set_page(state->lcd_status);               /* samd20 set_lcd_page only (no rebuild) */
+        goto_setup1(state, cfg);
     } else if (data16 == 2) {                           /* GOTO SETUP PAGE 2 */
-        if (state->lcd_status == LCD_SETUP_STD1 ||
-            state->lcd_status == LCD_SETUP_STD3 ||
-            state->lcd_status == LCD_SETUP_STDC ||
-            state->lcd_status == LCD_SETUP_STDE) {
-            state->lcd_status = (cfg->run_mode == MODE_DELAY)
-                                ? LCD_SETUP_STD2D : LCD_SETUP_STD2T;
-        } else if (state->lcd_status == LCD_SETUP_MULTI ||
-                   state->lcd_status == LCD_SETUP_HAND ||
-                   state->lcd_status == LCD_SETUP_MHC ||
-                   state->lcd_status == LCD_SETUP_MHE) {
-            state->lcd_status = LCD_SETUP_MH2;
-        }
-        app_lcd_change_page(state->lcd_status);
+        goto_setup2(state, cfg);
     } else if (data16 == 3) {                           /* GOTO SETUP PAGE 3 */
         if (state->lcd_status == LCD_SETUP_STD1 ||
             state->lcd_status == LCD_SETUP_STD2D ||
@@ -408,6 +421,57 @@ static uint16_t clamp_echo_power(uint16_t vp, uint16_t v)
 /*--------------------------------------------------------------
  * Public entry — VP → action dispatch
  *--------------------------------------------------------------*/
+
+/*--- panel boot / page-flip notification — guarded re-init (spec §10) ----
+ * data16==0 means the panel reports it landed on a page (its own splash or a
+ * mid-run reset). Re-seed the panel vars + model string + run page, but ONLY
+ * when (a) the Stage B boot handshake has finished (boot_complete) and (b) at
+ * least 200 ms passed since our own last set_page — otherwise the
+ * change_page→set_page→SYS_PIC_NOW→re-init→set_page chain is a feedback loop.
+ * app_lcd_init_mode ends in app_lcd_change_page, which refreshes
+ * last_set_page_ms, so the 200 ms gate re-arms after each re-init. */
+static inline __attribute__((always_inline)) void handle_sys_pic_now(lcd_app_state_t *state, app_config_t *cfg, uint16_t data16)
+{
+    if (data16 == 0 && state->boot_complete &&
+        (uint32_t)(sys_tick_get_ms() - state->last_set_page_ms) >= 200u) {
+        /* Panel self-reset mid-run: the held RUN press is lost and no
+         * RUN_RELEASE will arrive, so stop the run (UI lost -> stop the
+         * actuator). This also re-syncs ICON_RUN: us_run_status -> IDLE
+         * makes the next disp_step see a real edge after init_mode clears
+         * the icon (spec §4.3). Harmless when already idle. */
+        app_lcd_hook_us_command(US_CMD_RUN_RELEASE);
+        s_run_key_down = 0u;   /* panel reset: the release edge never arrives */
+        app_lcd_var_init();
+        app_lcd_send_model_str(cfg->model_freq, cfg->model_type);
+        app_lcd_init_mode(cfg);
+    }
+}
+
+/* dispatch 본체 — SETUP_PARAM / SETUP_PARAM_MOOHAN 공통: setup1 페이지 진입 + horn 체크박스 미러 (두 case 에서 각각 호출) */
+static inline __attribute__((always_inline)) void handle_setup_param_enter(lcd_app_state_t *state)
+{
+    state->lcd_status = setup1_page_for_mode(state->sys_mode);
+    app_lcd_change_page(state->lcd_status);
+    /* horn-down 체크박스 = 현재 SYS_HORN 모드 미러 + shadow 리셋 (legacy
+     * main.c:3617-3622 verbatim — 저장 시 체크 안 건드리면 temp==0이라
+     * 모드 이탈되는 legacy 거동 포함). */
+    dgus_write_u16(DISP_HORNDOWN, (uint16_t)app_horn_mode_active());
+    state->temp_horndown = 0u;
+}
+
+/* dispatch 본체 — LV_RUN_MODE: 1=delay / 2=trigger 로 run_mode 설정 + STD2 페이지 전환 */
+static inline __attribute__((always_inline)) void handle_run_mode(lcd_app_state_t *state, app_config_t *cfg, uint16_t data16)
+{
+    if (data16 == 1) {                               /* delay mode */
+        cfg->run_mode = MODE_DELAY;
+        state->lcd_status = LCD_SETUP_STD2D;
+        app_lcd_change_page(state->lcd_status);
+    } else if (data16 == 2) {                        /* trigger mode */
+        cfg->run_mode = MODE_TRIGGER;
+        state->lcd_status = LCD_SETUP_STD2T;
+        app_lcd_change_page(state->lcd_status);
+    }
+}
 
 /* 터치 키 디스패치 */
 void app_lcd_input_dispatch(const dgus_frame_t *f)
@@ -539,20 +603,11 @@ void app_lcd_input_dispatch(const dgus_frame_t *f)
 
     /*--- page navigation ---------------------------------------------------*/
     case SETUP_PARAM:
-        state->lcd_status = setup1_page_for_mode(state->sys_mode);
-        app_lcd_change_page(state->lcd_status);
-        /* horn-down 체크박스 = 현재 SYS_HORN 모드 미러 + shadow 리셋 (legacy
-         * main.c:3617-3622 verbatim — 저장 시 체크 안 건드리면 temp==0이라
-         * 모드 이탈되는 legacy 거동 포함). */
-        dgus_write_u16(DISP_HORNDOWN, (uint16_t)app_horn_mode_active());
-        state->temp_horndown = 0u;
+        handle_setup_param_enter(state);
         break;
     case SETUP_PARAM_MOOHAN:                             /* long-press variant of SETUP_PARAM */
         if (long_press_released(vp, data16)) {
-            state->lcd_status = setup1_page_for_mode(state->sys_mode);
-            app_lcd_change_page(state->lcd_status);
-            dgus_write_u16(DISP_HORNDOWN, (uint16_t)app_horn_mode_active());
-            state->temp_horndown = 0u;                   /* legacy 3617-3622 미러 */
+            handle_setup_param_enter(state);
         }
         break;
     case SETUP_MODEL:                                    /* long-press → model setup */
@@ -564,15 +619,7 @@ void app_lcd_input_dispatch(const dgus_frame_t *f)
         handle_std_setup_param(data16);
         break;
     case LV_RUN_MODE:
-        if (data16 == 1) {                               /* delay mode */
-            cfg->run_mode = MODE_DELAY;
-            state->lcd_status = LCD_SETUP_STD2D;
-            app_lcd_change_page(state->lcd_status);
-        } else if (data16 == 2) {                        /* trigger mode */
-            cfg->run_mode = MODE_TRIGGER;
-            state->lcd_status = LCD_SETUP_STD2T;
-            app_lcd_change_page(state->lcd_status);
-        }
+        handle_run_mode(state, cfg, data16);
         break;
 
     /*--- ultrasonic commands ----------------------------------------------*/
@@ -607,28 +654,9 @@ void app_lcd_input_dispatch(const dgus_frame_t *f)
         handle_ether_key(data16);
         break;
 
-    /*--- panel boot / page-flip notification — guarded re-init (spec §10) ----
-     * data16==0 means the panel reports it landed on a page (its own splash or a
-     * mid-run reset). Re-seed the panel vars + model string + run page, but ONLY
-     * when (a) the Stage B boot handshake has finished (boot_complete) and (b) at
-     * least 200 ms passed since our own last set_page — otherwise the
-     * change_page→set_page→SYS_PIC_NOW→re-init→set_page chain is a feedback loop.
-     * app_lcd_init_mode ends in app_lcd_change_page, which refreshes
-     * last_set_page_ms, so the 200 ms gate re-arms after each re-init. */
+    /*--- panel boot / page-flip → handle_sys_pic_now (spec §10) ------------*/
     case SYS_PIC_NOW:
-        if (data16 == 0 && state->boot_complete &&
-            (uint32_t)(sys_tick_get_ms() - state->last_set_page_ms) >= 200u) {
-            /* Panel self-reset mid-run: the held RUN press is lost and no
-             * RUN_RELEASE will arrive, so stop the run (UI lost -> stop the
-             * actuator). This also re-syncs ICON_RUN: us_run_status -> IDLE
-             * makes the next disp_step see a real edge after init_mode clears
-             * the icon (spec §4.3). Harmless when already idle. */
-            app_lcd_hook_us_command(US_CMD_RUN_RELEASE);
-            s_run_key_down = 0u;   /* panel reset: the release edge never arrives */
-            app_lcd_var_init();
-            app_lcd_send_model_str(cfg->model_freq, cfg->model_type);
-            app_lcd_init_mode(cfg);
-        }
+        handle_sys_pic_now(state, cfg, data16);
         break;
 
     default:

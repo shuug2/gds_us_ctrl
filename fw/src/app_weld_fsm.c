@@ -117,6 +117,128 @@ static uint16_t hold_time(const weld_in_t *in)
     return (s_run_mode != 0u) ? in->limit_trigger_time3 : in->limit_delay_time3;
 }
 
+/* weld_fsm_step 본체 — abort: 임의 상태 → SOL OFF + READY + 내부 래치 전부 클리어 (판정·return 은 호출자) */
+static inline __attribute__((always_inline)) void weld_abort_body(weld_out_t *out)
+{
+    if (s_run_status == WELD_WELD) {
+        out->weld_stop = 1u;
+    }
+    s_sol_dn         = 0u;
+    s_run_status     = WELD_READY;
+    s_f_status_start = 0u;
+    s_temp_time      = 0u;
+    s_multi_stage    = 0u;
+    s_multi_elapsed  = 0u;
+    s_latched_multi  = 0u;
+    s_latched_energy = 0u;
+    s_run_mode       = 0u;
+    s_dn_pressed     = 0u;
+    s_up_pressed     = 0u;
+    out->run_status  = s_run_status;
+    out->sol_dn      = s_sol_dn;
+}
+
+/* weld_fsm_step 본체 — case WELD_CYL1: 첫 진입 SOL_DN ON, TRIGGER 는 dn 엣지 / DELAY 는 타이머로 WELD 전이 */
+static inline __attribute__((always_inline)) void weld_step_cyl1(const weld_in_t *in)
+{
+    if (s_f_status_start == 0u) {
+        s_f_status_start = 1u;
+        s_sol_dn         = 1u;       /* SOL_DN ON (cylinder descends) */
+    } else if (s_run_mode != 0u) {   /* TRIGGER (main.c:1513-1528) */
+        if (s_dn_pressed != 0u) {
+            s_dn_pressed = 0u;
+            enter_weld(in, in->limit_trigger_time2);
+        }
+        /* dn 없음 -> 무기한 대기 (죽은 legacy CYL_TIMEOUT 충실히 미구현, spec §3.2). */
+    } else if (s_temp_time == 0u) {          /* WELD_CYL1 전이 블록 (DELAY) */
+        enter_weld(in, in->limit_delay_time2);
+    }
+}
+
+/* weld_fsm_step 본체 — case WELD_WELD: 첫 진입 진폭+weld_start, 이후 multi > energy > 시간 exit (55줄 — spec §6 기록) */
+static inline __attribute__((always_inline)) void weld_step_weld(const weld_in_t *in, weld_out_t *out)
+{
+    if (s_f_status_start == 0u) {
+        s_f_status_start = 1u;
+        if (s_latched_multi) {       /* H1: 전이 시점 스냅샷 (in->multi_ctrl 아님 —
+                                         무장-직후 1-tick 토글 창 제거) */
+            s_multi_stage   = 0u;
+            s_multi_elapsed = 1u;  /* weld_start step은 elapsed=1로 시작 (전환 step 포함, slice-1 s_temp_time 정합) */
+            out->amplitude  = weld_mo_amplitude(in->limit_mo_out1);  /* 1단 (comp 미적용) */
+        } else {
+            out->amplitude  = weld_amplitude(in->output_power, s_comp_time);
+        }
+        out->weld_start  = 1u;       /* glue: US_CYCLE START + pot write */
+    } else if (s_latched_multi) {
+        /* multi: 2단 진폭 스테핑 (samd20 5232-5258). 우선순위 최상 — energy/시간
+         * exit 미발동(아래 else-if 분기 진입 안 함). spec §3.4. H1: 전이 시점
+         * 스냅샷(s_latched_multi) 참조 — 런중 in->multi_ctrl 토글 무시. */
+        if (s_multi_elapsed < 0xFFFFu) {
+            s_multi_elapsed++;                   /* 포화 가드 (time2 매우 클 때 wrap 방지) */
+        }
+        if (s_multi_stage == 0u && s_multi_elapsed >= in->limit_mo_time1) {
+            s_multi_stage   = 1u;
+            out->amplitude  = weld_mo_amplitude(in->limit_mo_out2);  /* 2단 (samd20 5242) */
+            out->amp_change = 1u;                /* glue: set_amp 재호출 */
+        }
+        if (s_multi_elapsed >= in->limit_mo_time2) {
+            out->weld_stop   = 1u;               /* samd20 5250: WELD->HOLD */
+            s_f_status_start = 0u;
+            s_run_status     = WELD_HOLD;
+            s_temp_time      = hold_time(in);
+        }
+    } else if (s_latched_energy) {
+        /* energy 모드: 에너지 도달 -> 정상 종료(samd20 5272); 미도달 +
+         * backstop 만료 -> abort(samd20 5288, 에러 표시는 이연). spec §3.3. H1:
+         * 전이 시점 스냅샷(s_latched_energy) 참조 — 런중 in->energy_ctrl 토글 무시. */
+        if ((in->limit_energy != 0u) && (in->curr_energy >= in->limit_energy)) {
+            out->weld_stop   = 1u;
+            s_f_status_start = 0u;
+            s_run_status     = WELD_HOLD;
+            s_temp_time      = hold_time(in);
+        } else if (s_temp_time == 0u) {
+            out->weld_stop   = 1u;   /* abort도 US 정지 */
+            out->weld_fault  = 1u;   /* glue: fault hook → app_reg_raise_ovtime
+                                      * (ERR_OVTIME=legacy SYS_ERROR, 2026-07-18) */
+            s_sol_dn         = 0u;   /* 실린더 즉시 상승 */
+            s_f_status_start = 0u;
+            s_run_status     = WELD_READY;   /* CYL2 미경유, work_cnt++ 없음 */
+            s_latched_multi  = 0u;            /* H1: READY 복귀 지점 클리어 */
+            s_latched_energy = 0u;
+        }
+    } else if (s_temp_time == 0u) {
+        /* slice-1 시간-exit (energy_ctrl off) — 무회귀. */
+        out->weld_stop   = 1u;
+        s_f_status_start = 0u;
+        s_run_status     = WELD_HOLD;
+        s_temp_time      = hold_time(in);
+    }
+}
+
+/* weld_fsm_step 본체 — case WELD_CYL2: 첫 진입 SOL_DN OFF, TRIGGER 는 up 래치 / DELAY 는 타이머로 READY + cycle_done */
+static inline __attribute__((always_inline)) void weld_step_cyl2(weld_out_t *out)
+{
+    if (s_f_status_start == 0u) {
+        s_f_status_start = 1u;
+        s_sol_dn         = 0u;       /* SOL_DN OFF (cylinder rises) */
+    } else if (s_run_mode != 0u) {   /* TRIGGER (main.c:1618-1629) */
+        if (s_up_pressed != 0u) {
+            s_up_pressed     = 0u;
+            s_f_status_start = 0u;
+            s_run_status     = WELD_READY;
+            out->cycle_done  = 1u;       /* glue: work_cnt++ */
+            s_latched_multi  = 0u;       /* H1: READY 복귀 지점 클리어 */
+            s_latched_energy = 0u;
+        }
+    } else if (s_temp_time == 0u) {
+        s_f_status_start = 0u;
+        s_run_status     = WELD_READY;
+        out->cycle_done  = 1u;       /* glue: work_cnt++ */
+        s_latched_multi  = 0u;       /* H1: READY 복귀 지점 클리어 */
+        s_latched_energy = 0u;
+    }
+}
+
 /* weld FSM 1틱 진행 */
 void weld_fsm_step(const weld_in_t *in, weld_out_t *out)
 {
@@ -126,22 +248,7 @@ void weld_fsm_step(const weld_in_t *in, weld_out_t *out)
      * (글루 US_CYCLE RUN_RELEASE — slice-c/d force-stop과 이중 안전). work_cnt 미발행.
      * legacy: E-stop main.c:1415 / SYS_ERROR 1664-1665. */
     if ((in->abort != 0u) && (s_run_status != WELD_READY)) {
-        if (s_run_status == WELD_WELD) {
-            out->weld_stop = 1u;
-        }
-        s_sol_dn         = 0u;
-        s_run_status     = WELD_READY;
-        s_f_status_start = 0u;
-        s_temp_time      = 0u;
-        s_multi_stage    = 0u;
-        s_multi_elapsed  = 0u;
-        s_latched_multi  = 0u;
-        s_latched_energy = 0u;
-        s_run_mode       = 0u;
-        s_dn_pressed     = 0u;
-        s_up_pressed     = 0u;
-        out->run_status  = s_run_status;
-        out->sol_dn      = s_sol_dn;
+        weld_abort_body(out);
         return;
     }
 
@@ -167,76 +274,11 @@ void weld_fsm_step(const weld_in_t *in, weld_out_t *out)
         break;
 
     case WELD_CYL1:
-        if (s_f_status_start == 0u) {
-            s_f_status_start = 1u;
-            s_sol_dn         = 1u;       /* SOL_DN ON (cylinder descends) */
-        } else if (s_run_mode != 0u) {   /* TRIGGER (main.c:1513-1528) */
-            if (s_dn_pressed != 0u) {
-                s_dn_pressed = 0u;
-                enter_weld(in, in->limit_trigger_time2);
-            }
-            /* dn 없음 -> 무기한 대기 (죽은 legacy CYL_TIMEOUT 충실히 미구현, spec §3.2). */
-        } else if (s_temp_time == 0u) {          /* WELD_CYL1 전이 블록 (DELAY) */
-            enter_weld(in, in->limit_delay_time2);
-        }
+        weld_step_cyl1(in);
         break;
 
     case WELD_WELD:
-        if (s_f_status_start == 0u) {
-            s_f_status_start = 1u;
-            if (s_latched_multi) {       /* H1: 전이 시점 스냅샷 (in->multi_ctrl 아님 —
-                                             무장-직후 1-tick 토글 창 제거) */
-                s_multi_stage   = 0u;
-                s_multi_elapsed = 1u;  /* weld_start step은 elapsed=1로 시작 (전환 step 포함, slice-1 s_temp_time 정합) */
-                out->amplitude  = weld_mo_amplitude(in->limit_mo_out1);  /* 1단 (comp 미적용) */
-            } else {
-                out->amplitude  = weld_amplitude(in->output_power, s_comp_time);
-            }
-            out->weld_start  = 1u;       /* glue: US_CYCLE START + pot write */
-        } else if (s_latched_multi) {
-            /* multi: 2단 진폭 스테핑 (samd20 5232-5258). 우선순위 최상 — energy/시간
-             * exit 미발동(아래 else-if 분기 진입 안 함). spec §3.4. H1: 전이 시점
-             * 스냅샷(s_latched_multi) 참조 — 런중 in->multi_ctrl 토글 무시. */
-            if (s_multi_elapsed < 0xFFFFu) {
-                s_multi_elapsed++;                   /* 포화 가드 (time2 매우 클 때 wrap 방지) */
-            }
-            if (s_multi_stage == 0u && s_multi_elapsed >= in->limit_mo_time1) {
-                s_multi_stage   = 1u;
-                out->amplitude  = weld_mo_amplitude(in->limit_mo_out2);  /* 2단 (samd20 5242) */
-                out->amp_change = 1u;                /* glue: set_amp 재호출 */
-            }
-            if (s_multi_elapsed >= in->limit_mo_time2) {
-                out->weld_stop   = 1u;               /* samd20 5250: WELD->HOLD */
-                s_f_status_start = 0u;
-                s_run_status     = WELD_HOLD;
-                s_temp_time      = hold_time(in);
-            }
-        } else if (s_latched_energy) {
-            /* energy 모드: 에너지 도달 -> 정상 종료(samd20 5272); 미도달 +
-             * backstop 만료 -> abort(samd20 5288, 에러 표시는 이연). spec §3.3. H1:
-             * 전이 시점 스냅샷(s_latched_energy) 참조 — 런중 in->energy_ctrl 토글 무시. */
-            if ((in->limit_energy != 0u) && (in->curr_energy >= in->limit_energy)) {
-                out->weld_stop   = 1u;
-                s_f_status_start = 0u;
-                s_run_status     = WELD_HOLD;
-                s_temp_time      = hold_time(in);
-            } else if (s_temp_time == 0u) {
-                out->weld_stop   = 1u;   /* abort도 US 정지 */
-                out->weld_fault  = 1u;   /* glue: fault hook → app_reg_raise_ovtime
-                                          * (ERR_OVTIME=legacy SYS_ERROR, 2026-07-18) */
-                s_sol_dn         = 0u;   /* 실린더 즉시 상승 */
-                s_f_status_start = 0u;
-                s_run_status     = WELD_READY;   /* CYL2 미경유, work_cnt++ 없음 */
-                s_latched_multi  = 0u;            /* H1: READY 복귀 지점 클리어 */
-                s_latched_energy = 0u;
-            }
-        } else if (s_temp_time == 0u) {
-            /* slice-1 시간-exit (energy_ctrl off) — 무회귀. */
-            out->weld_stop   = 1u;
-            s_f_status_start = 0u;
-            s_run_status     = WELD_HOLD;
-            s_temp_time      = hold_time(in);
-        }
+        weld_step_weld(in, out);
         break;
 
     case WELD_HOLD:
@@ -254,25 +296,7 @@ void weld_fsm_step(const weld_in_t *in, weld_out_t *out)
         break;
 
     case WELD_CYL2:
-        if (s_f_status_start == 0u) {
-            s_f_status_start = 1u;
-            s_sol_dn         = 0u;       /* SOL_DN OFF (cylinder rises) */
-        } else if (s_run_mode != 0u) {   /* TRIGGER (main.c:1618-1629) */
-            if (s_up_pressed != 0u) {
-                s_up_pressed     = 0u;
-                s_f_status_start = 0u;
-                s_run_status     = WELD_READY;
-                out->cycle_done  = 1u;       /* glue: work_cnt++ */
-                s_latched_multi  = 0u;       /* H1: READY 복귀 지점 클리어 */
-                s_latched_energy = 0u;
-            }
-        } else if (s_temp_time == 0u) {
-            s_f_status_start = 0u;
-            s_run_status     = WELD_READY;
-            out->cycle_done  = 1u;       /* glue: work_cnt++ */
-            s_latched_multi  = 0u;       /* H1: READY 복귀 지점 클리어 */
-            s_latched_energy = 0u;
-        }
+        weld_step_cyl2(out);
         break;
 
     default:
