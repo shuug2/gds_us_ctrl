@@ -4,6 +4,7 @@
 **Branch**: `feat/modbus-write-lcd-echo` tip `3be6a5d`(PR #1 `3f82c06` 위 13 커밋: 에코 3 · docs 2 · 날짜 · F1 spec+fix · 세션마감 · B fix→**revert** · B spec/조사 docs · CLAUDE.md 보관 규칙). worktree `.claude/worktrees/feat-modbus-write-lcd-echo` 유지
 **Board**: **REMOTE `V3.1.0R!_260911` = `3be6a5d` 빌드**, `Verified OK` 2026-09-13. 패널 자산은 사용자가 DGUS 에서 수정 — "버전이 잘못되었었던듯"(구버전 자산)
 **Status**: ① 재부팅 후 COMM 페이지 모드 아이콘 "시리얼" — 조사+실기 3단계+원격기 회신으로 **펌웨어·FRAM·원격기 정상, 패널 자산 한 지점** 확정. 펌웨어 B 시도 효과 없음 → 원복. 사용자 DGUS 수정으로 해결 ② 양산 바이너리 보관 규칙 `releases/<버전>/` CLAUDE.md 기록(원격기와 공통, 파일명 `!` 미포함) ③ 벤치 미착수
+**Releases**: `releases/README.md` = 공통 SWD 플래시 가이드(CubeProgrammer CLI / OpenOCD / J-Link · SHA 대조 · LCD 버전 판정 · 실패 표 · 보관 절차 명령 + 버전 README 템플릿), 원격기 `gds_us_remote/releases/` 와 같은 목차(2026-09-13 원격기 세션 요청). **버전 폴더는 아직 없음** — 첫 보관본 = 이번 벤치 PASS 태그 뒤 `releases/V3.1.0R_260911/`(§7 절차). 양산 플래시는 반드시 보관본으로, `fw/build*/` 금지
 
 > **★ 다음 세션 진입 순서 (보드 세션)**
 > 1. `docs/superpowers/RESUME.md` 최상단(2026-09-13) — 열린 항목 1개(패널 자산 == 저장소 `hw/lcd/dgus/` 확인, 다르면 갱신) + 벤치 순서

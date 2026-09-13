@@ -124,7 +124,7 @@ env -u STM32_TOOLCHAIN cmake --build build --target flash     # 플래시
 
 HW 벤치 PASS 로 태그가 붙는 빌드는 **저장소 안 `releases/<버전문자열>/`** 에 보관한다. 버전문자열 = `define.h` 의 `VERSION_MSG` 에서 공백을 뗀 것(`V3.1.0R_260911`). 파일명 규칙 = **`gds_us_ctrl_v<버전>.bin`** — 극성 반전 표식 `!` 는 파일명에 넣지 않고(`gds_us_ctrl_v3.1.0R_260911.bin`) **README 에 "인터록 반전판(`REMOTE_EN_INTERLOCK_INVERTED 1`), 배포 금지" 를 명기**한다(사용자 결정 ①-b). STD 빌드가 함께 검증됐으면 같은 폴더에 `gds_us_ctrl_v3.0.0_260911.bin` 로 나란히.
 
-폴더 구성: `.bin`(플래시에 쓰는 것) · `.elf`(심볼, 선택) · `SHA256SUMS` · `README.md`(태그 · 커밋 · `arm-none-eabi-gcc --version` · 빌드 명령 `MODEL=remote ./fw.sh` · 플래시 명령 `./fw.sh flash` 또는 openocd 한 줄 · 재현 확인 `shasum -a 256 -c SHA256SUMS` · 이 릴리스에 든 것 · **배포 금지 여부**).
+**공통 플래시 가이드·절차 명령·버전 README 템플릿 = `releases/README.md`**(원격기 `gds_us_remote/releases/README.md` 와 같은 목차). 폴더 구성: `.bin`(플래시에 쓰는 것) · `.elf`(심볼, 선택) · `stm32f410.cfg` 복사본 · `SHA256SUMS` · `README.md`(태그 · 커밋 · `arm-none-eabi-gcc --version` · 빌드 명령 `MODEL=remote ./fw.sh` · 플래시 명령 `./fw.sh flash` 또는 openocd 한 줄 · 재현 확인 `shasum -a 256 -c SHA256SUMS` · 이 릴리스에 든 것 · **배포 금지 여부**).
 
 절차: ① 태그(`hw-revA_fw-…`) ② `rm -rf fw/build fw/build-remote` 클린 빌드 ③ `define.h` 날짜 == 태그 시점 확인(우리는 `git describe` 를 안 쓰므로 접미사 문제는 없지만 날짜 불일치는 사람이 잡아야 한다) ④ `releases/<버전>/` 에 복사·개명 ⑤ `SHA256SUMS` ⑥ **그 보관본을 보드에 플래시해 LCD 버전 육안** ⑦ 보관 폴더 커밋(태그보다 뒤 커밋이 정상) ⑧ 푸시. 양산 플래시는 반드시 보관본으로. 저장소 크기 부담이 되면 GitHub Release 자산으로 옮긴다(원격기와 같은 결정).
 
