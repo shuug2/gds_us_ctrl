@@ -4,7 +4,7 @@
 
 | 항목 | 값 |
 |---|---|
-| 태그 / 커밋 / 브랜치 | **태그 미발행**(벤치 PASS 후 `hw-revA_fw-stage-lcd-echo` 예정) · 빌드 트리 `8bd0417` = 코드 `3be6a5d` + docs 3 (`feat/modbus-write-lcd-echo`, PR #1 `3f82c06` 위) |
+| 태그 / 커밋 / 브랜치 | **태그 미발행**(벤치 PASS 후 `hw-revA_fw-stage-lcd-echo` 예정) · 빌드 트리 `8bd0417` = 코드 `3be6a5d` + docs 3 (`feat/modbus-write-lcd-echo`, PR #1 `3f82c06` 위) → **main 머지 `581d0ce`**(PR #2, 2026-09-13). main 클린 빌드 해시 동일 확인 |
 | 툴체인 | arm-none-eabi-gcc 15.2.1 (Arm GNU Toolchain 15.2.Rel1) · cmake 4.3.1 · Ninja · openocd 0.12.0 |
 | 빌드 | `rm -rf fw/build fw/build-remote && MODEL=remote ./fw.sh` — `git status --porcelain` 빈 트리(`8bd0417`) |
 | 산출 | FLASH 67,192 B (51.26 %) · RAM 6,440 B (19.65 %) |

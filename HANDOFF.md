@@ -1,4 +1,17 @@
-# Handoff: 에코 + F1 빌드 보드 플래시 완료 · COMM 아이콘 결함 = 패널 자산(DGUS 수정으로 해결) · 벤치 대기
+# Handoff: PR #1·#2 main 머지(벤치 전, 태그 보류) · 첫 보관본 releases/V3.1.0R_260911 · 벤치 대기
+
+**Generated**: 2026-09-13 b (원격기 releases/ 규칙 요청 → 가이드·보관본 → 사용자 결정으로 벤치 전 머지)
+**Branch**: `main` **`581d0ce`** = PR #1 머지 `27e2b33` + PR #2 머지 `581d0ce`(둘 다 `--no-ff`), origin 동기. 워크트리 2개·로컬 브랜치 삭제, `.superpowers/sdd/2026-09-08-*` 삭제. origin 의 `refactor/byte-identical`·`feat/modbus-write-lcd-echo` 브랜치는 남아 있음(삭제는 사용자 push 권한)
+**Board**: REMOTE `V3.1.0R!_260911` 그대로 — main 클린 빌드 `.bin` = `releases/V3.1.0R_260911/SHA256SUMS` = 보드 이미지 `2a813206…`(재플래시 불요)
+**Status**: ① `releases/README.md` 공통 SWD 플래시 가이드 + 첫 보관본(REMOTE `.bin`·cfg·SHA·README, **태그 미발행·벤치 미통과** 명기) ② 벤치 게이트를 건너뛴 머지 = 사용자 결정. **태그 `hw-revA_fw-stage-lcd-echo` 는 벤치 PASS 후**, FAIL 이면 fix 브랜치 + 새 날짜 보관본으로 대체 ③ 원격기 통보 완료(가이드·보관본·머지 3건) — 태그 발행·폴더 대체 시 재통보 약속 ④ ⚠ auto 모드 분류기가 `git merge`·`git push`·`gh pr create` 를 막음 — 사용자가 `!` 로 실행. 허용하려면 settings.json Bash 규칙
+
+> **★ 다음 세션 진입 순서 (보드 세션)** — 아래 09-13 블록과 같되 브랜치는 main
+> 1. 벤치: `plans/2026-09-11-modbus-write-lcd-echo.md` Task 5 표 + RESUME 추가 항목(E-13b/15/16/R-4b)
+> 2. PASS → 태그 → `releases/V3.1.0R_260911/README.md` 태그 칸 → 원격기 통보 · FAIL → fix 브랜치
+> 3. 패널 자산 == 저장소 `hw/lcd/dgus/` 확인
+---
+
+## 2026-09-13 — 플래시 완료 · COMM 아이콘 = 패널 자산 (이전 세션 헤더 보존)
 
 **Generated**: 2026-09-13 (보드 세션 — 플래시 3회, DGUS 자산 수정은 사용자)
 **Branch**: `feat/modbus-write-lcd-echo` tip `3be6a5d`(PR #1 `3f82c06` 위 13 커밋: 에코 3 · docs 2 · 날짜 · F1 spec+fix · 세션마감 · B fix→**revert** · B spec/조사 docs · CLAUDE.md 보관 규칙). worktree `.claude/worktrees/feat-modbus-write-lcd-echo` 유지
