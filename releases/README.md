@@ -109,7 +109,7 @@ V3.0.0_260911        ← STD
 | `Error: init mode failed (unable to connect to the target)` | 보드 전원 없음·SWD 배선·NRST 미연결 | 전원 확인 → SWDIO/SWCLK/GND 재확인 → cfg 의 `reset_config` 그대로 |
 | `LIBUSB_ERROR_ACCESS` (Linux) | udev 권한 | ST-LINK udev 규칙 설치 또는 `sudo` |
 | `Verified OK` 인데 LCD 버전이 다름 | 다른 폴더·작업 트리 빌드를 올림 | §3 부터 다시. 파일명이 아니라 SHA 를 믿는다 |
-| `Verified OK` 인데 LCD 무표시 | LCD 자산(DGUS) 구버전 또는 USART1 배선 | 펌웨어 문제 아님 — `hw/lcd/dgus/` 자산 대조(2026-09-13 사례) |
+| `Verified OK` 인데 LCD 무표시 | LCD 자산(DGUS) 구버전 또는 USART1 배선 | 펌웨어 문제 아님 — `hw/lcd/lcd_V30/<업체>/DWIN_SET/` 자산 대조(2026-09-13 사례) |
 | 플래시 후 설정이 초기값 | FRAM 문제 (플래시와 무관) | 펌웨어 재플래시로는 안 바뀜 — FRAM/I2C 점검 |
 | 부팅 직후 멈춤 + ST-LINK 붙어 있음 | halt 잔재 | 어댑터 분리 → 전원 재투입 |
 
@@ -157,7 +157,7 @@ shasum -a 256 *.bin stm32f410.cfg > SHA256SUMS
 | 태그 / 커밋 / 브랜치 | `hw-revA_fw-…` = `abc1234` (`main`) |
 | 툴체인 | arm-none-eabi-gcc 15.2.1 (Arm GNU Toolchain 15.2.Rel1) · cmake 4.3.1 · openocd 0.12.0 |
 | 빌드 | `rm -rf fw/build fw/build-remote && MODEL=remote ./fw.sh` — `git status` 깨끗한 태그 트리 |
-| 대상 보드 | hw-revA · STM32F410RBT (128 KB) · LCD 자산 `hw/lcd/dgus/` 버전 |
+| 대상 보드 | hw-revA · STM32F410RBT (128 KB) · LCD 자산 `hw/lcd/lcd_V30/<업체>/DWIN_SET/` 버전 |
 
 ## 이 폴더에서 바로 플래시
 openocd -f stm32f410.cfg -c "program gds_us_ctrl_v3.1.0R_260911.bin 0x08000000 verify reset exit"

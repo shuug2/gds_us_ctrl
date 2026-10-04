@@ -8,7 +8,7 @@
 > **★ 다음 세션 진입 순서 (보드 세션)** — 아래 09-13 블록과 같되 브랜치는 main
 > 1. 벤치: `plans/2026-09-11-modbus-write-lcd-echo.md` Task 5 표 + RESUME 추가 항목(E-13b/15/16/R-4b)
 > 2. PASS → 태그 → `releases/V3.1.0R_260911/README.md` 태그 칸 → 원격기 통보 · FAIL → fix 브랜치
-> 3. 패널 자산 == 저장소 `hw/lcd/dgus/` 확인
+> 3. 패널 자산 == 저장소 `hw/lcd/lcd_V30/gdsonic/DWIN_SET/` 확인 (2026-10-04 정본 이전·p27 0x140c 패치)
 ---
 
 ## 2026-09-13 — 플래시 완료 · COMM 아이콘 = 패널 자산 (이전 세션 헤더 보존)
@@ -20,7 +20,7 @@
 **Releases**: `releases/README.md` = 공통 SWD 플래시 가이드(CubeProgrammer CLI / OpenOCD / J-Link · SHA 대조 · LCD 버전 판정 · 실패 표 · 보관 절차 명령 + 버전 README 템플릿), 원격기 `gds_us_remote/releases/` 와 같은 목차(2026-09-13 원격기 세션 요청). **첫 보관본 `releases/V3.1.0R_260911/` 생성(2026-09-13, 사용자 지시로 벤치 전)** — REMOTE `.bin` 만(STD 미검증 제외, `.elf` 제외), 클린 빌드 해시 `2a813206…` = 보드 플래시 이미지와 동일 → 재플래시 불요. **태그 미발행·벤치 미통과**를 버전 README 에 명기. 벤치가 코드를 바꾸면 새 날짜 폴더로 대체, PASS 후 태그 발행 시 README 표의 태그 칸만 채운다(원격기에 **태그 발행·폴더 대체 둘 다** 통보 — 그쪽 CLAUDE.md §7 서술 갱신 대기, remote HANDOFF `296c23e` 에 현 상태 기록됨). 양산 플래시는 반드시 보관본으로, `fw/build*/` 금지
 
 > **★ 다음 세션 진입 순서 (보드 세션)**
-> 1. `docs/superpowers/RESUME.md` 최상단(2026-09-13) — 열린 항목 1개(패널 자산 == 저장소 `hw/lcd/dgus/` 확인, 다르면 갱신) + 벤치 순서
+> 1. `docs/superpowers/RESUME.md` 최상단(2026-09-13) — 열린 항목 1개(패널 자산 == 저장소 `hw/lcd/lcd_V30/gdsonic/DWIN_SET/` 확인 (2026-10-04 정본 이전·p27 0x140c 패치), 다르면 갱신) + 벤치 순서
 > 2. `plans/2026-09-11-modbus-write-lcd-echo.md` Task 5 벤치 표 + RESUME 의 추가 항목 4개
 > 3. `plans/2026-09-06-hold-to-run-bench-results.md` §4 · `plans/2026-09-05-bench-results.md` §4 — 기존 함정
 > 4. 조사 정본 3건: `research/2026-09-11-setup-sync-investigation.md` · `2026-09-11-safty-horn-save-investigation.md` · `2026-09-12-comm-mode-display-investigation.md`(종결 블록)
