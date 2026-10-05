@@ -8,21 +8,16 @@
 #ifndef DEFINE_H
 #define DEFINE_H
 
-/*--- 모델 브랜드 — 정확히 하나만 활성화 (samd20 main.c:27-30) ---
+/*--- 모델 브랜드(업체) — cmake -DBRAND=<이름> 이 고른다 (CMakeLists.txt, BRAND=moohan ./fw.sh) ---
  * 접두어뿐 아니라 freq/type -> 문자 매핑 자체가 브랜드마다 다르다.
  *   GDSONIC   "GDS-20H   "   DIAMT   "DIS-20H   "
  *   POWERTECH "PTW-2020DH"   MOOHAN  "MH-1520DH "
  *   MAKETECH  "SMT-H15D  "   (samd20에 없던 신규 — type이 숫자 앞에 온다)
+ * 업체 추가 = 아래 #if 합에 한 항 + app_lcd.c app_lcd_send_model_str() 에 #elif 블록 + hw/lcd/lcd_V30/README.md 표 한 줄.
  */
-#define GDSONIC
-//#define DIAMT     
-//#define POWERTECH 
-//#define MOOHAN    
-//#define MAKETECH  
-
 #if (defined(GDSONIC) + defined(DIAMT) + defined(POWERTECH) + defined(MOOHAN) \
    + defined(MAKETECH)) != 1
-#error "define.h: 모델 브랜드는 정확히 하나만 정의할 것"
+#error "define.h: 모델 브랜드는 정확히 하나만 정의할 것 (cmake -DBRAND=GDSONIC|DIAMT|POWERTECH|MOOHAN|MAKETECH)"
 #endif
 
 /*--- 제품 모델(기능 티어) — cmake -DMODEL=STD|REMOTE 가 고른다 (CMakeLists.txt:35) ---

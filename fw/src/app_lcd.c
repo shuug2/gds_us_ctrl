@@ -102,7 +102,7 @@ uint8_t app_lcd_run_page(const app_config_t *cfg)
 /* 모델명 문자열 전송 */
 void app_lcd_send_model_str(uint8_t freq, uint8_t type)
 {
-    /* 브랜드는 define.h가 고른다 (samd20 main.c:2379-2586, 브랜드당 #ifdef 1블록).
+    /* 브랜드는 cmake -DBRAND 가 주입한다 — 목록·검증은 define.h (samd20 main.c:2379-2586, 브랜드당 #ifdef 1블록).
      * Wire payload = 11 bytes incl. NUL at [10]. samd20은 freq/type이 범위를
      * 벗어나면 버퍼를 미초기화로 남겼다 — 포트는 default로 첫 케이스를 쓴다. */
     uint8_t s[11];
