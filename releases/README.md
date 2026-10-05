@@ -8,15 +8,16 @@
 releases/
 ├── README.md                              ← 이 문서 (버전 무관)
 └── V3.1.0R_260911/                        ← 버전 문자열 = 폴더명 (define.h VERSION_MSG, 공백·! 제거)
-    ├── gds_us_ctrl_v3.1.0R_260911.bin     ← REMOTE 앱. build-remote/gds_us_ctrl.bin 을 이름만 바꿔 복사 (내용 동일)
-    ├── gds_us_ctrl_v3.0.0_260911.bin      ← STD 앱 (같이 검증됐을 때만)
-    ├── gds_us_ctrl_v3.1.0R_260911.elf     ← 심볼 (선택, SHA 대상 아님 — 빌드 경로가 박혀 재현 불가)
+    ├── gds_us_ctrl_<brand>_v3.1.0R_260911.bin  ← REMOTE 앱. build[-<brand>]-remote/gds_us_ctrl.bin 을 이름만 바꿔 복사 (내용 동일)
+    ├── gds_us_ctrl_<brand>_v3.0.0_260911.bin   ← STD 앱 (같이 검증됐을 때만)
+    ├── gds_us_ctrl_<brand>_v3.1.0R_260911.elf  ← 심볼 (선택, SHA 대상 아님 — 빌드 경로가 박혀 재현 불가)
     ├── stm32f410.cfg                      ← fw/openocd/stm32f410.cfg 복사본 (어댑터 설정)
     ├── SHA256SUMS                         ← .bin + cfg
     └── README.md                          ← 그 버전의 내용·재현 방법·배포 가능 여부
 ```
 
 - 폴더명은 **git 태그가 아니라 버전 문자열**이다 — ctrl 의 태그는 `hw-revA_fw-…` 형식이라 버전이 안 담긴다(루트 `CLAUDE.md` 태깅 규칙). 태그↔커밋은 각 버전 README 에 적는다.
+- 파일명에 **브랜드(업체, 소문자)** 를 넣는다(2026-10-05~) — 펌웨어는 브랜드별로 LCD 모델명만 다르고 버전 문자열은 같아서, 한 버전 폴더에 브랜드별 `.bin` 이 나란히 놓인다(`BRAND=moohan MODEL=remote ./fw.sh`). 그 전 보관본 `V3.1.0R_260911/` 은 브랜드 없는 이름이며 GDSONIC 이다.
 - 파일명에 **`!` 를 넣지 않는다.** 인터록 반전판 여부·배포 가능 여부는 각 버전 README 의 🔴 항목이 정본이다. LCD 에는 `!` 가 그대로 보인다(§5).
 
 🔴 **플래시는 반드시 이 폴더의 보관본으로.** 작업 트리 `fw/build*/` 는 태그 뒤 커밋·수정된 `define.h` 날짜가 섞여 들어가도 파일명이 같아 구분이 안 된다.
@@ -127,9 +128,11 @@ MODEL=remote ./fw.sh
 
 V=V3.1.0R_260911                              # VERSION_MSG 에서 공백·! 제거
 mkdir -p releases/$V
-cp fw/build-remote/gds_us_ctrl.bin releases/$V/gds_us_ctrl_v${V#V}.bin
-cp fw/build-remote/gds_us_ctrl.elf releases/$V/gds_us_ctrl_v${V#V}.elf   # 선택
-cp fw/build/gds_us_ctrl.bin        releases/$V/gds_us_ctrl_v3.0.0_260911.bin   # STD 검증 시
+B=gdsonic                                     # 브랜드마다 반복: BRAND=$B MODEL=remote ./fw.sh 후 (gdsonic 은 build-remote/)
+D=fw/build-remote; [ $B = gdsonic ] || D=fw/build-$B-remote
+cp $D/gds_us_ctrl.bin releases/$V/gds_us_ctrl_${B}_v${V#V}.bin
+cp $D/gds_us_ctrl.elf releases/$V/gds_us_ctrl_${B}_v${V#V}.elf   # 선택
+cp fw/build/gds_us_ctrl.bin releases/$V/gds_us_ctrl_${B}_v3.0.0_260911.bin   # STD 검증 시 (gdsonic 기준)
 cp fw/openocd/stm32f410.cfg        releases/$V/
 cd releases/$V
 shasum -a 256 *.bin stm32f410.cfg > SHA256SUMS
