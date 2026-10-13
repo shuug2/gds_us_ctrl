@@ -4,7 +4,7 @@
 
 ## 업체 ↔ 펌웨어 BRAND
 
-| 폴더 | BRAND (`fw/include/define.h`) | 계열 | 상태 |
+| 폴더 | BRAND (`BRAND=<소문자> ./fw.sh`, 목록 `fw/include/define.h`) | 계열 | 상태 |
 |---|---|---|---|
 | `gdsonic/` | `GDSONIC` | 검은색 | 정본 기준 세트 |
 | `dongin/` | `DIAMT` | 검은색 | 작업 중 (bin·48.icl = gdsonic, 32.icl 만 다름) |

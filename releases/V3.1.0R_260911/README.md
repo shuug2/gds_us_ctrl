@@ -9,6 +9,7 @@
 | 빌드 | `rm -rf fw/build fw/build-remote && MODEL=remote ./fw.sh` — `git status --porcelain` 빈 트리(`8bd0417`) |
 | 산출 | FLASH 67,192 B (51.26 %) · RAM 6,440 B (19.65 %) |
 | 대상 보드 | hw-revA · STM32F410RBT (128 KB) · DGUS 패널 자산 = 사용자 2026-09-13 수정본(저장소 `hw/lcd/dgus/` 와의 일치는 미확인, HANDOFF 열린 항목) |
+| 브랜드 | **GDSONIC** (BRAND 빌드 옵션 도입 2026-10-05 이전 보관본이라 파일명에 브랜드 없음) |
 | STD 빌드 | **미포함** — 이번 벤치 대상이 아니라 검증되지 않았다 |
 | `.elf` | 미포함 — 태그 체크아웃 후 클린 빌드로 재생성(빌드 경로가 박혀 해시 대조 대상도 아님) |
 

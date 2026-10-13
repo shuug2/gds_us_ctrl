@@ -70,6 +70,7 @@ gds_us_ctrl/
 ./fw.sh reset      # 보드 리셋만
 ./fw.sh test       # host 테스트 (fw/test)
 ./fw.sh gdb        # 빌드 + GDB 접속
+BRAND=moohan MODEL=remote ./fw.sh flash   # 브랜드(업체) — 기본 gdsonic, 목록 fw/include/define.h → build-moohan-remote/
 ./fw.sh reconfig   # cmake 강제 재구성 후 빌드
 ```
 
@@ -122,7 +123,7 @@ env -u STM32_TOOLCHAIN cmake --build build --target flash     # 플래시
 
 ### 양산 바이너리 보관 (`releases/`, 2026-09-13 — 원격기 `gds_us_remote` 와 공통 규칙)
 
-HW 벤치 PASS 로 태그가 붙는 빌드는 **저장소 안 `releases/<버전문자열>/`** 에 보관한다. 버전문자열 = `define.h` 의 `VERSION_MSG` 에서 공백을 뗀 것(`V3.1.0R_260911`). 파일명 규칙 = **`gds_us_ctrl_v<버전>.bin`** — 극성 반전 표식 `!` 는 파일명에 넣지 않고(`gds_us_ctrl_v3.1.0R_260911.bin`) **README 에 "인터록 반전판(`REMOTE_EN_INTERLOCK_INVERTED 1`), 배포 금지" 를 명기**한다(사용자 결정 ①-b). STD 빌드가 함께 검증됐으면 같은 폴더에 `gds_us_ctrl_v3.0.0_260911.bin` 로 나란히.
+HW 벤치 PASS 로 태그가 붙는 빌드는 **저장소 안 `releases/<버전문자열>/`** 에 보관한다. 버전문자열 = `define.h` 의 `VERSION_MSG` 에서 공백을 뗀 것(`V3.1.0R_260911`). 파일명 규칙 = **`gds_us_ctrl_<brand>_v<버전>.bin`**(2026-10-05~, 브랜드 소문자 — 같은 버전 폴더에 브랜드별 .bin 을 나란히. 그 전 보관본 `V3.1.0R_260911/` 은 브랜드 없는 이름 = GDSONIC) — 극성 반전 표식 `!` 는 파일명에 넣지 않고(`gds_us_ctrl_gdsonic_v3.1.0R_260911.bin`) **README 에 "인터록 반전판(`REMOTE_EN_INTERLOCK_INVERTED 1`), 배포 금지" 를 명기**한다(사용자 결정 ①-b). STD 빌드가 함께 검증됐으면 같은 폴더에 `gds_us_ctrl_gdsonic_v3.0.0_260911.bin` 로 나란히.
 
 **공통 플래시 가이드·절차 명령·버전 README 템플릿 = `releases/README.md`**(원격기 `gds_us_remote/releases/README.md` 와 같은 목차). 폴더 구성: `.bin`(플래시에 쓰는 것) · `.elf`(심볼, 선택) · `stm32f410.cfg` 복사본 · `SHA256SUMS` · `README.md`(태그 · 커밋 · `arm-none-eabi-gcc --version` · 빌드 명령 `MODEL=remote ./fw.sh` · 플래시 명령 `./fw.sh flash` 또는 openocd 한 줄 · 재현 확인 `shasum -a 256 -c SHA256SUMS` · 이 릴리스에 든 것 · **배포 금지 여부**).
 

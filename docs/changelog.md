@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### 2026-10-05 — feat(build): 브랜드(업체) 빌드 옵션 `BRAND=` / `-DBRAND`
+
+- `define.h` 의 브랜드 주석 토글을 없애고 MODEL 축과 같은 방식으로 전환: `BRAND=moohan MODEL=remote ./fw.sh flash` → `build-moohan-remote/`. 기본 GDSONIC 은 `build/`·`build-remote/` 그대로이고 `.bin` **바이트 동일**(STD `04423faf…`, REMOTE `2a813206…`). 업체 추가 = `define.h` `#if` 한 항 + `app_lcd.c` `#elif` 블록 + `hw/lcd/lcd_V30/README.md` 한 줄. 보관본 파일명에 브랜드 포함(`gds_us_ctrl_<brand>_v<버전>.bin`, 다음 보관본부터). plan `plans/2026-10-04-brand-build-option.md`.
+
 ### 2026-09-11 — feat(modbus/lcd): FC06 쓰기 → LCD VP 에코 — SETUP 숫자 13분기 + STD RUN 텍스트 + HORN/CAL/MODEL — HW 벤치 대기
 
 - **무엇**: 원격기가 FC06 으로 SETUP 값을 쓰면 컨트롤러 LCD 가 그 페이지에 머무는 동안 옛 숫자를 보이던 것(조사 `research/2026-09-11-setup-sync-investigation.md` §A)을 고쳤다. `apply_writes` 의 cfg 분기마다 기존 3개 에코(`DISP_ENERGY_EN/MULTI_EN/SAFTY`)와 **동형**으로 `dgus_write_u16(VP, cfg->…)` 1줄: DELAY1/2/3 · TRIGGER2/3 · OUT_POWER · ON_TIME · ENERGY(u32+u16) · MULTI_T1/T2/O1/O2 · TIMEOVER(14 VP 쓰기). STD RUN 페이지(9)의 `D/W(E)/H`·RUN_MODE 배지는 `render_run_std` 를 공개 함수 `app_lcd_run_std_refresh()` 로 승격해 `if (save)` 뒤 1회 재기록(set_page 없음, 페이지 게이트 없음). HORN_CMD → `DISP_HORNDOWN`, CAL → `VAR_*CAL_VAL`, MODEL → 선택 VP 도 에코.

@@ -40,6 +40,12 @@ add_compile_definitions(
 set(MODEL "STD" CACHE STRING "제품 모델 — STD | REMOTE")
 add_compile_definitions(MODEL_${MODEL})
 
+# 모델 브랜드(업체) — LCD MODEL_NAME 문자열만 갈린다 (app_lcd.c app_lcd_send_model_str).
+# 값 검증은 define.h의 #error가 한다 (오타 -DBRAND=MOOHN → 컴파일 실패). 업체 추가 = define.h + app_lcd.c.
+#   cmake -B build-moohan -DBRAND=MOOHAN -G Ninja   또는   BRAND=moohan ./fw.sh
+set(BRAND "GDSONIC" CACHE STRING "모델 브랜드 — GDSONIC | DIAMT | POWERTECH | MOOHAN | MAKETECH")
+add_compile_definitions(${BRAND})
+
 # 원격 활성화 게이트 우회 — 벤치 전용 탈출구. MODEL=REMOTE 빌드에서만 의미가 있다
 # (STD 빌드에는 게이트 코드 자체가 안 들어간다).
 # 인터록 스위치(PC8)가 달린 PCB가 나오기 전까지는 REMOTE 빌드로 게이트를 켤 물리적
