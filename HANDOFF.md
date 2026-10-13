@@ -1,4 +1,17 @@
-# Handoff: PR #1·#2 main 머지(벤치 전, 태그 보류) · 첫 보관본 releases/V3.1.0R_260911 · 벤치 대기
+# Handoff: 업체별 변형 관리 — DGUS 정본 hw/lcd/lcd_V30 (LFS) · p27 아이콘 근본 수정 · BRAND 빌드 옵션
+
+**Generated**: 2026-10-13 (2026-09-27 시작 세션)
+**Branch**: `main` **`7271e8c`**, origin 보다 2 앞 — `! git lfs push origin main && git push origin main` 필요
+**Board**: **MOOHAN REMOTE** `BRAND=moohan MODEL=remote ./fw.sh flash` (`7ae37a43…`). 보관본(GDSONIC `2a813206…`)과 다름 — GDSONIC 복귀 = `MODEL=remote ./fw.sh flash`
+**Status**: **업체별 납품 변형 관리 — DGUS 정본 이전 + BRAND 빌드 옵션 (2026-09-27~10-13, 마감)**: ① DGUS 정본 = **`hw/lcd/lcd_V30/<업체>/`**(DWIN_SET + 소스, **Git LFS**), 구 `hw/lcd/dgus/` 삭제. 반입 gdsonic(검은색, 기준)·moohan(밝은색, 10-13 22:40 판)·dongin(=DIAMT, 작업 중). 작업 원본 = `~/dev/work/gds_lcd_V30/<업체>/` → `rsync -rc --delete --exclude .DS_Store` 동기화(절차 `lcd_V30/README.md`). ② **p27 모드 아이콘 결함 근본 해결** — 위젯이 0x140b(터치 return 값)에 바인딩돼 재부팅 후 "시리얼" 표시·DHCP 터치 시 아이콘 소실(09-13 증상의 실체). 0x140c 로 수정, **툴 프로젝트에도 반영**(gdsonic 툴 출력 = 저장소본 바이트 동일). 반영 전 검사 = 모드 아이콘 0x140c · 통신 버튼 0x140b. ③ **BRAND 빌드 옵션** `BRAND=moohan MODEL=remote ./fw.sh flash` → `build-moohan-remote/`(기본 GDSONIC `.bin` 바이트 동일). 보관 파일명 규칙 → `gds_us_ctrl_<brand>_v<버전>.bin`(다음 보관본부터). 업체=BRAND 1:1, DIAMT=DONGIN, 신규 SAMA·SONOSYS(모델명 규칙 대기), 화면 계열은 VP·키 공유(MOOHAN LV_TIME 바·0x1100 키 없음 = 의도). **보드 = MOOHAN REMOTE**(`7ae37a43…`, 보관본과 다름). main `7271e8c`, origin 보다 2 앞(LFS 포함 push 대기). 열린 항목: push · **원격기에 보관 파일명 규칙 변경 통보 여부**(공통 규칙이었음) · SAMA/SONOSYS 모델명 규칙 · dongin 세트 · 기존 벤치 대기 그대로. 분석 `research/2026-09-27-lcd-v2-dgus-analysis.md`(lcd-V2 = 구판, TCP 화면 없음 — 정본 아님).
+
+> **★ 다음 세션 진입 순서**
+> 1. push(위) · 원격기에 보관 파일명 규칙(`gds_us_ctrl_<brand>_v<버전>.bin`) 변경 통보 여부 결정
+> 2. 벤치(아래 09-13 b 블록 순서 그대로) — 패널 자산은 이제 `hw/lcd/lcd_V30/gdsonic/DWIN_SET/`(p27 수정본)
+> 3. 사용자 대기: SAMA/SONOSYS 모델명 규칙 → define.h `#if` + app_lcd.c `#elif` + lcd_V30 README 한 줄 / dongin 세트 완성 → 동기화
+---
+
+## 2026-09-13 b — PR #1·#2 머지 · 첫 보관본 (이전 세션 헤더 보존)
 
 **Generated**: 2026-09-13 b (원격기 releases/ 규칙 요청 → 가이드·보관본 → 사용자 결정으로 벤치 전 머지)
 **Branch**: `main` **`581d0ce`** = PR #1 머지 `27e2b33` + PR #2 머지 `581d0ce`(둘 다 `--no-ff`), origin 동기. 워크트리 2개·로컬 브랜치 삭제, `.superpowers/sdd/2026-09-08-*` 삭제. origin 의 `refactor/byte-identical`·`feat/modbus-write-lcd-echo` 브랜치는 남아 있음(삭제는 사용자 push 권한)
