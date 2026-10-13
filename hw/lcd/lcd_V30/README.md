@@ -17,7 +17,7 @@
 ## 규칙
 
 - **`DWIN_SET/` 은 평평하게 유지, 파일 개명 금지** — DWIN 은 파일명/번호로 로드한다. 패널 갱신 = 이 폴더를 그대로 SD(FAT32) 의 `DWIN_SET` 으로 복사하거나 DGUS 툴로 다운로드.
-- 편집은 DGUS 툴(`TFT/` 프로젝트)에서 하고, 내보낸 `DWIN_SET/` 을 여기에 덮어쓴다. ⚠ 아래 "변경 이력"의 bin 직접 패치는 툴 프로젝트에 아직 반영되지 않았다 — 툴에서 다시 내보내기 전에 같은 수정을 툴에 먼저 할 것.
+- 편집은 DGUS 툴(`TFT/` 프로젝트)에서 하고, 작업 원본(`~/dev/work/gds_lcd_V30/<업체>/`) 폴더 전체를 여기에 동기화한다(`rsync -rc --delete --exclude .DS_Store`). 반영 전 p21/23/25/27 모드 아이콘 = 0x140c, 통신 버튼 = 0x140b 인지 확인.
 - 펌웨어가 쓰는 VP 는 `fw/include/dgus_lcd.h` 가 정본. 세트를 바꾸면 그 VP 바인딩이 유지되는지 확인.
 
 ## 파일 역할 (`DWIN_SET/`)
@@ -37,4 +37,5 @@
 ## 변경 이력
 
 - **2026-10-04 — 3세트 `14ShowFile.bin` p27 모드 아이콘 VP 0x140b → 0x140c** (gdsonic/dongin @0x5747, moohan @0x51e7, 1바이트). 0x140b 는 터치 return 값(0 시리얼/1 이더넷/2 전환)이라 아이콘이 "마지막 누른 버튼"을 보여 재부팅 후 이더넷이어도 시리얼로 보였다(2026-09-13 증상). 펌웨어는 `DISP_COMM_MODE` 0x140c 에 쓴다. 구 `hw/lcd/dgus/` 의 2026-05-31 수정과 바이트 동일 — 패치 후 `gdsonic/DWIN_SET/14ShowFile.bin` == 구 저장소본. (구 README 는 이 수정을 "show-config auto-load" 로 적었으나 실제 차이는 VP 1바이트였다.)
+- **2026-10-13 — moohan 원본 폴더 전체 동기화**(작업 원본 10-13 22:17 내보내기). 툴에서 p27 아이콘 0x140c 반영 — gdsonic 툴 출력도 이 폴더와 바이트 동일해져 10-04 bin 패치가 툴 프로젝트에도 들어감. moohan 은 13Touch·14Show·22Config·48.icl 갱신 + 디자인 원본 `gds_lcd_v25_mh1.pn` 추가. 계약: gdsonic 대비 LV_TIME 바·p3/p9 0x1100 키 없음(의도) 외 동일.
 - 이전 이력: 구 `hw/lcd/dgus/` (git 히스토리, 커밋 `0eafe68`).
