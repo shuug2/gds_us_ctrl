@@ -87,7 +87,7 @@
 ### 2.1 사전 점검
 
 ```bash
-cd /Users/tknoh/dev/work/gds_us_ctrl   # main repo
+cd /Users/tknoh/dev/work/gdsonic/gds_us_ctrl   # main repo
 git status                             # working tree clean 기대 (untracked .understand-anything/, ref/atmega16/M16_reverse/ = 무관)
 git log --oneline -5
 git tag -l 'hw-revA*'                  # 위 §1.1 태그들 확인
@@ -118,7 +118,7 @@ make -C fw/test test                                # rsb 16 / main 14 스위트
   - ⚠ 남은 것 = **FA-6/7/12(RTU 방향)** — RS-485 어댑터 게이트. 태그 미부여(스테이지 아닌 fix).
 
 - ~~**[2026-07-06 사용자 신규 등록 3건]**~~ — ✅ **전부 코드-완료 2026-07-08**(`e26e15b`/`60792da`/`78a1e43`, 전건 cpp-review 0 Crit/High, main 직접 커밋): ① 부팅 터치 유령 런 = data=0 물리 토글 fix ② REMOTE icon = samd20 case 9 포팅(1s hold) ③ 전류 EMA α 1/8→1/2(τ≈100ms). **벤치 검증 미실시**(보드 미플래시) — 체크리스트 = 루트 `HANDOFF.md` §Resume (유령 런 소멸/REMOTE 에셋 렌더/반응 체감+energy 타이밍[리뷰 MEDIUM]).
-- **HMI SP1 Task 8 실보드 E2E** — 진입 = `~/dev/work/gds_us_hmi` 폴더 세션 + 그쪽 HANDOFF.md (이 repo 아님). RS-485 어댑터 필요. **병행: RS-485 첫-write 재현 절차 실행** — `docs/superpowers/research/2026-07-05-rs485-first-write.md` §6 (전원사이클→첫 FC06 ×10 기록; 최유력=글리치 병합, V-A/V-B 시나리오 분리).
+- **HMI SP1 Task 8 실보드 E2E** — 진입 = `~/dev/work/gdsonic/gds_us_hmi` 폴더 세션 + 그쪽 HANDOFF.md (이 repo 아님). RS-485 어댑터 필요. **병행: RS-485 첫-write 재현 절차 실행** — `docs/superpowers/research/2026-07-05-rs485-first-write.md` §6 (전원사이클→첫 FC06 ×10 기록; 최유력=글리치 병합, V-A/V-B 시나리오 분리).
 - **6b signal calibration 잔여** — ⏸ **사용자 보류(2026-07-05 c)**. 전류 다점/2점 fit(낮은 부하 실측점 — 오프셋 제거로 중간 구간 편차 가능), ch0 도메인, weld energy 절대 E2E + divisor, EMA↔에너지 적분 디커플링(리뷰 MEDIUM), OUTERR(하위 항목).
 - **B-SEAM 잔여** — ⏸ **사용자 보류(2026-07-05 c)**. 스코프 파형 정밀 관측 + PB12 용도 + 진폭 추종 (구동·스윕 주체는 해소).
 - **후속 소소(비긴급)**: app_eth STATIC_UP 링크 재폴링 부재(선재 — KA로 완화됨, 근본 수정은 링크 FSM 확장) / KA 무송신-피어 잔여(Modbus 실질 무해) / defer Minor 목록 = `.superpowers/sdd/progress.md`(mbtcp) + 구 ledger들.
@@ -184,7 +184,7 @@ pkill -x cat
 
 1. **Worktree 생성** (선택, 격리 작업 시):
    ```bash
-   cd /Users/tknoh/dev/work/gds_us_ctrl
+   cd /Users/tknoh/dev/work/gdsonic/gds_us_ctrl
    git worktree add ../gds_us_ctrl-<stage> -b feat/<stage-name>
    ```
    (단일 슬라이스/소규모는 main에서 직접 브랜치도 가능 — 최근 stage-c/d 슬라이스는 feature 브랜치 직접 사용)
@@ -240,7 +240,7 @@ pkill -x cat
 
 ### 5.1 빌드 + 호스트 테스트
 ```bash
-cd /Users/tknoh/dev/work/gds_us_ctrl
+cd /Users/tknoh/dev/work/gdsonic/gds_us_ctrl
 env -u STM32_TOOLCHAIN cmake -S fw -B fw/build -G Ninja && env -u STM32_TOOLCHAIN cmake --build fw/build
 arm-none-eabi-size fw/build/gds_us_ctrl.elf
 make -C fw/test test

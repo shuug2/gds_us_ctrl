@@ -17,7 +17,7 @@
 ## 규칙
 
 - **`DWIN_SET/` 은 평평하게 유지, 파일 개명 금지** — DWIN 은 파일명/번호로 로드한다. 패널 갱신 = 이 폴더를 그대로 SD(FAT32) 의 `DWIN_SET` 으로 복사하거나 DGUS 툴로 다운로드.
-- 편집은 DGUS 툴(`TFT/` 프로젝트)에서 하고, 작업 원본(`~/dev/work/gds_lcd_V30/<업체>/`) 폴더 전체를 여기에 동기화한다(`rsync -rc --delete --exclude .DS_Store`). 반영 전 p21/23/25/27 모드 아이콘 = 0x140c, 통신 버튼 = 0x140b 인지 확인.
+- 편집은 DGUS 툴(`TFT/` 프로젝트)에서 하고, 작업 원본(`~/dev/work/gdsonic/gds_lcd_V30/<업체>/`) 폴더 전체를 여기에 동기화한다(`rsync -rc --delete --exclude .DS_Store`). 반영 전 p21/23/25/27 모드 아이콘 = 0x140c, 통신 버튼 = 0x140b 인지 확인.
 - 펌웨어가 쓰는 VP 는 `fw/include/dgus_lcd.h` 가 정본. 세트를 바꾸면 그 VP 바인딩이 유지되는지 확인.
 
 ## 파일 역할 (`DWIN_SET/`)
