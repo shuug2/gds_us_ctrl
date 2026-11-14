@@ -116,14 +116,14 @@ env -u STM32_TOOLCHAIN cmake --build build --target flash     # 플래시
 
 - `3.0.x` = **STD** (레거시-동등 기능셋) — 번호를 동결하고 날짜만 진행한다. `V3.0.0_260905`
 - `3.1.x` = **REMOTE** (원격기 연동) — `V3.1.0R_260905`, 접미어 `R` 이 모델 표식
-- 접미어 `!` = PC8 인터록 극성 반전판. `REMOTE_EN_INTERLOCK_INVERTED` 를 따라가므로 원복을 잊어도 LCD 가 어긋나지 않는다
+- 접미어 `!` = PC8 인터록 극성 반전판 = 물리 인터록 없음(최종 상태, 2026-11-15). `REMOTE_EN_INTERLOCK_INVERTED` 를 따라간다
 
 ⚠ Modbus 소비자의 capability 판별은 버전 문자열이 아니다(버전 레지스터 없음, LCD 전용) —
 `0x31 CFG_CAP` / `0x2A REMOTE_CAP` 이 그 일을 한다. 그래서 STD 번호 동결이 소비자를 오도하지 않는다.
 
 ### 양산 바이너리 보관 (`releases/`, 2026-09-13 — 원격기 `gds_us_remote` 와 공통 규칙)
 
-HW 벤치 PASS 로 태그가 붙는 빌드는 **저장소 안 `releases/<버전문자열>/`** 에 보관한다. 버전문자열 = `define.h` 의 `VERSION_MSG` 에서 공백을 뗀 것(`V3.1.0R_260911`). 파일명 규칙 = **`gds_us_ctrl_<brand>_v<버전>.bin`**(2026-10-05~, 브랜드 소문자 — 같은 버전 폴더에 브랜드별 .bin 을 나란히. 그 전 보관본 `V3.1.0R_260911/` 은 브랜드 없는 이름 = GDSONIC) — 극성 반전 표식 `!` 는 파일명에 넣지 않고(`gds_us_ctrl_gdsonic_v3.1.0R_260911.bin`) **README 에 "인터록 반전판(`REMOTE_EN_INTERLOCK_INVERTED 1`), 배포 금지" 를 명기**한다(사용자 결정 ①-b). STD 빌드가 함께 검증됐으면 같은 폴더에 `gds_us_ctrl_gdsonic_v3.0.0_260911.bin` 로 나란히.
+HW 벤치 PASS 로 태그가 붙는 빌드는 **저장소 안 `releases/<버전문자열>/`** 에 보관한다. 버전문자열 = `define.h` 의 `VERSION_MSG` 에서 공백을 뗀 것(`V3.1.0R_260911`). 파일명 규칙 = **`gds_us_ctrl_<brand>_v<버전>.bin`**(2026-10-05~, 브랜드 소문자 — 같은 버전 폴더에 브랜드별 .bin 을 나란히. 그 전 보관본 `V3.1.0R_260911/` 은 브랜드 없는 이름 = GDSONIC) — 극성 반전 표식 `!` 는 파일명에 넣지 않고(`gds_us_ctrl_gdsonic_v3.1.0R_260911.bin`) **README 에 "인터록 반전판(`REMOTE_EN_INTERLOCK_INVERTED 1`) = 물리 인터록 없음" 을 명기**한다(사용자 결정 ①-b; 배포 금지는 2026-11-15 해제). STD 빌드가 함께 검증됐으면 같은 폴더에 `gds_us_ctrl_gdsonic_v3.0.0_260911.bin` 로 나란히.
 
 **공통 플래시 가이드·절차 명령·버전 README 템플릿 = `releases/README.md`**(원격기 `gds_us_remote/releases/README.md` 와 같은 목차). 폴더 구성: `.bin`(플래시에 쓰는 것) · `.elf`(심볼, 선택) · `stm32f410.cfg` 복사본 · `SHA256SUMS` · `README.md`(태그 · 커밋 · `arm-none-eabi-gcc --version` · 빌드 명령 `MODEL=remote ./fw.sh` · 플래시 명령 `./fw.sh flash` 또는 openocd 한 줄 · 재현 확인 `shasum -a 256 -c SHA256SUMS` · 이 릴리스에 든 것 · **배포 금지 여부**).
 
@@ -148,7 +148,7 @@ HW 벤치 PASS 로 태그가 붙는 빌드는 **저장소 안 `releases/<버전�
 
 **먼저 `docs/NEXT_STEPS.md`를 읽고 진행 상황과 다음 작업을 확인.**
 
-🔴🔴 **배포 금지 (2026-09-05~)**: `8f33c5f` 이후 **PC8 인터록 극성이 반전**돼 있다(미실장 HIGH=허용). **단선·커넥터 탈락이 "허용" 이 되어 인터록 보호가 없다.** `gds_us_remote` 의 "STD 에도 원격 기동 / 확인 없이 탭" 결정과 합쳐지면 **원격 START = 탭 한 번 + 물리 인터록 없음**이다. 해제 조건 = **PC8 실장 PCB + 극성 원복(`fw/include/define.h` `REMOTE_EN_INTERLOCK_INVERTED` → `0`) + A-1·A-5·A-13 재시험 PASS**. 상세 = `HANDOFF.md` 최상단.
+⚠ **PC8 극성 반전이 최종 상태 (사용자 결정 2026-11-15)** — PC8 인터록 실장 PCB 는 만들지 않는다. 풀업 HIGH=허용, 물리 인터록·단선 fail-safe 없음, 원격 START = 탭 한 번. 사용자가 이 위험을 수용하고 **배포 금지를 해제**했다. 펌웨어·바이너리 무변경, LCD `!` = 물리 인터록 없는 판. 상세 = `HANDOFF.md` 최상단. (2026-09-05~11-14 의 배포 금지는 해제됨)
 
 **현재 진행 (2026-10-13, 마감)**: ① DGUS 정본 = **`hw/lcd/lcd_V30/<업체>/`**(DWIN_SET + 소스, **Git LFS**), 구 `hw/lcd/dgus/` 삭제. 반입 gdsonic(검은색, 기준)·moohan(밝은색, 10-13 22:40 판)·dongin(=DIAMT, 작업 중). 작업 원본 = `~/dev/work/gdsonic/gds_lcd_V30/<업체>/` → `rsync -rc --delete --exclude .DS_Store` 동기화(절차 `lcd_V30/README.md`). ② **p27 모드 아이콘 결함 근본 해결** — 위젯이 0x140b(터치 return 값)에 바인딩돼 재부팅 후 "시리얼" 표시·DHCP 터치 시 아이콘 소실(09-13 증상의 실체). 0x140c 로 수정, **툴 프로젝트에도 반영**(gdsonic 툴 출력 = 저장소본 바이트 동일). 반영 전 검사 = 모드 아이콘 0x140c · 통신 버튼 0x140b. ③ **BRAND 빌드 옵션** `BRAND=moohan MODEL=remote ./fw.sh flash` → `build-moohan-remote/`(기본 GDSONIC `.bin` 바이트 동일). 보관 파일명 규칙 → `gds_us_ctrl_<brand>_v<버전>.bin`(다음 보관본부터). 업체=BRAND 1:1, DIAMT=DONGIN, 신규 SAMA·SONOSYS(모델명 규칙 대기), 화면 계열은 VP·키 공유(MOOHAN LV_TIME 바·0x1100 키 없음 = 의도). **보드 = MOOHAN REMOTE**(`7ae37a43…`, 보관본과 다름). main `7271e8c`, origin 보다 2 앞(LFS 포함 push 대기). 열린 항목: push · **원격기에 보관 파일명 규칙 변경 통보 여부**(공통 규칙이었음) · SAMA/SONOSYS 모델명 규칙 · dongin 세트 · 기존 벤치 대기 그대로. 분석 `research/2026-09-27-lcd-v2-dgus-analysis.md`(lcd-V2 = 구판, TCP 화면 없음 — 정본 아님). 아래 블록은 이전 세션.
 
@@ -168,14 +168,14 @@ HW 벤치 PASS 로 태그가 붙는 빌드는 **저장소 안 `releases/<버전�
 
 주요 신설:
 1. **제품 모델 축 STD/REMOTE** — H/W 동일(hw-revA), F/W 기능셋으로만 갈린다. `MODEL=remote ./fw.sh` → `build-remote/`. **게이트는 REMOTE 전용**. 버전 문자열로 구분(`V3.0.0` / `V3.0.0R`)
-2. **원격 활성화 게이트 = PC8 물리 인터록** (active-LOW+풀업 **fail-safe**, 만료 없음, `DIS_ESTOP` 만 래치)
+2. **원격 활성화 게이트 = PC8 물리 인터록** (active-LOW+풀업 **fail-safe**, 만료 없음, `DIS_ESTOP` 만 래치) — ⚠ 2026-11-15 최종: PC8 회로 미실장 + 극성 반전, 상시 허용
 3. **F-A comm/eth staging+commit** `0x1E~0x29` · **calibration** `0x2E/0x2F` · **HORN_CMD** `0x30` · **CFG_CAP** `0x31`
 4. **TCP 연결 자동 복구** (앱 유휴 타임아웃 12s)
 
 ⚠ **레지스터 여유 6칸** — FC03 응답 상한 57칸(현재 51칸, `0x32 FEAT_CAP` 2026-09-06). 그 이상은 소비 측 스냅샷 원자성이 깨진다 (`app_modbus_core.h` `MB_REG_COUNT` 주석).
 
 열린 항목:
-1. **★ HW 벤치** — 보드 + **PC8 실장 PCB**(회로 수정 진행 중) + 패널 배선 필요. PC8 없이도 **STD 빌드로 S·M·B34·MOD·CAL·NET·FA 는 가능**
+1. **★ HW 벤치** — 보드 + 패널 배선 필요. ~~PC8 실장 PCB~~ 안 만듦(2026-11-15 최종) → A-1/A-5/A-13 종결
 2. **HMI SP1 Task 8 실보드 E2E** — `~/dev/work/gdsonic/gds_us_hmi`(별도 repo)
 3. **컨트롤러 측 `MODEL_TYPE` 차단 여부** — `gds_us_remote` 사용자 판단 대기(한 줄, 자리는 코드 주석에 표시)
 4. **전류 0.60A 실측** / **6b·B-SEAM**(사용자 보류)

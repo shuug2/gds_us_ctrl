@@ -177,7 +177,7 @@
 | PC10 | CON_RESET | 리셋 입력 |
 | PC11 | CON_ESTOP | 비상 정지 |
 | PC12 | CON_KEY1 | 키 입력 1 |
-| **PC8** | **CON_REMOTE_EN** | **원격 제어 활성화 물리 인터록** (2026-09-04 확정). 🔴 **active-LOW + 풀업** — 스위치 닫힘=LOW=허용, 열림·단선·커넥터 탈락=HIGH=**불허**(fail-safe). 키 스위치 권장, 기계 쪽 패널에 설치. 요구사항 A / `MODEL_REMOTE` 빌드 전용 |
+| **PC8** | **CON_REMOTE_EN** | **원격 제어 활성화 입력** — ⚠ **최종 상태(2026-11-15 사용자 결정): 인터록 회로 미실장 + 극성 반전**. 풀업만 걸려 HIGH=**허용**(상시), LOW 로 끌어내리면 불허. 물리 인터록·단선 fail-safe 없음(`define.h` `REMOTE_EN_INTERLOCK_INVERTED 1`). 원안(2026-09-04: active-LOW fail-safe, 키 스위치)은 폐기. `MODEL_REMOTE` 빌드 전용 |
 
 ---
 

@@ -25,7 +25,7 @@ openocd -f stm32f410.cfg -c "program gds_us_ctrl_v3.1.0R_260911.bin 0x08000000 v
 
 ## 플래시 후 확인
 
-LCD 첫 화면 버전 = `V3.1.0R!_260911` (`!` 는 인터록 반전판 표식, 파일명엔 없음).
+LCD 첫 화면 버전 = `V3.1.0R!_260911` (`!` 는 인터록 반전판 = 물리 인터록 없음 표식, 파일명엔 없음).
 
 ## 재현 확인
 
@@ -54,4 +54,4 @@ shasum -a 256 fw/build-remote/gds_us_ctrl.bin   # SHA256SUMS 의 .bin 줄과 같
 
 ## 🔴 배포 가능 여부
 
-**현장 배포 금지.** 인터록 반전판(`fw/include/define.h` `REMOTE_EN_INTERLOCK_INVERTED 1`, LCD `!`) — PC8 미실장 HIGH=허용이라 단선·커넥터 탈락이 "허용" 이 된다. 해제 조건 = PC8 실장 PCB + 매크로 `0` 원복 + A-1·A-5·A-13 재시험 PASS(`HANDOFF.md` 최상단). 추가로 이 보관본은 **에코·F1 벤치 미통과**다.
+**배포 금지 해제 (사용자 결정 2026-11-15).** 인터록 반전판(`fw/include/define.h` `REMOTE_EN_INTERLOCK_INVERTED 1`, LCD `!`)이 최종 상태 — PC8 미실장 HIGH=허용이라 물리 인터록이 없고 단선·커넥터 탈락도 "허용" 이다. 이 위험은 사용자가 수용했다(`HANDOFF.md`). ⚠ 단 이 보관본은 **에코·F1 벤치 미통과**다.

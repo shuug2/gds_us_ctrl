@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### 2026-11-15 — decision: PC8 인터록 극성 반전 = 최종 상태, 배포 금지 해제
+
+- **사용자 결정**: PC8 인터록 실장 PCB 는 만들지 않는다. `REMOTE_EN_INTERLOCK_INVERTED 1`(풀업 HIGH=허용)이 최종. 위험(물리 인터록·단선 fail-safe 없음, 원격 START 탭 한 번)을 수용하고 배포 금지를 해제.
+- 펌웨어 동작·바이너리 무변경(주석만 — 16 변형 SHA 대조 동일). LCD `!` 유지, 뜻 = 물리 인터록 없는 판. `V3.1.0R_260911/` 보관본 그대로 유효.
+- 폐기: 해제 조건(실장 PCB · 매크로 `0` 원복 · A-1/A-5/A-13 재시험). A-13 은 영구 미검증.
+
 ### 2026-10-05 — feat(build): 브랜드(업체) 빌드 옵션 `BRAND=` / `-DBRAND`
 
 - `define.h` 의 브랜드 주석 토글을 없애고 MODEL 축과 같은 방식으로 전환: `BRAND=moohan MODEL=remote ./fw.sh flash` → `build-moohan-remote/`. 기본 GDSONIC 은 `build/`·`build-remote/` 그대로이고 `.bin` **바이트 동일**(STD `04423faf…`, REMOTE `2a813206…`). 업체 추가 = `define.h` `#if` 한 항 + `app_lcd.c` `#elif` 블록 + `hw/lcd/lcd_V30/README.md` 한 줄. 보관본 파일명에 브랜드 포함(`gds_us_ctrl_<brand>_v<버전>.bin`, 다음 보관본부터). plan `plans/2026-10-04-brand-build-option.md`.
