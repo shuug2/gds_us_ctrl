@@ -4,9 +4,13 @@
 #include <stdbool.h>
 #include "app_config.h"
 #include "dgus_lcd.h"   /* dgus_frame_t for app_lcd_input_dispatch */
+#include "app_brand.h"
 
-/* GDSONIC model string -> MODEL_NAME (11-byte payload incl. trailing NUL). */
+/* Brand model string -> MODEL_NAME (11-byte payload incl. trailing NUL). */
 void app_lcd_send_model_str(uint8_t freq, uint8_t type);
+
+/* Current brand (V30 = BRAND build constant). */
+brand_t app_lcd_brand(void);
 
 /* Resolve the RUN page id for the configured model_type. */
 uint8_t app_lcd_run_page(const app_config_t *cfg);
