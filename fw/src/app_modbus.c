@@ -582,7 +582,7 @@ void app_modbus_apply_writes(mb_link_t link)
         app_lcd_send_model_str(cfg->model_freq, cfg->model_type);
         dgus_write_u16(MODEL_FREQ, cfg->model_freq);   /* MODEL_SETUP 선택 VP — enter_model_setup :326 와 동형 */
         save = true;
-    } else if (g_mb.holding[MB_REG_MODEL_TYPE] != cfg->model_type) {
+    } else if ((g_mb.holding[MB_REG_MODEL_TYPE] != cfg->model_type) && (app_estop_active() == 0u)) {
         /* B-5 모델 타입. 위와 동형이나 🔴 **부작용이 하나 더 있다**: PC11 의 의미가 model_type 으로
          * 뒤바뀐다(app_input_fsm.c:46-60).
          *   <=1 (hand/multi) -> PC11 = B_SEEK (active-LOW)
@@ -590,11 +590,11 @@ void app_modbus_apply_writes(mb_link_t link)
          * 따라서 이 쓰기 하나가
          *   0/1 -> 2 : PC11 이 HIGH 면 즉시 E-stop 진입 + SOL 강제 OFF
          *   2 -> 0/1 : E-stop 활성 중이면 s_estop_active 가 0 으로 클리어
-         * 를 일으킨다. **가드를 두지 않는 것은 사용자 결정**(changelog 2026-09-04 B-5):
-         * LCD 편집 경로에도 같은 가드가 없어(app_lcd_input.c:452 무조건 대입) 기계 앞의 조작자는
-         * 이미 같은 일을 할 수 있고, 원격에만 새 규칙을 만들지 않는다는 이 저장소 원칙과 일관된다.
-         * ⚠ 남는 차이: 원격 조작자는 기계 앞에 없을 수 있다. 거부가 필요해지면
-         * app_estop_active() || us_on_status 로 막는 것이 그 자리다. */
+         * 를 일으킨다. **E-STOP 활성 중에는 거부한다**(사용자 결정 2026-11-15, 09-04 "가드 없음" 번복 —
+         * PC8 물리 인터록 영구 포기로 E-STOP 이 남은 물리 차단층이고, 모든 마스터를 막을 곳은 슬레이브뿐).
+         * 거부는 침묵: 다음 tick 의 mirror_live() 가 holding 을 cfg 로 되돌려 read-back 이 실패를 본다.
+         * 가동 중(us_on_status)은 막지 않는다 — 0/1->2 는 E-stop 진입 = 정지 방향. LCD 편집 경로
+         * (app_lcd_input.c:518)는 기계 앞 조작자라 레거시대로 둔다(사용자 결정 같은 날). */
         cfg->model_type = (uint8_t)g_mb.holding[MB_REG_MODEL_TYPE];
         app_lcd_send_model_str(cfg->model_freq, cfg->model_type);
         dgus_write_u16(MODEL_TYPE, cfg->model_type);   /* :327 와 동형. PC11 의미 변경(위 주석)과 무관 */
