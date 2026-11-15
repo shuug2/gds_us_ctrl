@@ -122,3 +122,5 @@
 - B-4: LCD 커넥터 뺀 채 부팅 → 5 s 뒤 연결 → 패널이 뜨면 mon 재읽기 줄 + 시험 세트 기준 `MH-…`. 재읽기 줄이 없으면 같은 핸들러가 직전에 찍는 `[lcd-hook] us_command=` 줄도 없는지 확인 → 없으면 handle_sys_pic_now 미발화 = 기존 메커니즘(패널이 SYS_PIC_NOW 프레임을 자발 송신하는지) 문제로 분리 기록, 브랜드 결함 아님.
 - B-5: Modbus 무회귀 1항목(FC03 0x00 읽기) + 운전 START/STOP 1회.
 - B-6: 런 중 패널 재기동(LCD 커넥터 순간 분리/재연결) → mon 타임스탬프로 refresh 블록 시간 측정, 무응답 시 ≤360 ms; 출력 정지 확인.
+
+**벤치 결과 (2026-11-15, V31 REMOTE)**: B-1 PASS(`raw=0x0002 ok=1 -> 2`, 빅엔디언 확정; 첫 시도 0 은 시험 세트 미적재) · B-2 PASS(`MH-…`) · B-3 PASS(`GDS-…`) · B-4 ⚠ 늦게 꽂은 LCD 가 SYS_PIC_NOW 를 안 보내 로고에서 멈춤(us_command 줄도 없음 = 기존 메커니즘, 브랜드 결함 아님 — HANDOFF 열린 항목) · B-5 PASS(FC03 + START→0.55 s ceiling→STOP) · B-6 측정 불가(B-4 와 같은 경로). 게이트 PASS → 머지.

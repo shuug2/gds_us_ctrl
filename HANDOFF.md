@@ -12,7 +12,9 @@
 > ✅ 결정됨 2026-11-15 (상세 = 허브 `../CLAUDE.md` §5):
 > - **#1 커밋 분할** = ① V31 펌웨어 ② MODEL_TYPE 가드 ③ 문서·회로도 ④ 업체별 `.bin` — 실행·push 완료.
 > - **#2 새 보관본 범위** = REMOTE × 4업체(gdsonic·moohan·diamt·powertech) × V30·V31 = `.bin` 8개, 한 커밋 클린 빌드. CTRL·MAKETECH 제외. V31 = `gds_us_ctrl_<brand>_hw31_v<버전>.bin`(gdsonic 도 브랜드 포함). 발행 = 벤치 PASS 후.
-> - ⚠ 2026-11-15 feat/lcd-brand-id — 벤치 게이트 PASS 시 V31 = 브랜드 없는 `gds_us_ctrl_hw31_v<버전>.bin` 1개 + 업체 전환 = LCD 세트 SD 로 대체 (설계 specs/2026-11-15-lcd-brand-id-design.md)
+> - ✅ 2026-11-15 **LCD 브랜드 번호(feat/lcd-brand-id) 벤치 PASS·머지** — V31 = 브랜드 없는 `gds_us_ctrl_hw31_v<버전>.bin` 1개, 업체 전환 = LCD 세트 SD(22_Config VP `0x1500` 브랜드 번호). 위 #2 의 V31 업체별 4개를 대체. 벤치(V31 REMOTE): B-1 `raw=0x0002 ok=1 -> 2`(바이트 순서 `00 0N` 확정) · B-2 `MH-…` · B-3 정본 gdsonic `GDS-…` · B-5 Modbus FC03 + START→ceiling→STOP PASS. 설계 specs/2026-11-15-lcd-brand-id-design.md
+> - ⚠ **열린 항목 (B-4·B-6, 기존 결함·브랜드 무관)**: 부팅 4 s 뒤 LCD 를 꽂으면 패널이 SYS_PIC_NOW 를 보내지 않아 **로고 화면에서 멈춤**(모델명·브랜드 재읽기도 안 됨). 전원 재투입으로 복구. main 도 같은 경로 — 양산(부팅 시 LCD 연결)엔 영향 없음. 런 중 패널 재기동 블록 시간(B-6)도 같은 이유로 측정 불가. 고칠지 별도 결정.
+> - 벤치 보드 통신 = RS-485 **38400 8E1** addr 1(`usbserial-11434400`), mon J3 = `usbserial-AB0MLYXA`.
 > - **#3 Flasher 슬롯** = V30 생산 종료, 슬롯 1 = gdsonic `_hw31` 하나(2~4 비움). 업체 전환 = downloader UART(J3) + 업체 LCD 세트 SD. 흐름 = `production/README.md` "다음 보관본부터" 절.
 > - **#4 Flasher 파일** = J-Flash **V7.88 단일 뱅크**(PEX 삭제) — 다음 보관본 묶음부터, `mkproduction.sh` JFLASH V7.88 고정 + 슬롯 1 단독 PROG 실기 1회.
 > - **#7 MODEL_TYPE 가드** = E-STOP 활성 중 Modbus `0x18` 쓰기 침묵 거부(가동 중 허용, LCD 경로 레거시). `fw/src/app_modbus.c:585` — **벤치 대기**(E-STOP 중 FC06 0x18 → read-back 옛 값 / 해제 후 반영). 벤치 PASS 후 remote 계약 갱신 통보.
