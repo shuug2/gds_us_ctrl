@@ -106,6 +106,11 @@ void app_modbus_note_remote(void)
 }
 
 /* REMOTE icon 게이트 */
+bool app_modbus_hold_active(void)
+{
+    return hold_wdt_armed(&s_hwd) != 0u;
+}
+
 bool app_modbus_remote_active(void)
 {
     /* REMOTE icon 게이트: 마지막 요청 후 1 s 유지 (samd20 main.c:5189-5192). */

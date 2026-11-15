@@ -27,6 +27,7 @@ typedef struct {
     int16_t  freq_cal_val;    /* FREQ_IN 표시 보정 → freq_fsm_compute (slice-B) */
     uint8_t  model_type;      /* 0=hand — legacy ceiling 게이트 (slice-D) */
     int16_t  cal_val;         /* ch1 표시 전류 보정 (config, ch1 slice) */
+    uint8_t  hold_run;        /* 1 = 원격 hold 런(워치독 무장) — 운영 ceiling 제외, LCD 터치 RUN 과 동형(사용자 2026-11-15) */
 } reg_run_limits_t;
 
 /* Superloop regulation step; gates internally on sys_tick_get_ms() deltas:

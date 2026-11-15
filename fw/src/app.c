@@ -149,6 +149,7 @@ void app_loop_iter(void)
             .freq_cal_val   = rc->freq_cal_val,
             .model_type     = rc->model_type,
             .cal_val        = rc->cal_val,
+            .hold_run       = app_modbus_hold_active() ? 1u : 0u,
         };
         app_reg_tick(&lim);
     }

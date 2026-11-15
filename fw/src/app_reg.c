@@ -457,6 +457,7 @@ static void reg_check_auto_terminate(uint32_t now, const reg_run_limits_t *lim)
             }
         } else if ((lim->model_type == MODEL_TYPE_HAND) &&
                    ((rs == (uint8_t)US_COMM) || (rs == (uint8_t)US_REMOTE)) &&
+                   (lim->hold_run == 0u) &&   /* hold 런 = 워치독 600 ms + 30 s 안전망이 지배 */
                    (lim->limit_on_time != 0u) &&
                    (elapsed >= (uint32_t)lim->limit_on_time * ON_TIME_UNIT_MS)) {
             reg_stop_run(rs);   /* COMM/REMOTE: no swallow (legacy) */

@@ -40,6 +40,9 @@ void app_modbus_apply_writes(mb_link_t link);
 void app_modbus_note_remote(void);
 bool app_modbus_remote_active(void);
 
+/* 원격 hold 런(START=2 로 워치독 무장) 진행 중 — app_reg 운영 ceiling 제외 판정용 */
+bool app_modbus_hold_active(void);
+
 /* 원격 제어 활성화 게이트 (요구사항 A). 상태는 비영속 파일 static.
  * 조작 입력은 PC8 물리 스위치 레벨뿐 — 소프트웨어 조작 API는 없다(그게 인터록의
  * 요점이다). MODEL_CTRL 빌드는 게이트가 없어 항상 MB_REMOTE_EN_ENABLED. */
