@@ -114,8 +114,32 @@ uint8_t app_lcd_run_page(const app_config_t *cfg)
 #define BRAND_BUILD BRAND_GDSONIC
 #endif
 
+#if defined(HW_V31)
+#define BRAND_READ_RETRIES 3u
+
+static brand_t s_brand = BRAND_GDSONIC;
+
+/* 현재 브랜드 (V31 = 패널 VP 0x1500 에서 읽은 값) */
+brand_t app_lcd_brand(void) { return s_brand; }
+
+/* 패널에서 브랜드 ID 읽기 — dgus_read_word 가 다른 RX 프레임을 버리므로 부팅·패널 재기동에서만 호출 */
+void app_lcd_brand_refresh(void)
+{
+    uint16_t v = 0u;   /* dgus_read_word leaves it untouched on failure -> raw=0 */
+    bool ok = false;
+    for (uint8_t i = 0u; i < BRAND_READ_RETRIES && !ok; i++) {
+        ok = dgus_read_word(BRAND_VP, &v, DGUS_READ_REPLY_TIMEOUT_MS);
+    }
+    s_brand = ok ? brand_from_id(v) : BRAND_GDSONIC;
+    mon_printf("[lcd] brand vp=0x%04X raw=0x%04X ok=%u -> %u\r\n",
+               (unsigned)BRAND_VP, (unsigned)v, (unsigned)ok, (unsigned)s_brand);
+}
+#else
 /* 현재 브랜드 (V30 = 빌드 상수) */
 brand_t app_lcd_brand(void) { return BRAND_BUILD; }
+
+void app_lcd_brand_refresh(void) {}
+#endif
 
 /* 모델명 문자열 전송 — 규칙은 app_brand (Wire payload = 11 bytes incl. NUL at [10]). */
 void app_lcd_send_model_str(uint8_t freq, uint8_t type)

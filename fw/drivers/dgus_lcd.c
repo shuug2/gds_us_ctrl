@@ -176,11 +176,11 @@ void dgus_write_text(uint16_t vp, const char *txt)
 }
 
 /* 시스템 변수 RD 요청 */
-void dgus_read_var(uint8_t var)
+void dgus_read_var(uint16_t var)
 {
     /* samd20 read_system_var — RD 0x83, payload = 1 (1 word read) */
     uint8_t pl[1] = { 1 };
-    send_frame(DGUS_CMD_RD, (uint16_t)var, pl, 1);
+    send_frame(DGUS_CMD_RD, var, pl, 1);
 }
 
 /*--------------------------------------------------------------
@@ -290,7 +290,7 @@ bool dgus_read_word(uint16_t addr, uint16_t *out_val, uint32_t timeout_ms)
         /* 이전 요청 잔여 / 터치 프레임 비움 */
     }
 
-    dgus_read_var((uint8_t)addr);                       /* 0x83 RD, 1 word */
+    dgus_read_var(addr);                               /* 0x83 RD, 1 word */
 
     uint32_t t0 = sys_tick_get_ms();
     while ((uint32_t)(sys_tick_get_ms() - t0) < timeout_ms) {
