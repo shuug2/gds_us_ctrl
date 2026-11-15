@@ -8,15 +8,30 @@
 #ifndef DEFINE_H
 #define DEFINE_H
 
-/*--- 모델 브랜드(업체) — cmake -DBRAND=<이름> 이 고른다 (CMakeLists.txt, BRAND=moohan ./fw.sh) ---
- * 접두어뿐 아니라 freq/type -> 문자 매핑 자체가 브랜드마다 다르다.
- *   GDSONIC   "GDS-20H   "   DIAMT   "DIS-20H   "
- *   POWERTECH "PTW-2020DH"   MOOHAN  "MH-1520DH "
- *   MAKETECH  "SMT-H15D  "   (samd20에 없던 신규 — type이 숫자 앞에 온다)
- * 업체 추가 = 아래 #if 합에 한 항 + app_lcd.c app_lcd_send_model_str() 에 #elif 블록 + hw/lcd/lcd_V30/README.md 표 한 줄.
+/*--- 보드 리비전 — cmake -DHW_REV=V30|V31 이 고른다 (CMakeLists.txt:45, HW_REV=v31 ./fw.sh) ---
+ *   V30  기본. 부저 PA2, mon = USART6(PC6/PC7, RS-485 와 공유)
+ *   V31  부저 PB9, mon = USART2(PA2 TX/PA3 RX, 헤더 J3) + UART 부트로더 점프
+ * 🔴 V31 이미지를 V30 보드에 올리면 mon 출력이 부저 라인(PA2)으로 나간다 — 반대면 부저 무음.
+ *    핀 분기는 io.c(부저)·mon 드라이버·main.c 배선에만 둔다. */
+#if (defined(HW_V30) + defined(HW_V31)) != 1
+#error "define.h: 보드 리비전은 정확히 하나만 정의할 것 (cmake -DHW_REV=V30|V31)"
+#endif
+
+/*--- 모델 브랜드(업체) ---
+ * V30: cmake -DBRAND=<이름> 이 고른다 (CMakeLists.txt, BRAND=moohan ./fw.sh) — 정확히 하나.
+ * V31: 브랜드 매크로 없음 — 런타임에 LCD VP 0x1500(BRAND_VP)의 브랜드 번호로 판별한다
+ *      (app_lcd_brand_refresh). fw.sh 가 -DBRAND=NONE 을 넘기고 CMake 는 매크로를 안 만든다.
+ * 브랜드 번호표 정본 = app_brand.h brand_t (1 GDSONIC · 2 MOOHAN · 3 DIAMT · 4 POWERTECH · 5 MAKETECH,
+ *   그 외 → GDSONIC). 모델명 규칙도 app_brand. 설계 = docs/superpowers/specs/2026-11-15-lcd-brand-id-design.md
+ * 업체 추가 = app_brand + 아래 #if 합에 한 항 + app_lcd.c BRAND_BUILD 에 #elif + hw/lcd/lcd_V30/README.md 표 한 줄.
  */
+#if defined(HW_V31)
 #if (defined(GDSONIC) + defined(DIAMT) + defined(POWERTECH) + defined(MOOHAN) \
-   + defined(MAKETECH)) != 1
+   + defined(MAKETECH)) != 0
+#error "V31 은 런타임 브랜드 — BRAND 지정 금지"
+#endif
+#elif (defined(GDSONIC) + defined(DIAMT) + defined(POWERTECH) + defined(MOOHAN) \
+     + defined(MAKETECH)) != 1
 #error "define.h: 모델 브랜드는 정확히 하나만 정의할 것 (cmake -DBRAND=GDSONIC|DIAMT|POWERTECH|MOOHAN|MAKETECH)"
 #endif
 
@@ -32,15 +47,6 @@
  */
 #if (defined(MODEL_CTRL) + defined(MODEL_REMOTE)) != 1
 #error "define.h: 제품 모델은 정확히 하나만 정의할 것 (cmake -DMODEL=CTRL|REMOTE)"
-#endif
-
-/*--- 보드 리비전 — cmake -DHW_REV=V30|V31 이 고른다 (CMakeLists.txt:45, HW_REV=v31 ./fw.sh) ---
- *   V30  기본. 부저 PA2, mon = USART6(PC6/PC7, RS-485 와 공유)
- *   V31  부저 PB9, mon = USART2(PA2 TX/PA3 RX, 헤더 J3) + UART 부트로더 점프
- * 🔴 V31 이미지를 V30 보드에 올리면 mon 출력이 부저 라인(PA2)으로 나간다 — 반대면 부저 무음.
- *    핀 분기는 io.c(부저)·mon 드라이버·main.c 배선에만 둔다. */
-#if (defined(HW_V30) + defined(HW_V31)) != 1
-#error "define.h: 보드 리비전은 정확히 하나만 정의할 것 (cmake -DHW_REV=V30|V31)"
 #endif
 
 /*--- PC8 원격 인터록 극성 (REMOTE 전용) ---

@@ -99,21 +99,6 @@ uint8_t app_lcd_run_page(const app_config_t *cfg)
     else                           return LCD_RUN_STD;     /* 9 */
 }
 
-/* 빌드 브랜드 — cmake -DBRAND 가 주입한다 (목록·검증 = define.h). */
-#if defined(GDSONIC)
-#define BRAND_BUILD BRAND_GDSONIC
-#elif defined(MOOHAN)
-#define BRAND_BUILD BRAND_MOOHAN
-#elif defined(DIAMT)
-#define BRAND_BUILD BRAND_DIAMT
-#elif defined(POWERTECH)
-#define BRAND_BUILD BRAND_POWERTECH
-#elif defined(MAKETECH)
-#define BRAND_BUILD BRAND_MAKETECH
-#else
-#define BRAND_BUILD BRAND_GDSONIC
-#endif
-
 #if defined(HW_V31)
 #define BRAND_READ_RETRIES 3u
 
@@ -135,6 +120,21 @@ void app_lcd_brand_refresh(void)
                (unsigned)BRAND_VP, (unsigned)v, (unsigned)ok, (unsigned)s_brand);
 }
 #else
+/* 빌드 브랜드 — cmake -DBRAND 가 주입한다 (목록·검증 = define.h). */
+#if defined(GDSONIC)
+#define BRAND_BUILD BRAND_GDSONIC
+#elif defined(MOOHAN)
+#define BRAND_BUILD BRAND_MOOHAN
+#elif defined(DIAMT)
+#define BRAND_BUILD BRAND_DIAMT
+#elif defined(POWERTECH)
+#define BRAND_BUILD BRAND_POWERTECH
+#elif defined(MAKETECH)
+#define BRAND_BUILD BRAND_MAKETECH
+#else
+#define BRAND_BUILD BRAND_GDSONIC
+#endif
+
 /* 현재 브랜드 (V30 = 빌드 상수) */
 brand_t app_lcd_brand(void) { return BRAND_BUILD; }
 
