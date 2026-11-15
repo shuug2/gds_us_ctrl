@@ -70,31 +70,40 @@ gds_us_ctrl/
 ./fw.sh reset      # 보드 리셋만
 ./fw.sh test       # host 테스트 (fw/test)
 ./fw.sh gdb        # 빌드 + GDB 접속
-BRAND=moohan MODEL=remote ./fw.sh flash   # 브랜드(업체) — 기본 gdsonic, 목록 fw/include/define.h → build-moohan-remote/
 ./fw.sh reconfig   # cmake 강제 재구성 후 빌드
+HW_REV=v31 BRAND=moohan MODEL=remote ./fw.sh flash   # → fw/build-v31-moohan-remote/
 ```
+
+빌드 축 3개 = 환경변수(대소문자 무관, 목록·검증 = `fw/include/define.h` `#error`). 빌드 폴더 = **`fw/build-<hw_rev>-<brand>-<model>/`**(기본값도 항상 이름에 들어간다, 2026-10-27~):
+
+| 변수 | 값 (첫째가 기본) | 갈리는 것 |
+|---|---|---|
+| `HW_REV` | `v30` · `v31` | 부저 핀(PA2/PB9) · mon UART(USART6/USART2 헤더 J3) · V31 UART 부트로더 점프. 🔴 V31 이미지를 V30 보드에 올리면 mon 출력이 부저로 나간다 |
+| `BRAND` | `gdsonic` · `moohan` · `diamt` · `powertech` · `maketech` | LCD 모델명 문자열 |
+| `MODEL` | `ctrl` · `remote` | 기능 티어 (CTRL = 옛 이름 STD, 2026-10-27 개명. 장비 타입 `model_type` 의 std 와는 별개) |
 
 스크립트가 대신 피해주는 함정 2개 — **수동으로 cmake를 부를 땐 직접 챙겨야 한다**:
 
 1. `$STM32_TOOLCHAIN`이 stale 경로를 가리켜 cmake가 실패 → `env -u STM32_TOOLCHAIN cmake ...`
    (상세: `docs/superpowers/historical/2026-05-05-RESUME.md` §2.2)
-2. `CMakeLists.txt:91`의 `file(GLOB src/*.c drivers/*.c)`는 **configure 타임 고정** → `.c`가
+2. `CMakeLists.txt:123`의 `file(GLOB src/*.c drivers/*.c)`는 **configure 타임 고정** → `.c`가
    추가/삭제된 브랜치로 전환한 뒤 증분 빌드만 하면 새 파일이 링크되지 않아 undefined
-   reference로 터진다. `fw.sh`는 소스 목록을 `build/.src-glob` 스탬프와 비교해 달라졌을
+   reference로 터진다. `fw.sh`는 소스 목록을 `<빌드 폴더>/.src-glob` 스탬프와 비교해 달라졌을
    때만 재구성한다.
 
 수동 등가 명령:
 
 ```bash
 cd fw
-env -u STM32_TOOLCHAIN cmake -B build -G Ninja                # 재구성
-env -u STM32_TOOLCHAIN cmake --build build                    # 빌드
-env -u STM32_TOOLCHAIN cmake --build build --target flash     # 플래시
+B=build-v30-gdsonic-ctrl
+env -u STM32_TOOLCHAIN cmake -B $B -G Ninja -DHW_REV=V30 -DBRAND=GDSONIC -DMODEL=CTRL   # 재구성
+env -u STM32_TOOLCHAIN cmake --build $B                    # 빌드
+env -u STM32_TOOLCHAIN cmake --build $B --target flash     # 플래시
 # openocd 직접: openocd -f openocd/stm32f410.cfg \
-#     -c "program build/gds_us_ctrl.elf verify reset exit"
+#     -c "program $B/gds_us_ctrl.elf verify reset exit"
 ```
 
-플래시 타깃 정의 = `fw/CMakeLists.txt:123` (`reset`:130 / `server`:135 / `gdb`:140),
+플래시 타깃 정의 = `fw/CMakeLists.txt:155` (`reset`:162 / `server`:167 / `gdb`:172),
 어댑터 설정 = `fw/openocd/stm32f410.cfg` (ST-LINK / hla_swd / stm32f4x).
 성공 판정은 openocd 출력의 `** Verified OK **` + `** Resetting Target **`.
 
@@ -114,20 +123,20 @@ env -u STM32_TOOLCHAIN cmake --build build --target flash     # 플래시
 
 **버전 번호 = 기능 티어, 날짜 접미어 = 그 빌드** (`fw/include/define.h`):
 
-- `3.0.x` = **STD** (레거시-동등 기능셋) — 번호를 동결하고 날짜만 진행한다. `V3.0.0_260905`
+- `3.0.x` = **CTRL** (레거시-동등 기능셋, 옛 이름 STD) — 번호를 동결하고 날짜만 진행한다. `V3.0.0_260905`
 - `3.1.x` = **REMOTE** (원격기 연동) — `V3.1.0R_260905`, 접미어 `R` 이 모델 표식
 - 접미어 `!` = PC8 인터록 극성 반전판 = 물리 인터록 없음(최종 상태, 2026-11-15). `REMOTE_EN_INTERLOCK_INVERTED` 를 따라간다
 
 ⚠ Modbus 소비자의 capability 판별은 버전 문자열이 아니다(버전 레지스터 없음, LCD 전용) —
-`0x31 CFG_CAP` / `0x2A REMOTE_CAP` 이 그 일을 한다. 그래서 STD 번호 동결이 소비자를 오도하지 않는다.
+`0x31 CFG_CAP` / `0x2A REMOTE_CAP` 이 그 일을 한다. 그래서 CTRL 번호 동결이 소비자를 오도하지 않는다.
 
 ### 양산 바이너리 보관 (`releases/`, 2026-09-13 — 원격기 `gds_us_remote` 와 공통 규칙)
 
-HW 벤치 PASS 로 태그가 붙는 빌드는 **저장소 안 `releases/<버전문자열>/`** 에 보관한다. 버전문자열 = `define.h` 의 `VERSION_MSG` 에서 공백을 뗀 것(`V3.1.0R_260911`). 파일명 규칙 = **`gds_us_ctrl_<brand>_v<버전>.bin`**(2026-10-05~, 브랜드 소문자 — 같은 버전 폴더에 브랜드별 .bin 을 나란히. 그 전 보관본 `V3.1.0R_260911/` 은 브랜드 없는 이름 = GDSONIC) — 극성 반전 표식 `!` 는 파일명에 넣지 않고(`gds_us_ctrl_gdsonic_v3.1.0R_260911.bin`) **README 에 "인터록 반전판(`REMOTE_EN_INTERLOCK_INVERTED 1`) = 물리 인터록 없음" 을 명기**한다(사용자 결정 ①-b; 배포 금지는 2026-11-15 해제). STD 빌드가 함께 검증됐으면 같은 폴더에 `gds_us_ctrl_gdsonic_v3.0.0_260911.bin` 로 나란히.
+HW 벤치 PASS 로 태그가 붙는 빌드는 **저장소 안 `releases/<버전문자열>/`** 에 보관한다. 버전문자열 = `define.h` 의 `VERSION_MSG` 에서 공백을 뗀 것(`V3.1.0R_260911`). 파일명 규칙 = **`gds_us_ctrl_<brand>_v<버전>.bin`**(2026-10-05~, 브랜드 소문자 — 같은 버전 폴더에 브랜드별 .bin 을 나란히. 그 전 보관본 `V3.1.0R_260911/` 은 브랜드 없는 이름 = GDSONIC) — 극성 반전 표식 `!` 는 파일명에 넣지 않고(`gds_us_ctrl_gdsonic_v3.1.0R_260911.bin`) **README 에 "인터록 반전판(`REMOTE_EN_INTERLOCK_INVERTED 1`) = 물리 인터록 없음" 을 명기**한다(사용자 결정 ①-b; 배포 금지는 2026-11-15 해제). CTRL 빌드가 함께 검증됐으면 같은 폴더에 `gds_us_ctrl_gdsonic_v3.0.0_260911.bin` 로 나란히. **V31 보드용은 `_hw31` 을 브랜드 뒤에 넣는다**(`gds_us_ctrl_moohan_hw31_v<버전>.bin`, 2026-10-27~) — V30 보드에 올리면 mon 출력이 부저로 나가므로 파일명으로 구분한다. V30 은 표식 없는 지금 이름 그대로. LCD 버전 문자열은 리비전과 무관(같음) — 구분은 파일명·SHA 로만.
 
 **공통 플래시 가이드·절차 명령·버전 README 템플릿 = `releases/README.md`**(원격기 `gds_us_remote/releases/README.md` 와 같은 목차). 폴더 구성: `.bin`(플래시에 쓰는 것) · `.elf`(심볼, 선택) · `stm32f410.cfg` 복사본 · `SHA256SUMS` · `README.md`(태그 · 커밋 · `arm-none-eabi-gcc --version` · 빌드 명령 `MODEL=remote ./fw.sh` · 플래시 명령 `./fw.sh flash` 또는 openocd 한 줄 · 재현 확인 `shasum -a 256 -c SHA256SUMS` · 이 릴리스에 든 것 · **배포 금지 여부**).
 
-절차: ① 태그(`hw-revA_fw-…`) ② `rm -rf fw/build fw/build-remote` 클린 빌드 ③ `define.h` 날짜 == 태그 시점 확인(우리는 `git describe` 를 안 쓰므로 접미사 문제는 없지만 날짜 불일치는 사람이 잡아야 한다) ④ `releases/<버전>/` 에 복사·개명 ⑤ `SHA256SUMS` ⑥ **그 보관본을 보드에 플래시해 LCD 버전 육안** ⑦ 보관 폴더 커밋(태그보다 뒤 커밋이 정상) ⑧ 푸시. 양산 플래시는 반드시 보관본으로. 저장소 크기 부담이 되면 GitHub Release 자산으로 옮긴다(원격기와 같은 결정).
+절차: ① 태그(`hw-revA_fw-…`) ② `rm -rf fw/build-v30-gdsonic-remote` (그 조합의 빌드 폴더) 클린 빌드 ③ `define.h` 날짜 == 태그 시점 확인(우리는 `git describe` 를 안 쓰므로 접미사 문제는 없지만 날짜 불일치는 사람이 잡아야 한다) ④ `releases/<버전>/` 에 복사·개명 ⑤ `SHA256SUMS` ⑥ **그 보관본을 보드에 플래시해 LCD 버전 육안** ⑦ 보관 폴더 커밋(태그보다 뒤 커밋이 정상) ⑧ 푸시. 양산 플래시는 반드시 보관본으로. 저장소 크기 부담이 되면 GitHub Release 자산으로 옮긴다(원격기와 같은 결정).
 
 ---
 

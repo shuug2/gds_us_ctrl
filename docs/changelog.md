@@ -8,6 +8,14 @@
 - 펌웨어 동작·바이너리 무변경(주석만 — 16 변형 SHA 대조 동일). LCD `!` 유지, 뜻 = 물리 인터록 없는 판. `V3.1.0R_260911/` 보관본 그대로 유효.
 - 폐기: 해제 조건(실장 PCB · 매크로 `0` 원복 · A-1/A-5/A-13 재시험). A-13 은 영구 미검증.
 
+### 2026-10-27 — feat(build): 보드 리비전 `HW_REV=v30|v31` + V31 UART 모니터·부트로더 점프, 기능 티어 STD → CTRL, 빌드 폴더 `build-<hw>-<brand>-<model>/` — 미커밋·벤치 대기
+
+- **V31 회로**(`hw/schematics/USW_CTRL_V31.*`): 부저 PA2 → PB9, PA2/PA3 = 헤더 J3 mon(USART2), PC6/PC7 = Modbus 전용. V30 이 소량 출하돼 **빌드 옵션으로 공존** — `HW_REV=v31 ./fw.sh`. **V30 빌드는 바이트 동일**(4 업체 × CTRL/REMOTE 8 개 SHA 대조, REMOTE 4 개 = `releases/V3.1.0R_260911/` 보관본).
+- **V31 전용**: mon = USART2 115200 8N1 상시(신설 `drivers/usart2.c`, `mon_usart6.c` 는 송신 UART 만 `#if`) · mon RX 매직 `!!GDSUS_BOOT!!` → 슈퍼루프 경계에서 RTC BKP0R 표식 + 리셋 → `main()` 첫 줄 `boot_jump_check()` 가 ROM 부트로더(USART2 8E1)로 점프(신설 `src/boot_jump.c`, 순수 매처 `src/boot_magic.c` + host `test_boot_magic` = 18 스위트). V31 FLASH +652 B.
+- **개명**: 기능 티어 STD → **CTRL**(`MODEL=ctrl`, `MODEL_CTRL`). 장비 타입 `model_type` 의 std(Modbus 0x18 값 2, LCD STD 페이지)는 별개라 그대로.
+- **빌드 폴더**: `fw/build-<hw_rev>-<brand>-<model>/` — 기본값도 항상 이름에(`build/` → `build-v30-gdsonic-ctrl/`, `build-remote/` → `build-v30-gdsonic-remote/`).
+- **보관 파일명**: V31 용 `gds_us_ctrl_<brand>_hw31_v<버전>.bin` (`releases/README.md` §1), UART 굽기 절차 §4-E. spec `specs/2026-09-20-uart-mon-port-design.md` §0·§0.1(AN2606 부트로더 핀 대조 — 설계 변경 불요).
+
 ### 2026-10-05 — feat(build): 브랜드(업체) 빌드 옵션 `BRAND=` / `-DBRAND`
 
 - `define.h` 의 브랜드 주석 토글을 없애고 MODEL 축과 같은 방식으로 전환: `BRAND=moohan MODEL=remote ./fw.sh flash` → `build-moohan-remote/`. 기본 GDSONIC 은 `build/`·`build-remote/` 그대로이고 `.bin` **바이트 동일**(STD `04423faf…`, REMOTE `2a813206…`). 업체 추가 = `define.h` `#if` 한 항 + `app_lcd.c` `#elif` 블록 + `hw/lcd/lcd_V30/README.md` 한 줄. 보관본 파일명에 브랜드 포함(`gds_us_ctrl_<brand>_v<버전>.bin`, 다음 보관본부터). plan `plans/2026-10-04-brand-build-option.md`.

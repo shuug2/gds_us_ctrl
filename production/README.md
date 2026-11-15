@@ -6,12 +6,26 @@
 
 | 슬롯 | 업체 | FW (LCD 표시 버전) | FW 보관본 | LCD 세트 (커밋) | 배포 |
 |---|---|---|---|---|---|
-| 1 | gdsonic | `V3.1.0R!_260911` | `releases/V3.1.0R_260911/gds_us_ctrl_v3.1.0R_260911.bin` (`2a813206…`) | `hw/lcd/lcd_V30/gdsonic` (`235266d`, 10-18 `48.icl` #56 시리얼 ON 수정 포함) | ✅ 허용 |
-| 2 | moohan | `V3.1.0R!_260911` | `releases/V3.1.0R_260911/gds_us_ctrl_moohan_v3.1.0R_260911.bin` (`7ae37a43…`) | `hw/lcd/lcd_V30/moohan` (`2eb516b`, 10-13) | ✅ 허용 |
-| 3 | diamt | `V3.1.0R!_260911` | `releases/V3.1.0R_260911/gds_us_ctrl_diamt_v3.1.0R_260911.bin` (`9566fad5…`) | `hw/lcd/lcd_V30/dongin` (`235266d`, 10-18 `32.icl`·`48.icl`(빨간 아이콘) 갱신 포함, 작업 중 세트) | ✅ 허용 |
-| 4 | powertech | `V3.1.0R!_260911` | `releases/V3.1.0R_260911/gds_us_ctrl_powertech_v3.1.0R_260911.bin` (`d071e033…`) | ⚠ 없음 — LCD 세트 미반입 (`models.txt` 에 `-`) | ✅ 허용 |
+| 1 | gdsonic | `V3.1.0R!_260911` | `releases/V3.1.0R_260911/gds_us_ctrl_v3.1.0R_260911.bin` (`2a813206…`) | `hw/lcd/lcd_V30/gdsonic` (`235266d`, 10-18 `48.icl` #56 시리얼 ON 수정 포함) | ✅ 허용 (V30 보드) |
+| 2 | moohan | `V3.1.0R!_260911` | `releases/V3.1.0R_260911/gds_us_ctrl_moohan_v3.1.0R_260911.bin` (`7ae37a43…`) | `hw/lcd/lcd_V30/moohan` (`2eb516b`, 10-13) | ✅ 허용 (V30 보드) |
+| 3 | diamt | `V3.1.0R!_260911` | `releases/V3.1.0R_260911/gds_us_ctrl_diamt_v3.1.0R_260911.bin` (`9566fad5…`) | `hw/lcd/lcd_V30/dongin` (`235266d`, 10-18 `32.icl`·`48.icl`(빨간 아이콘) 갱신 포함, 작업 중 세트) | ✅ 허용 (V30 보드) |
+| 4 | powertech | `V3.1.0R!_260911` | `releases/V3.1.0R_260911/gds_us_ctrl_powertech_v3.1.0R_260911.bin` (`d071e033…`) | ⚠ 없음 — LCD 세트 미반입 (`models.txt` 에 `-`) | ✅ 허용 (V30 보드) |
 
 ⚠ **배포 칸 근거**: PC8 인터록 극성 반전판(`REMOTE_EN_INTERLOCK_INVERTED 1`, LCD 버전에 `!`) = 물리 인터록 없음 — 이것이 최종 상태이고 사용자가 위험을 수용해 배포를 허용했다(2026-11-15, 루트 `HANDOFF.md`). **출하 전 이 표의 배포 칸을 반드시 본다.**
+
+🟡 **V31 보드 = 출하 보류** (사용자 결정 2026-11-15): 위 표의 `.bin` 은 전부 V30 용이다. V31 보드는 MODEL_TYPE(`0x18`) E-STOP 가드가 들어간 새 보관본(`_hw31`, 벤치 PASS 후)부터 출하한다. V30 보드는 위 기존 보관본 그대로 출하.
+
+## 다음 보관본부터 — V31 생산·출하 흐름 (사용자 결정 2026-11-15)
+
+V30 보드는 **생산 종료**. V31 보드를 전 업체에 출하한다. 아래 표·절차(현 `V3.1.0R_260911`, V30 4슬롯)는 다음 보관본에서 이 흐름으로 바뀐다.
+
+- **Flasher 슬롯** (구형 PLUS 는 4슬롯): **슬롯 1 = gdsonic `_hw31`** 만 쓴다. 2~4 비움. ⚠ 최초 이미지는 반드시 `_hw31` — V30 이미지는 UART 부트로더 진입 경로가 없어 출하 단계 전환이 안 된다.
+- **생산 (최초 다운로드 + 기본 검사)**: Flasher 슬롯 1 → PROG → LCD 는 gdsonic 세트(SD) → 기본 검사. 모든 보드가 gdsonic 상태로 검사된다.
+- **출하 (업체 전환)** — 출하 업체가 gdsonic 이면 생략:
+  1. FW: downloader 로 J3(UART, 115200) 에 해당 업체 `gds_us_ctrl_<brand>_hw31_v<버전>.bin` 다운로드(굽기 전 `SHA256SUMS` 대조, 절차 = 허브 `CLAUDE.md` §4.4). 다운로드 중 LCD 터치 금지
+  2. LCD: 패널 전원 끈 상태로 해당 업체 `lcd/<brand>/DWIN_SET/` SD 삽입 → 전원 투입 → 갱신 완료 후 전원 끄고 SD 제거 (아래 LCD 절차와 같음)
+  3. 판정: 전원 재투입 → LCD 버전 = 기준표 FW 칸 · **업체 로고 + 모델명**(MODEL_SETUP 화면) 이 그 업체인지 육안 — FW 와 LCD 세트가 짝이 맞아야 한다
+- 묶음 구성(다음 보관본 때 `models.txt`·`mkproduction.sh` 반영): Flasher = 슬롯 1 하나, 출하용 = 4업체 `_hw31` `.bin` + `SHA256SUMS`, LCD = 4업체 세트 전부.
 
 ## 생산라인 작업
 

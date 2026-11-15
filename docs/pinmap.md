@@ -88,7 +88,17 @@
 | PA9 | LCD_TX | USART1_TX | AF7 | DGUS LCD 시리얼 TX (Stage A 활성) |
 | PA10 | LCD_RX | USART1_RX | AF7 | DGUS LCD 시리얼 RX (Stage A 활성, IT byte 모드) |
 
-### USART6 — 모니터링 + Modbus RTU (이중 역할, 단계별 전환)
+### USART2 — 모니터 + UART 부트로더 (V31 보드만, `HW_REV=v31`)
+
+| Pin | Net Name | Signal | AF | 설명 |
+|-----|----------|--------|----|------|
+| PA2 | MON_TX → J3.3 | USART2_TX | AF7 | mon 115200 8N1 상시 출력 / ROM 부트로더 TX(8E1) |
+| PA3 | MON_RX → J3.2 | USART2_RX | AF7 | 매직 `!!GDSUS_BOOT!!` 수신(RXNE IRQ, 내부 풀업) / ROM 부트로더 RX |
+
+> V31 회로 `hw/schematics/USW_CTRL_V31.*`. 헤더 J3 = 1 3.3 V(의도, 어댑터 전원 연결 금지) · 2 RX · 3 TX · 4 GND. V31 에서 USART6(PC6/PC7) = Modbus 전용(넷 `MODBUS_TX/RX`). 설계·부트로더 핀 영향 = spec `2026-09-20-uart-mon-port-design.md` §0.
+> V30 보드는 아래 USART6 이중 역할 그대로(PA2 = 부저, PA3 미배선).
+
+### USART6 — 모니터링 + Modbus RTU (이중 역할, 단계별 전환 — V30 보드)
 
 | Pin | Net Name | Signal | 설명 |
 |-----|----------|--------|------|
@@ -124,7 +134,8 @@
 
 | Pin | Net Name | Signal | 설명 |
 |-----|----------|--------|------|
-| PA2 | BUZZER | TIM9_CH1 (PWM) | 부저 PWM 출력 |
+| PA2 | BUZZER | GPIO out (active-HIGH, TIM9 미사용) | **V30** 부저 — `io.c` 단순 토글 |
+| PB9 | BUZZER (R60) | GPIO out (active-HIGH) | **V31** 부저 — PA2 가 mon TX 로 넘어감 |
 
 ### TIM5_CH1 — 출력 초음파 주파수 측정 (입력 캡처)
 
@@ -186,11 +197,12 @@
 | 주변장치 | 핀 | 용도 |
 |---------|-----|------|
 | USART1 | PA9/PA10 | LCD 시리얼 통신 |
-| USART6 | PC6/PC7 | 모니터링/디버그 |
+| USART2 | PA2/PA3 | **V31** 모니터 + UART 부트로더 (헤더 J3) |
+| USART6 | PC6/PC7 | Modbus RTU (V30 은 모니터 겸용) |
 | SPI1 | PA4–PA7, PC4, PC5 | Ethernet (W5500) |
 | I2C1 | PB6/PB7 | EEPROM |
 | ADC1 | PB0(출력세기 피드백, vestigial)/PB1(**소비전류**, 2026-06-20 정정) | 아날로그 입력 2채널 |
-| TIM9_CH1 | PA2 | 부저 PWM |
+| GPIO | PA2 (V30) / PB9 (V31) | 부저 (TIM9 PWM 아님) |
 | TIM5_CH1 | PA0 | **출력 초음파 주파수 측정** (입력 캡처, FREQ_IN ← SAMD20 PB15) |
 | TIM11 | — | 내부 타이머 (용도 TBD) |
 | RTC | — | 실시간 클럭 (LSI 32 kHz) |
@@ -221,8 +233,8 @@ USB 48 MHz ← PLLQ
 
 | 포트 | 여유 핀 | 비고 |
 |---|---|---|
-| PA | `PA1` `PA3` `PA8` | PA1/PA3 = ADC1_IN1/IN3 겸용(아날로그 확장 여지) · PA8 = MCO1 |
-| PB | `PB8` `PB9` `PB15` | PB8은 heartbeat 예약이었으나 **구현이 없어 실제 여유** |
+| PA | `PA1` `PA3`(V30 만) `PA8` | PA1/PA3 = ADC1_IN1/IN3 겸용(아날로그 확장 여지) · PA8 = MCO1 · V31 은 PA3 = MON_RX |
+| PB | `PB8` `PB9`(V30 만) `PB15` | PB8은 heartbeat 예약이었으나 **구현이 없어 실제 여유** · V31 은 PB9 = 부저 |
 | PC | ~~`PC8`~~ `PC0` `PC1` `PC2` `PC3` `PC9` `PC13` `PC14` `PC15` | PC8 = **CON_REMOTE_EN 으로 확정 소진** (2026-09-04) · PC0–PC3 = ADC1_IN10~13 겸용 |
 | PD | `PD2` | LQFP64 노출 |
 

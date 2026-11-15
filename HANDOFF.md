@@ -2,6 +2,23 @@
 
 > **2026-11-15 gdsonic 폴더 이전 완료**: 저장소 = `~/dev/work/gdsonic/gds_us_ctrl`. 현행 문서 경로 갱신, `fw/build-*` 17개(16변형 + build-trace) 클린 빌드 PASS, 메모리 옛 경로 없음. 남은 `dev/work/gds_` 는 MIGRATION §3 지난 기록(그대로 둠).
 
+> **🟡 사용자 결정 대기 (2026-11-15 정리)** — 정해지면 이 표에서 지우고 `../CLAUDE.md` §5·§6 에 옮긴다.
+>
+> | # | 결정 | 풀리는 일 |
+> |---|---|---|
+> | 5 | **SAMA·SONOSYS 모델명 규칙** · dongin LCD 세트 완성 시점 | `define.h`/`app_lcd.c` BRAND 추가 |
+> | 6 | **원격기에 보관 파일명 규칙 변경 통보** 여부 (공통 규칙이었음) | remote 규칙 정합 |
+>
+> ✅ 결정됨 2026-11-15 (상세 = 허브 `../CLAUDE.md` §5):
+> - **#1 커밋 분할** = ① V31 펌웨어 ② MODEL_TYPE 가드 ③ 문서·회로도 ④ 업체별 `.bin` — 실행·push 완료.
+> - **#2 새 보관본 범위** = REMOTE × 4업체(gdsonic·moohan·diamt·powertech) × V30·V31 = `.bin` 8개, 한 커밋 클린 빌드. CTRL·MAKETECH 제외. V31 = `gds_us_ctrl_<brand>_hw31_v<버전>.bin`(gdsonic 도 브랜드 포함). 발행 = 벤치 PASS 후.
+> - **#3 Flasher 슬롯** = V30 생산 종료, 슬롯 1 = gdsonic `_hw31` 하나(2~4 비움). 업체 전환 = downloader UART(J3) + 업체 LCD 세트 SD. 흐름 = `production/README.md` "다음 보관본부터" 절.
+> - **#4 Flasher 파일** = J-Flash **V7.88 단일 뱅크**(PEX 삭제) — 다음 보관본 묶음부터, `mkproduction.sh` JFLASH V7.88 고정 + 슬롯 1 단독 PROG 실기 1회.
+> - **#7 MODEL_TYPE 가드** = E-STOP 활성 중 Modbus `0x18` 쓰기 침묵 거부(가동 중 허용, LCD 경로 레거시). `fw/src/app_modbus.c:585` — **벤치 대기**(E-STOP 중 FC06 0x18 → read-back 옛 값 / 해제 후 반영). 벤치 PASS 후 remote 계약 갱신 통보.
+> - **출하**: **V30 보드 = 기존 보관본 `V3.1.0R_260911` 그대로 출하** / **V31 보드 = 출하 보류**(가드 포함 새 보관본 대기). 배포 금지 해제·PC8 반전 최종은 그대로.
+>
+> 결정 아님·실행 대기: lcd-echo 벤치 → 태그 `hw-revA_fw-stage-lcd-echo`. 위 `Branch` 줄 "origin 보다 2 앞"은 stale.
+
 **Generated**: 2026-10-13 (2026-09-27 시작 세션)
 **Branch**: `main` **`7271e8c`**, origin 보다 2 앞 — `! git lfs push origin main && git push origin main` 필요
 **Board**: **MOOHAN REMOTE** `BRAND=moohan MODEL=remote ./fw.sh flash` (`7ae37a43…`). 보관본(GDSONIC `2a813206…`)과 다름 — GDSONIC 복귀 = `MODEL=remote ./fw.sh flash`

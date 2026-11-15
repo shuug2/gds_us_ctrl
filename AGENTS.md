@@ -64,8 +64,8 @@ gds_us_ctrl/
 
 ```bash
 cd fw
-cmake -B build -G Ninja
-cmake --build build
+cmake -B build-v30-gdsonic-ctrl -G Ninja
+cmake --build build-v30-gdsonic-ctrl
 ```
 
 > `$STM32_TOOLCHAIN` env var가 stale 경로를 가리키면 `env -u STM32_TOOLCHAIN cmake ...`로 우회. 자세한 사항은 `docs/superpowers/historical/2026-05-05-RESUME.md` §2.2 참조.
@@ -74,9 +74,9 @@ cmake --build build
 
 ```bash
 cd fw
-cmake --build build --target flash
+cmake --build build-v30-gdsonic-ctrl --target flash
 # 또는 직접:
-# openocd -f openocd/stm32f410.cfg -c "program build/gds_us_ctrl.elf verify reset exit"
+# openocd -f openocd/stm32f410.cfg -c "program build-v30-gdsonic-ctrl/gds_us_ctrl.elf verify reset exit"
 ```
 
 ---
