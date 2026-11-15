@@ -9,15 +9,19 @@
 | `gdsonic/` | `GDSONIC` | 검은색 | 정본 기준 세트 |
 | `dongin/` | `DIAMT` | 검은색 | 작업 중 (bin = gdsonic, 32.icl·48.icl 다름 — 빨간 레벨 바) |
 | `moohan/` | `MOOHAN` | 밝은색 | p3·p9 `LV_TIME` 바(0x1184~0x1197) 없음 — 의도 |
-| — | `POWERTECH`, `MAKETECH` | 검은색 | 미반입 |
-| — | `SAMA`, `SONOSYS` (신규) | 밝은색 | 미반입, 모델명 규칙 미정 |
+| — (작업 원본 `powertech/` 만) | `POWERTECH` | 검은색 ← gdsonic | 미반입 — 로고·레벨 바 그림 대기 |
+| — | `MAKETECH` | 검은색 | 미반입 (`tools/brands.json` 에 없음) |
+| — (작업 원본 `sama/`·`sonosys/` 만) | (펌웨어에 없음) | 밝은색 ← moohan | 미반입 — 로고 대기, 모델명 규칙 미정 |
 
-업체 = BRAND 1:1. 업체가 늘면 폴더 하나 + 이 표 한 줄.
+업체 = BRAND 1:1. 업체가 늘면 폴더 하나 + 이 표 한 줄 + `../tools/brands.json` 한 줄.
+
+**파생 규칙 (사용자 2026-11-15)**: 같은 색 계열은 기준 세트에서 파생한다. 검은색 = gdsonic + 로고(`32.icl` #0)·레벨 바(`48.icl` #11), 밝은색 = moohan + 로고. 파생 세트는 `../tools/lcdset.py build <업체>` 로 만들고 `check`·`report` 로 확인한다(`../tools/README.md`).
 
 ## 규칙
 
 - **`DWIN_SET/` 은 평평하게 유지, 파일 개명 금지** — DWIN 은 파일명/번호로 로드한다. 패널 갱신 = 이 폴더를 그대로 SD(FAT32) 의 `DWIN_SET` 으로 복사하거나 DGUS 툴로 다운로드.
 - 편집은 DGUS 툴(`TFT/` 프로젝트)에서 하고, 작업 원본(`~/dev/work/gdsonic/gds_lcd_V30/<업체>/`) 폴더 전체를 여기에 동기화한다(`rsync -rc --delete --exclude .DS_Store --exclude Thumbs.db`). 반영 전 p21/23/25/27 모드 아이콘 = 0x140c, 통신 버튼 = 0x140b 인지 확인.
+  - 도구: `../tools/lcdset.py check <업체>` (계약 검사) · `sync-preview <업체>` (아래 미리보기 + 함정 경고를 자동으로 함).
   - **반드시 미리보기 먼저**: `rsync -rcn --delete --exclude .DS_Store --exclude Thumbs.db --itemize-changes <작업원본>/<업체>/ <여기>/<업체>/ | grep -vE '^\.(d|f\.\.T)'` — 시각만 다른 줄을 빼고 남는 줄(내용 변경 `>fc`·신규 `>f+++`·삭제 `*deleting`)을 하나씩 확인한 뒤 실행.
   - ⚠ **한글 파일명 함정**: `DWIN_SET/23_나눔스퀘어.bin` 은 작업 원본이 macOS NFD, 저장소(gdsonic·dongin)가 NFC 로 이름 바이트가 달라 rsync 가 다른 파일로 본다 → 미리보기에 `*deleting …23_나눔스퀘어.bin` 이 뜨고, 그대로 실행하면 **정본에서 폰트가 빠질 수 있다**. 이 Mac 의 `/usr/bin/rsync` 는 openrsync 라 `--iconv` 가 없다 — 내용이 같으면(`cmp`) `--exclude '23_*.bin'` 을 붙여 건너뛴다.
   - ⚠ **역행 함정**: 작업 원본이 저장소보다 오래된 파일이 있으면 동기화가 되돌린다(예: 2026-11-15 이전 dongin 작업 원본의 `14ShowFile.bin` = p27 0x140b 구판, `48.icl` = 06-22 판). 미리보기의 `>fc` 줄은 양쪽 날짜·SHA 를 보고, 저장소 쪽이 의도된 수정본이면 작업 원본을 먼저 저장소 판으로 맞춘다. 2026-11-15 dongin 두 파일은 맞춤 완료.
