@@ -1,17 +1,19 @@
 {
-  "_doc": "업체 표. family 기준 세트 = families. 파생 업체는 기준 세트에 logo(32.icl #0)·bar(48.icl #11, 검은색 계열만)를 바꿔 끼운다. 경로는 작업 원본 <업체>/ 기준. fw_brand=null 은 펌웨어에 아직 없음.",
+  "_doc": "업체 표. family 기준 세트 = families. 파생 업체는 기준 세트에 logo(32.icl #0)·bar(48.icl #11, 검은색 계열만)를 바꿔 끼운다. 경로는 작업 원본 <업체>/ 기준. fw_brand=null 은 펌웨어에 아직 없음. brand_id = 22_Config VP 0x1500 에 build 가 쓰는 번호(정본 ctrl fw/include/app_brand.h; 6·7 은 예약).",
   "families": {
     "black": "gdsonic",
     "white": "moohan"
   },
   "brands": {
-    "gdsonic":   { "family": "black", "fw_brand": "GDSONIC" },
-    "dongin":    { "family": "black", "fw_brand": "DIAMT",
+    "gdsonic":   { "brand_id": 1, "family": "black", "fw_brand": "GDSONIC" },
+    "dongin":    { "brand_id": 3, "family": "black", "fw_brand": "DIAMT",
                    "logo": "32_bg_dongin/00_logo.jpg", "bar": "48_icon_red/11_lv_rd_64x16.jpg" },
-    "powertech": { "family": "black", "fw_brand": "POWERTECH",
+    "powertech": { "brand_id": 4, "family": "black", "fw_brand": "POWERTECH",
                    "logo": "brand_src/00_logo.jpg", "bar": "brand_src/11_lv_bar_64x16.jpg" },
-    "moohan":    { "family": "white", "fw_brand": "MOOHAN" },
-    "sama":      { "family": "white", "fw_brand": null, "logo": "brand_src/00_logo.jpg" },
-    "sonosys":   { "family": "white", "fw_brand": null, "logo": "brand_src/00_logo.jpg" }
+    "maketech":  { "brand_id": 5, "family": "black", "fw_brand": "MAKETECH",
+                   "logo": "brand_src/00_logo.jpg", "bar": "brand_src/11_lv_bar_64x16.jpg" },
+    "moohan":    { "brand_id": 2, "family": "white", "fw_brand": "MOOHAN" },
+    "sama":      { "brand_id": 6, "family": "white", "fw_brand": null, "logo": "brand_src/00_logo.jpg" },
+    "sonosys":   { "brand_id": 7, "family": "white", "fw_brand": null, "logo": "brand_src/00_logo.jpg" }
   }
 }

@@ -6,6 +6,7 @@
   build  <업체> [--force]    기준 세트 + 로고/레벨 바 → <작업원본>/<업체>/DWIN_SET
   report [업체...] [--open]  HTML 보고서 (icl 칸 그림, 기준 세트 대비 차이, 검사 결과)
   sync-preview <업체>        작업 원본 → 정본 rsync 미리보기 (실행은 하지 않는다)
+  export <업체> <빈폴더>     패널용 축소 사본 — jpg·ASCII 에 안 쓰는 폰트 제외, font0 필요한 폭까지
 """
 import sys
 
@@ -33,6 +34,9 @@ SLOTS = {
 }
 CONTRACT_BINS = ("13TouchFile.bin", "14ShowFile.bin", "22_Config.bin")
 IGNORED = {".DS_Store", "Thumbs.db"}
+# V31 펌웨어가 부팅 때 읽는 브랜드 번호: 22_Config VP 0x1500, 2 B 상위 먼저 (정본 ctrl fw/include/app_brand.h)
+BRAND_VP = 0x1500
+BRAND_OFF = BRAND_VP * 2
 
 
 class LcdError(Exception):
@@ -45,7 +49,7 @@ def load_brands(path=os.path.join(TOOLS_DIR, "brands.json")):
     for name, b in cfg["brands"].items():
         if b.get("family") not in cfg["families"]:
             raise LcdError(f"brands.json: {name} family '{b.get('family')}' 없음")
-        unknown = set(b) - {"family", "fw_brand"} - set(SLOTS)
+        unknown = set(b) - {"family", "fw_brand", "brand_id"} - set(SLOTS)
         if unknown:
             raise LcdError(f"brands.json: {name} 모르는 키 {sorted(unknown)}")
     return cfg
@@ -101,18 +105,44 @@ def check_brand(cfg, work, name):
             bad = dgus.cfg_kills_touch(_read(os.path.join(d, f)))
             res.append(("FAIL", f"{f}: 0x20=5A·0x21=10 — 2025 배치 터치가 죽는 값") if bad
                        else ("PASS", f"{f}: 터치 설정 공장값(0x20/0x21 ≠ 5A/10)"))
+    res.extend(_check_brand_id(cfg, d, name))
     base = base_of(cfg, name)
     if name != base:
         res.extend(_compare_with_base(cfg, work, name, base))
     return res
 
 
+def _check_brand_id(cfg, d, name):
+    want = cfg["brands"][name].get("brand_id")
+    if want is None:
+        return []
+    try:
+        b = _read(os.path.join(d, "22_Config.bin"))[BRAND_OFF:BRAND_OFF + 2]
+    except OSError as e:
+        return [("FAIL", f"22_Config.bin: {e}")]
+    got = int.from_bytes(b, "big") if len(b) == 2 else None
+    msg = f"22_Config VP 0x{BRAND_VP:04x} 브랜드 번호 = {got} (brands.json {want})"
+    if got == want or (got == 0 and want == 1):  # 0 → 펌웨어가 GDSONIC 으로 본다
+        return [("PASS", msg)]
+    if got == 0:  # V30 은 무시, V31 은 GDSONIC 모델명을 띄운다
+        return [("WARN", msg + " — 미기록, V31 에서 GDSONIC 으로 보임")]
+    return [("FAIL", msg)]
+
+
+def _mask_brand(b):
+    return b[:BRAND_OFF] + b[BRAND_OFF + 2:]
+
+
 def _compare_with_base(cfg, work, name, base):
     d, bd = dwin(work, name), dwin(work, base)
     res = []
     for f in CONTRACT_BINS:
-        same = _read(os.path.join(d, f)) == _read(os.path.join(bd, f))
-        res.append(("PASS" if same else "FAIL", f"{f} = 기준 {base}" if same else f"{f} ≠ 기준 {base} (계약 파일)"))
+        a, b = _read(os.path.join(d, f)), _read(os.path.join(bd, f))
+        note = ""
+        if f == "22_Config.bin":  # 브랜드 번호 칸은 업체마다 다르다
+            a, b, note = _mask_brand(a), _mask_brand(b), f" (VP 0x{BRAND_VP:04x} 제외)"
+        same = a == b
+        res.append(("PASS" if same else "FAIL", f"{f} = 기준 {base}{note}" if same else f"{f} ≠ 기준 {base}{note} (계약 파일)"))
     only_base, only_me = _listing(bd) - _listing(d), _listing(d) - _listing(bd)
     if only_base or only_me:
         res.append(("WARN", f"파일 목록 차이 — 기준에만 {sorted(only_base)}, 여기에만 {sorted(only_me)}"))
@@ -161,12 +191,69 @@ def build_brand(cfg, work, name, force=False):
         if copy_as:
             shutil.copyfile(src, os.path.join(tmp, copy_as))
         log.append(f"{key}: {icl_name} #{eid} <- {os.path.relpath(src, os.path.join(work, name))} ({mode})")
+    if brand.get("brand_id") is not None:
+        path = os.path.join(tmp, "22_Config.bin")
+        b = _read(path)
+        if len(b) < BRAND_OFF + 2:
+            raise LcdError(f"22_Config.bin 이 VP 0x{BRAND_VP:04x} 보다 짧음 ({len(b)} B)")
+        with open(path, "wb") as f:
+            f.write(b[:BRAND_OFF] + brand["brand_id"].to_bytes(2, "big") + b[BRAND_OFF + 2:])
+        log.append(f"brand_id: 22_Config VP 0x{BRAND_VP:04x} <- {brand['brand_id']}")
     if os.path.exists(out):
         os.rename(out, out + time.strftime(".bak-%Y%m%d-%H%M%S"))
     os.rename(tmp, out)
     with open(os.path.join(work, name, "BUILD.txt"), "w", encoding="utf-8") as f:
         f.write("lcdset build\n" + "\n".join(log) + "\n")
     return log
+
+
+# ---------- export (패널용 축소 사본) ----------
+
+PANEL_EXTS = {".icl", ".bin", ".hzk", ".lib", ".cfg"}  # 패널이 읽는 것 — jpg 는 구동에 안 쓴다(사용자 2026-11-15)
+FONT_EXTS = {".hzk", ".dzk", ".bin"}
+NON_FONT_BINS = set(CONTRACT_BINS)
+
+
+def _file_id(name):
+    head = name.split("_", 1)[0].split(".", 1)[0]
+    return int(head) if head.isdigit() else None
+
+
+def plan_export(work, name):
+    """→ ([(파일, 처리, 쓸 바이트 수)], ASCII 폰트 폭). 화면이 ASCII 만 쓴다는 전제가 깨지면 LcdError."""
+    d = dwin(work, name)
+    ids, width, problems = dgus.ascii_font_usage(_read(os.path.join(d, "14ShowFile.bin")),
+                                                 _read(os.path.join(d, "13TouchFile.bin")))
+    if problems:
+        raise LcdError("ASCII 전용 축소 불가:\n  " + "\n  ".join(problems))
+    plan = []
+    for f in sorted(_listing(d)):
+        ext, size = os.path.splitext(f)[1].lower(), os.path.getsize(os.path.join(d, f))
+        is_font = ext in FONT_EXTS and f not in NON_FONT_BINS
+        if ext not in PANEL_EXTS:
+            plan.append((f, "제외(패널 미사용)", 0))
+        elif is_font and _file_id(f) not in ids:
+            plan.append((f, "제외(ASCII 에 안 쓰는 폰트)", 0))
+        elif is_font and ext == ".hzk" and size == dgus.HZK_FULL_LEN:
+            plan.append((f, f"축소(ASCII 폭 4~{width})", dgus.hzk_end(width)))
+        else:
+            plan.append((f, "그대로", size))
+    return plan, width
+
+
+def export_brand(cfg, work, name, dest):
+    fails = [m for lvl, m in check_brand(cfg, work, name) if lvl == "FAIL"]
+    if fails:
+        raise LcdError("check FAIL — 내보내지 않음:\n  " + "\n  ".join(fails))
+    if os.path.isdir(dest) and os.listdir(dest):
+        raise LcdError(f"{dest} 가 비어 있지 않음 — 남은 파일도 패널에 올라가므로 빈 폴더만 받는다")
+    plan, _ = plan_export(work, name)
+    os.makedirs(dest, exist_ok=True)
+    for f, _, n in plan:
+        if n:
+            with open(os.path.join(dwin(work, name), f), "rb") as src, open(os.path.join(dest, f), "wb") as out:
+                out.write(src.read(n))
+    return plan
 
 
 # ---------- sync-preview ----------
@@ -262,6 +349,21 @@ def cmd_report(cfg, a):
     return 0
 
 
+def cmd_export(cfg, a):
+    if a.dry_run:
+        plan, _ = plan_export(a.work, a.brand)
+    else:
+        plan = export_brand(cfg, a.work, a.brand, a.dest)
+    before = sum(os.path.getsize(os.path.join(dwin(a.work, a.brand), f)) for f, _, _ in plan)
+    for f, what, n in plan:
+        if what != "그대로":
+            print(f"  {what:24} {f}")
+    after = sum(n for _, _, n in plan)
+    print(f"  {before / 1e6:.2f} MB → {after / 1e6:.2f} MB ({sum(1 for p in plan if p[2])}개 파일)"
+          + ("" if a.dry_run else f"\n→ {a.dest}"))
+    return 0
+
+
 def cmd_sync_preview(cfg, a):
     notes, lines, run = sync_preview(a.work, a.canon, a.brand)
     for n in notes:
@@ -282,8 +384,13 @@ def main(argv=None):
     s = sub.add_parser("report"); s.add_argument("brands", nargs="*")
     s.add_argument("--out", default=None, help="출력 폴더 (기본 <작업원본>/_report)")
     s.add_argument("--open", action="store_true", help="브라우저로 연다"); s.set_defaults(fn=cmd_report)
+    s = sub.add_parser("export", help="패널용 축소 사본 (jpg·안 쓰는 폰트 제외, font0 축소)")
+    s.add_argument("brand"); s.add_argument("dest", nargs="?", help="빈 폴더 (예: /Volumes/SD/DWIN_SET)")
+    s.add_argument("--dry-run", action="store_true", help="계획만 출력"); s.set_defaults(fn=cmd_export)
     s = sub.add_parser("sync-preview"); s.add_argument("brand"); s.set_defaults(fn=cmd_sync_preview)
     a = p.parse_args(argv)
+    if a.cmd == "export" and not a.dry_run and not a.dest:
+        p.error("export: 대상 폴더(dest) 또는 --dry-run 이 필요")
     try:
         return a.fn(load_brands(), a) or 0
     except (LcdError, dgus.DgusFormatError) as e:

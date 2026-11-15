@@ -142,3 +142,73 @@ def check_mode_icons(show: bytes):
 
 def cfg_kills_touch(cfg: bytes) -> bool:
     return all(len(cfg) > a and cfg[a] == v for a, v in CFG_TOUCH_KILL.items())
+
+
+# ---------- 폰트 사용 분석 (ASCII 전용 화면) ----------
+# ASCII HZK: 폭 4~64 dot, 높이 = 2×폭, 폭마다 128글자, 글자당 ceil(폭/8)×높이 바이트가 폭 오름차순으로 이어진다.
+# 2026-11-15 0_verdana_ASC.HZK 크기 일치·글자 렌더링으로 검증.
+HZK_MIN_W, HZK_MAX_W, HZK_CHARS = 4, 64, 128
+SHOW_TYPES_NO_FONT = {0x00, 0x02}  # 변수 아이콘·애니메이션 아이콘 — icl 만 쓴다
+SHOW_TEXT, SHOW_DATA = 0x11, 0x10
+TOUCH_FONT_FUNCS = {0x00, 0x06}    # 숫자·문자 입력 키보드 — 입력값 표시에 폰트를 쓴다
+TOUCH_SYNC_RETURN, TOUCH_REC_LEN, TOUCH_SYNC_LEN = 0x08, 32, 48
+
+
+def hzk_end(width: int) -> int:
+    """ASCII HZK 에서 폭 width 까지 담은 앞부분의 길이."""
+    return sum(((w + 7) // 8) * 2 * w * HZK_CHARS for w in range(HZK_MIN_W, width + 1))
+
+
+HZK_FULL_LEN = hzk_end(HZK_MAX_W)  # 3,082,752
+
+
+def _all_show_records(show: bytes):
+    pages, first = 0, len(show)  # 페이지 표는 첫 레코드 앞에서 끝난다
+    while SHOW_PAGE_TABLE + 4 * pages + 4 <= first:
+        pos = SHOW_PAGE_TABLE + 4 * pages
+        if struct.unpack("<H", show[pos:pos + 2])[0]:
+            first = min(first, struct.unpack(">H", show[pos + 2:pos + 4])[0])
+        pages += 1
+    for p in range(pages):
+        for r, _ in show_records(show, p):
+            yield p, show[r:r + SHOW_RECORD_LEN]
+
+
+def touch_functions(touch: bytes):
+    """13TouchFile → {기능 코드: 개수}. 레코드 32 B (동기 반환 0x08 은 48 B), 끝 = FFFF."""
+    i, out = 0, {}
+    while i + 16 <= len(touch) and touch[i:i + 2] != b"\xff\xff":
+        if touch[i + 0x0E] != 0xFE:
+            raise DgusFormatError(f"13TouchFile @0x{i:x} 레코드 표식 0xFE 아님")
+        f = touch[i + 0x0F]
+        out[f] = out.get(f, 0) + 1
+        i += TOUCH_SYNC_LEN if f == TOUCH_SYNC_RETURN else TOUCH_REC_LEN
+    return out
+
+
+def ascii_font_usage(show: bytes, touch: bytes):
+    """화면이 ASCII 만 쓴다는 전제로 → (ASCII 폰트 ID 집합, 필요한 최대 폭, 문제 목록).
+
+    글자(0x11) 는 GBK 계열 인코딩(하위 니블 1~4)에서 ASCII 를 Font0 으로, 폭 X/2 로 그린다.
+    숫자(0x10) 는 Lib_ID 폰트를 폭 Font_X 로 그린다. 문제가 있으면 줄이면 안 된다.
+    """
+    ids, width, problems = set(), 0, []
+    for page, r in _all_show_records(show):
+        t = r[1]
+        if t == SHOW_TEXT:
+            enc = r[0x1C] & 0x0F
+            if not 1 <= enc <= 4:
+                problems.append(f"p{page} 글자 VP 0x{r[6] << 8 | r[7]:04x}: 인코딩 {enc} — ASCII 도 Font1 로 그린다")
+            ids.add(r[0x18])
+            width = max(width, r[0x1A] // 2)
+        elif t == SHOW_DATA:
+            ids.add(r[0x0E])
+            width = max(width, r[0x0F])
+        elif t not in SHOW_TYPES_NO_FONT:
+            problems.append(f"p{page} 표시 형식 0x{t:02x} — 폰트 사용 미분석")
+    used = set(touch_functions(touch)) & TOUCH_FONT_FUNCS
+    if used:
+        problems.append(f"터치 입력 키보드 기능 {sorted(used)} — 폰트 사용 미분석")
+    if width > HZK_MAX_W:
+        problems.append(f"필요 폭 {width} > HZK 최대 {HZK_MAX_W}")
+    return ids, width, problems
