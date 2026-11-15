@@ -38,6 +38,13 @@ cp "$PRJ" "$JFD/"
 ini="[FILES]"
 while read -r slot brand bin lcd; do
     case "$slot" in ''|\#*) continue ;; esac
+    if [ "$slot" = - ]; then   # LCD 세트만 (Flasher 슬롯 없음)
+        [ "$lcd" = - ] && { echo "LCD 전용  $brand  LCD 세트 없음 (-)"; continue; }
+        [ -f "$ROOT/$lcd/DWIN_SET/14ShowFile.bin" ] || { echo "LCD 세트 없음 ($brand): $lcd/DWIN_SET" >&2; exit 1; }
+        mkdir -p "$LCD/$brand"
+        rsync -rc --exclude .DS_Store --exclude "*.bak" "$ROOT/$lcd/DWIN_SET/" "$LCD/$brand/DWIN_SET/"
+        echo "LCD 전용  $brand  LCD ← $lcd"; continue
+    fi
     [[ "$slot" =~ ^[0-9]+$ ]] && [ "$slot" -ge 1 ] && [ "$slot" -le 99 ] || { echo "잘못된 슬롯: $slot" >&2; exit 1; }
     [ -f "$ROOT/$bin" ] || { echo "FW 보관본 없음 (슬롯 $slot $brand): $bin" >&2; exit 1; }
     [ "$lcd" = - ] || [ -f "$ROOT/$lcd/DWIN_SET/14ShowFile.bin" ] || { echo "LCD 세트 없음 (슬롯 $slot $brand): $lcd/DWIN_SET" >&2; exit 1; }
