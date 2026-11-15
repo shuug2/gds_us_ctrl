@@ -22,7 +22,7 @@
  * V31: 브랜드 매크로 없음 — 런타임에 LCD VP 0x1500(BRAND_VP)의 브랜드 번호로 판별한다
  *      (app_lcd_brand_refresh). fw.sh 가 -DBRAND=NONE 을 넘기고 CMake 는 매크로를 안 만든다.
  * 브랜드 번호표 정본 = fw/include/app_brand.h. 모델명 규칙도 app_brand. 설계 = docs/superpowers/specs/2026-11-15-lcd-brand-id-design.md
- * 업체 추가 = app_brand + 아래 #if 합에 한 항 + app_lcd.c BRAND_BUILD 에 #elif + hw/lcd/lcd_V30/README.md 표 한 줄.
+ * 업체 추가 = app_brand + 아래 #if 합 두 곳(V31 `!= 0`·V30 `!= 1`)에 한 항씩 + app_lcd.c BRAND_BUILD 에 #elif + hw/lcd/lcd_V30/README.md 표 한 줄.
  */
 #if defined(HW_V31)
 #if (defined(GDSONIC) + defined(DIAMT) + defined(POWERTECH) + defined(MOOHAN) \

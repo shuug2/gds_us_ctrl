@@ -132,7 +132,7 @@ void app_lcd_brand_refresh(void)
 #elif defined(MAKETECH)
 #define BRAND_BUILD BRAND_MAKETECH
 #else
-#define BRAND_BUILD BRAND_GDSONIC
+#error "app_lcd.c: BRAND_BUILD 매핑에 없는 브랜드 — app_lcd.c 에 #elif 추가"
 #endif
 
 /* 현재 브랜드 (V30 = 빌드 상수) */

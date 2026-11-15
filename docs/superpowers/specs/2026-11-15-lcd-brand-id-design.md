@@ -44,7 +44,7 @@
 
 ## 6. 설계 상세 (제안 — 빌더가 확정할 칸은 §7)
 
-### 6.1 브랜드 번호표 (정본 = `fw/include/define.h`, lcdset `brands.json` 은 같은 숫자)
+### 6.1 브랜드 번호표 (정본 = `fw/include/app_brand.h`, lcdset `brands.json` 은 같은 숫자)
 
 | 번호 | 브랜드 |
 |---|---|
