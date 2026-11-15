@@ -67,6 +67,7 @@
  *   3.0.x  CTRL    레거시-동등 기능셋. 번호를 동결한다(출하 기준점 표기, 사용자 결정).
  *   3.1.x  REMOTE  원격기 연동 티어.
  * 접미어 R = REMOTE 모델, ! = 인터록 극성 반전판 = 물리 인터록 없음(위 매크로, 최종). 현장에서 LCD로 구분한다.
+ *   ⚠ 3.1.1~: ! 는 **V30 보드에만** 붙는다 — V31(역시 인터록 없음)은 ! 없이 표시해 LCD 로 리비전을 구분한다(사용자 2026-11-15).
  *
  * ⚠ Modbus 소비자의 capability 판별은 이 문자열이 아니다 — 버전 레지스터는 없고
  *   0x31 CFG_CAP / 0x2A REMOTE_CAP이 그 일을 한다(app_modbus_core.h의 판정표).
@@ -78,10 +79,10 @@
  *   V3.0.0_260905    STD — 번호 동결, 날짜만 진행. IWDG · Modbus 무음 손상 fix 2건 ·
  *                    F-A 레지스터 확장(0x1E~0x29 · 0x2E~0x31) 포함
  *   V3.1.0R_260905   REMOTE 티어 첫 릴리즈 (tag hw-revA_fw-3.1.0) — 지금은 ! 판(11-15 최종 확정)
- *   V3.1.1R!_261115  V31 단일 바이너리(LCD VP 0x1500 브랜드) · MODEL_TYPE E-STOP 가드 (tag hw-revA_fw-stage-v31-brand)
+ *   V3.1.1R!_261115  (V31 보드는 V3.1.1R_261115) V31 단일 바이너리(LCD VP 0x1500 브랜드) · MODEL_TYPE E-STOP 가드 (tag hw-revA_fw-stage-v31-brand)
  */
 #if defined(MODEL_REMOTE)
-#  if REMOTE_EN_INTERLOCK_INVERTED
+#  if REMOTE_EN_INTERLOCK_INVERTED && defined(HW_V30)   /* ! = V30 보드 표식 — V31 은 빼서 LCD 로 리비전 구분(사용자 2026-11-15) */
 #define VERSION_MSG "V3.1.1R!_261115     "
 #  else
 #define VERSION_MSG "V3.1.1R_261115      "
