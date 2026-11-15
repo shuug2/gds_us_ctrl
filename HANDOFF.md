@@ -2,6 +2,18 @@
 
 > **2026-11-15 gdsonic 폴더 이전 완료**: 저장소 = `~/dev/work/gdsonic/gds_us_ctrl`. 현행 문서 경로 갱신, `fw/build-*` 17개(16변형 + build-trace) 클린 빌드 PASS, 메모리 옛 경로 없음. 남은 `dev/work/gds_` 는 MIGRATION §3 지난 기록(그대로 둠).
 
+> **🔚 세션 마감 (2026-11-15 밤, 허브 지시 — 작업은 downloader 세션으로 이동)**
+> - 상태: 출하판 **`V3.1.2R_261115`**(V30 4개) + **`V3.1.2R_261115_hw31`**(V31 1개, 보드·LCD 확인) 발행·push, 태그 `hw-revA_fw-stage-hold-runtime`(`da41e7a`). V31 벤치 보드 = 이 `_hw31` 보관본. `production/models.txt` = 3.1.2(슬롯 1 V31 단일 + LCD 전용 줄 moohan·diamt·powertech).
+> - 마감 커밋(미push일 수 있음 — `git status` 확인): `production/README.md` 3.1.2·단일 바이너리 흐름 정리(UART 업체 전환 문구 제거), `mkproduction.sh` J-Flash **V7.88 고정**(`/Applications/SEGGER/JLink_V788/`)·`.pex` 삭제, `gds_us_ctrl_f410.jflash` 단일 뱅크(OTP 뱅크 제거).
+> - **다음 할 일**:
+>   1. **J-Flash V7.88 설치**(사용자, 관리자 암호): `sudo installer -pkg ~/Downloads/JLink_MacOSX_V788_universal.pkg -target /` — 압축만 푼 실행은 rc 137 로 죽음.
+>   2. `production/mkproduction.sh` → `gdsonic/production/ctrl/` 재생성(슬롯 1 = V31 `_hw31` 단일, LCD = 번호 든 gdsonic·moohan·dongin). 생성물에 `.pex` 없음·`FLASHER.INI` 인덱스 0 하나 확인.
+>   3. 소스 묶음 `gds_us_ctrl_fw_src_V3.1.2R_261115_hw31.zip`(SHA `4dd9fb02…`, 재현 빌드 SHA OK) — 세션 scratchpad 에 만들어 둠(지워졌으면 `git archive da41e7a fw fw.sh` + `build_production.sh`(V31 단일)·`SHA256SUMS`(_hw31 .bin 줄)·README 로 재작성) → `gdsonic/production/ctrl/` 에 두고 옛 `V3.1.0R_260911` zip 정리.
+>   4. `gdsonic/production/HISTORY.md` 맨 위 한 줄 + 그 폴더 git 커밋.
+>   5. 벤치: Flasher 슬롯 1 PROG(V7.88 단일 뱅크 방식 실증 — 10-28 PASS 절차 기록이 없어 "OTP 뱅크 제거 + PEX 없음"은 허브 문구 해석) → moohan 세트 SD 로 업체 전환 1회(MH- 확인).
+>   6. 그 외: V30 보관본 V30 보드 첫 사용 확인 · PLC 문서(`comm_protocol_plc.md`) 가드·hold 반영 · LCD 핫플러그 로고 멈춤(고칠지 결정) · SWD 플래시 직후 RTU 무응답 1회(재현 시험) · PC11 순간값 확인.
+> - 사용자 결정 대기: 위 표(#5 SAMA·SONOSYS, #6 원격기 통보)와 LCD 핫플러그 수정 여부.
+
 > **🟡 사용자 결정 대기 (2026-11-15 정리)** — 정해지면 이 표에서 지우고 `../CLAUDE.md` §5·§6 에 옮긴다.
 >
 > | # | 결정 | 풀리는 일 |

@@ -8,7 +8,8 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
-JFLASH="${JFLASH:-$(ls -d /Applications/SEGGER/JLink*/JFlash.app/Contents/MacOS/JFlashExe 2>/dev/null | tail -1)}"
+# J-Flash V7.88 고정 — 구형 Flasher PLUS(FW V6.32g)에서 PASS 한 유일한 방식(2026-10-28, 결정 2026-11-15). V9.42 + Device.pex 는 단독 PROG 실패.
+JFLASH="${JFLASH:-/Applications/SEGGER/JLink_V788/JFlash.app/Contents/MacOS/JFlashExe}"
 PRJ="$HERE/gds_us_ctrl_f410.jflash"
 OUT="$ROOT/../production/ctrl"   # 결과물은 저장소 밖 gdsonic/production/ctrl (이력 = 그 폴더 git)
 CTRL_TOP="$OUT/controller"
@@ -60,6 +61,7 @@ while read -r slot brand bin lcd; do
     echo "슬롯 $slot  $brand  FW ← $bin  LCD ← $lcd"
 done < "$HERE/models.txt"
 printf '%s\r\n' "$ini" > "$CTRL/FLASHER.INI"
+rm -f "$CTRL"/*.pex   # PEX 삭제 — 구형 FW 가 STM32F4 Device.pex 를 못 돌린다
 
 (cd "$CTRL" && shasum -a 256 *.cfg *.dat FLASHER.INI > SHA256SUMS)
 (cd "$JFD" && shasum -a 256 *.hex *.jflash > SHA256SUMS)

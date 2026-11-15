@@ -41,19 +41,12 @@
   EndianMode = 0
   ChipName = "ST STM32F410RB"
 [FLASH]
-  NumBanks = 2
+  NumBanks = 1
 [FLASH0]
   aRangeSel[1] = 0-4
   BankName = "Program flash"
   BankSelMode = 1
   BaseAddr = 0x08000000
-[FLASH1]
-  BankName = "OTP"
-  BankSelMode = 0
-  BaseAddr = 0x1FFF7800
-  Disabled = 1
-  EndSector = 16
-  StartSector = 0
 [PRODUCTION]
   AutoPerformsDisconnect = 0
   AutoPerformsErase = 1
