@@ -9,7 +9,9 @@
 | 빌드 | `rm -rf fw/build fw/build-remote && MODEL=remote ./fw.sh` — `git status --porcelain` 빈 트리(`8bd0417`) |
 | 산출 | FLASH 67,192 B (51.26 %) · RAM 6,440 B (19.65 %) |
 | 대상 보드 | hw-revA · STM32F410RBT (128 KB) · DGUS 패널 자산 = 사용자 2026-09-13 수정본(저장소 `hw/lcd/dgus/` 와의 일치는 미확인, HANDOFF 열린 항목) |
-| 브랜드 | **GDSONIC** (BRAND 빌드 옵션 도입 2026-10-05 이전 보관본이라 파일명에 브랜드 없음) |
+| 브랜드 | **GDSONIC** = `gds_us_ctrl_v3.1.0R_260911.bin` (BRAND 빌드 옵션 도입 2026-10-05 이전 보관본이라 파일명에 브랜드 없음) · **MOOHAN** = `gds_us_ctrl_moohan_v3.1.0R_260911.bin` (2026-10-14 추가 — 아래) · **DIAMT** = `gds_us_ctrl_diamt_v3.1.0R_260911.bin` · **POWERTECH** = `gds_us_ctrl_powertech_v3.1.0R_260911.bin` (2026-10-18 추가 — 아래) |
+| MOOHAN 추가분 | main `9ff6225` 클린 빌드 `rm -rf fw/build-moohan-remote && BRAND=moohan MODEL=remote ./fw.sh` · FLASH 67,272 B · SHA `7ae37a43…` = 2026-10-13 보드 플래시 이미지(재플래시 불요) · 같은 트리 GDSONIC 클린 빌드 = `2a813206…`(위 보관본과 동일) · LCD 자산 `hw/lcd/lcd_V30/moohan/` · 태그·벤치 없음 |
+| DIAMT·POWERTECH 추가분 | main `9ff6225` 클린 빌드 `rm -rf fw/build-<brand>-remote && BRAND=<brand> MODEL=remote ./fw.sh` · DIAMT FLASH 67,192 B SHA `9566fad5…` · POWERTECH FLASH 67,280 B SHA `d071e033…` · 보드 미플래시(LCD 육안 미확인) · LCD 자산 DIAMT = `hw/lcd/lcd_V30/dongin/`(작업 중 세트), POWERTECH = 미반입 · 태그·벤치 없음 |
 | STD 빌드 | **미포함** — 이번 벤치 대상이 아니라 검증되지 않았다 |
 | `.elf` | 미포함 — 태그 체크아웃 후 클린 빌드로 재생성(빌드 경로가 박혀 해시 대조 대상도 아님) |
 
