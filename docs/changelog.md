@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [3.1.2] — 2026-11-15 · tag `hw-revA_fw-stage-hold-runtime` · 보관본 V30 `releases/V3.1.2R_261115/` 4개 + V31 `releases/V3.1.2R_261115_hw31/` 1개
+
+원격 hold 런 RUN TIME 제외. 버전 V30 `V3.1.2R!_261115` · V31 `V3.1.2R_261115` / CTRL `V3.0.0_261115`(무변경).
+
+### 2026-11-15 c — feat: 원격 hold 런(START=2)은 HAND RUN TIME ceiling 제외 — 벤치 PASS
+
+- 워치독이 무장된 hold 런은 HAND `limit_on_time` ceiling 에서 빠진다(LCD 터치 RUN 과 동형, 사용자 결정 — HMI 요청). `reg_run_limits_t.hold_run` ← `app_modbus_hold_active()`. 소스는 US_COMM 그대로라 TOUCH 전용 거동(STOP 대칭·swallow)은 따라오지 않는다.
+- 그대로: 탭 START=1 ceiling · energy/OVTIME · 30 s 안전 ceiling · hold 워치독 600 ms.
+- 벤치(V31 HAND, RTU 38400, Windows HMI): hold 7.1 s 유지·뗌 정지 84 ms · HMI 상한 10 s · 탭 START 500 ms 에 정지 · 케이블 탈거 → `[mb] hold wdt trip`.
+
 ## [3.1.1] — 2026-11-15 · tag `hw-revA_fw-stage-v31-brand` · 보관본 `releases/V3.1.1R_261115/`(`!` 는 폴더·파일명에 안 넣음)
 
 V31 보드 지원(USART2 mon·UART 부트로더 점프) · V31 단일 바이너리 + LCD 런타임 브랜드 · `MODEL_TYPE(0x18)` E-STOP 가드. 버전 V30 `V3.1.1R!_261115` · **V31 `V3.1.1R_261115`(`!` 는 V30 에만 — LCD 로 리비전 구분)** / CTRL `V3.0.0_261115`. 보관 = V30 `releases/V3.1.1R_261115/` 4개 + V31 `releases/V3.1.1R_261115_hw31/` 1개. 벤치(V31): 브랜드 B-1~B-3·B-5 PASS, 가드 CTRL/REMOTE PASS.
