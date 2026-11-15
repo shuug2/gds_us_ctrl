@@ -7,7 +7,7 @@
 | 폴더 | BRAND (`BRAND=<소문자> ./fw.sh`, 목록 `fw/include/define.h`) | 계열 | 상태 |
 |---|---|---|---|
 | `gdsonic/` | `GDSONIC` | 검은색 | 정본 기준 세트 |
-| `dongin/` | `DIAMT` | 검은색 | 작업 중 (bin·48.icl = gdsonic, 32.icl 만 다름) |
+| `dongin/` | `DIAMT` | 검은색 | 작업 중 (bin = gdsonic, 32.icl·48.icl 다름 — 빨간 레벨 바) |
 | `moohan/` | `MOOHAN` | 밝은색 | p3·p9 `LV_TIME` 바(0x1184~0x1197) 없음 — 의도 |
 | — | `POWERTECH`, `MAKETECH` | 검은색 | 미반입 |
 | — | `SAMA`, `SONOSYS` (신규) | 밝은색 | 미반입, 모델명 규칙 미정 |
@@ -17,7 +17,10 @@
 ## 규칙
 
 - **`DWIN_SET/` 은 평평하게 유지, 파일 개명 금지** — DWIN 은 파일명/번호로 로드한다. 패널 갱신 = 이 폴더를 그대로 SD(FAT32) 의 `DWIN_SET` 으로 복사하거나 DGUS 툴로 다운로드.
-- 편집은 DGUS 툴(`TFT/` 프로젝트)에서 하고, 작업 원본(`~/dev/work/gdsonic/gds_lcd_V30/<업체>/`) 폴더 전체를 여기에 동기화한다(`rsync -rc --delete --exclude .DS_Store`). 반영 전 p21/23/25/27 모드 아이콘 = 0x140c, 통신 버튼 = 0x140b 인지 확인.
+- 편집은 DGUS 툴(`TFT/` 프로젝트)에서 하고, 작업 원본(`~/dev/work/gdsonic/gds_lcd_V30/<업체>/`) 폴더 전체를 여기에 동기화한다(`rsync -rc --delete --exclude .DS_Store --exclude Thumbs.db`). 반영 전 p21/23/25/27 모드 아이콘 = 0x140c, 통신 버튼 = 0x140b 인지 확인.
+  - **반드시 미리보기 먼저**: `rsync -rcn --delete --exclude .DS_Store --exclude Thumbs.db --itemize-changes <작업원본>/<업체>/ <여기>/<업체>/ | grep -vE '^\.(d|f\.\.T)'` — 시각만 다른 줄을 빼고 남는 줄(내용 변경 `>fc`·신규 `>f+++`·삭제 `*deleting`)을 하나씩 확인한 뒤 실행.
+  - ⚠ **한글 파일명 함정**: `DWIN_SET/23_나눔스퀘어.bin` 은 작업 원본이 macOS NFD, 저장소(gdsonic·dongin)가 NFC 로 이름 바이트가 달라 rsync 가 다른 파일로 본다 → 미리보기에 `*deleting …23_나눔스퀘어.bin` 이 뜨고, 그대로 실행하면 **정본에서 폰트가 빠질 수 있다**. 이 Mac 의 `/usr/bin/rsync` 는 openrsync 라 `--iconv` 가 없다 — 내용이 같으면(`cmp`) `--exclude '23_*.bin'` 을 붙여 건너뛴다.
+  - ⚠ **역행 함정**: 작업 원본이 저장소보다 오래된 파일이 있으면 동기화가 되돌린다(예: 2026-11-15 이전 dongin 작업 원본의 `14ShowFile.bin` = p27 0x140b 구판, `48.icl` = 06-22 판). 미리보기의 `>fc` 줄은 양쪽 날짜·SHA 를 보고, 저장소 쪽이 의도된 수정본이면 작업 원본을 먼저 저장소 판으로 맞춘다. 2026-11-15 dongin 두 파일은 맞춤 완료.
 - 펌웨어가 쓰는 VP 는 `fw/include/dgus_lcd.h` 가 정본. 세트를 바꾸면 그 VP 바인딩이 유지되는지 확인.
 
 ## 파일 역할 (`DWIN_SET/`)
@@ -36,6 +39,7 @@
 
 ## 변경 이력
 
+- **2026-10-18 — gdsonic `48.icl` #56(시리얼 ON) 수정 + dongin 아이콘·배경 갱신.** gdsonic `48.icl` 의 56번 칸에 57번(시리얼 OFF)과 같은 그림이 들어 있어 ON/OFF 가 구분되지 않았다 — 56번 항목만 `48_icon_red/48.icl` 의 정상 항목(원본 `56_serial_on.jpg` 와 픽셀 동일, red/green 원본 동일)으로 교체하고 오프셋 표·크기(@0x08)·CRC(@0x06, 0x08~끝 Modbus CRC16 LE)를 재계산했다. 나머지 58개 항목은 바이트 동일. 작업 원본(`DWIN_SET/48.icl`·`48_icon_green/48.icl`)도 같은 파일로 교체. 같은 날 gdsonic 작업 원본의 `DWIN_SET/120.lib`(10-13 신규) + `TFT/` 6개(p01·03·05·23·25·27) 반영 — gdsonic 정본 = 작업 원본 일치. dongin: `32.icl` = 작업 원본 10-18 판, `48.icl` = `48_icon_red/48.icl`(빨간 레벨 바 #11, 정상 시리얼 ON #56), `32_bg_dongin/00_logo.jpg` 추가. dongin `14ShowFile.bin` 은 작업 원본(p27 0x140b 구판)을 쓰지 않고 저장소 수정본(= gdsonic) 유지.
 - **2026-10-04 — 3세트 `14ShowFile.bin` p27 모드 아이콘 VP 0x140b → 0x140c** (gdsonic/dongin @0x5747, moohan @0x51e7, 1바이트). 0x140b 는 터치 return 값(0 시리얼/1 이더넷/2 전환)이라 아이콘이 "마지막 누른 버튼"을 보여 재부팅 후 이더넷이어도 시리얼로 보였다(2026-09-13 증상). 펌웨어는 `DISP_COMM_MODE` 0x140c 에 쓴다. 구 `hw/lcd/dgus/` 의 2026-05-31 수정과 바이트 동일 — 패치 후 `gdsonic/DWIN_SET/14ShowFile.bin` == 구 저장소본. (구 README 는 이 수정을 "show-config auto-load" 로 적었으나 실제 차이는 VP 1바이트였다.)
 - **2026-10-13 b — moohan 재동기화**(22:40 내보내기): 13Touch·14Show + TFT 4개(p19/21/23/25 프로젝트) 갱신. 아이콘 0x140c·통신 버튼 0x140b·계약(LV_TIME 바·0x1100 키 없음 외 gdsonic 동일) 유지 확인.
 - **2026-10-13 — moohan 원본 폴더 전체 동기화**(작업 원본 10-13 22:17 내보내기). 툴에서 p27 아이콘 0x140c 반영 — gdsonic 툴 출력도 이 폴더와 바이트 동일해져 10-04 bin 패치가 툴 프로젝트에도 들어감. moohan 은 13Touch·14Show·22Config·48.icl 갱신 + 디자인 원본 `gds_lcd_v25_mh1.pn` 추가. 계약: gdsonic 대비 LV_TIME 바·p3/p9 0x1100 키 없음(의도) 외 동일.
