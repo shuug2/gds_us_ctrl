@@ -78,15 +78,16 @@
  *   V3.0.0_260905    STD — 번호 동결, 날짜만 진행. IWDG · Modbus 무음 손상 fix 2건 ·
  *                    F-A 레지스터 확장(0x1E~0x29 · 0x2E~0x31) 포함
  *   V3.1.0R_260905   REMOTE 티어 첫 릴리즈 (tag hw-revA_fw-3.1.0) — 지금은 ! 판(11-15 최종 확정)
+ *   V3.1.1R!_261115  V31 단일 바이너리(LCD VP 0x1500 브랜드) · MODEL_TYPE E-STOP 가드 (tag hw-revA_fw-stage-v31-brand)
  */
 #if defined(MODEL_REMOTE)
 #  if REMOTE_EN_INTERLOCK_INVERTED
-#define VERSION_MSG "V3.1.0R!_260911     "
+#define VERSION_MSG "V3.1.1R!_261115     "
 #  else
-#define VERSION_MSG "V3.1.0R_260911      "
+#define VERSION_MSG "V3.1.1R_261115      "
 #  endif
 #else
-#define VERSION_MSG "V3.0.0_260911       "
+#define VERSION_MSG "V3.0.0_261115       "
 #endif
 
 #endif /* DEFINE_H */

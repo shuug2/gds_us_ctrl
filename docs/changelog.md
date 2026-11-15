@@ -2,7 +2,11 @@
 
 ## [Unreleased]
 
-### 2026-11-15 b — feat/build/refactor: V31 런타임 브랜드(LCD VP 0x1500) — 빌드 축·보관 파일명·출하 흐름 — 벤치 대기
+## [3.1.1] — 2026-11-15 · tag `hw-revA_fw-stage-v31-brand` · 보관본 `releases/V3.1.1R_261115/`(`!` 는 폴더·파일명에 안 넣음)
+
+V31 보드 지원(USART2 mon·UART 부트로더 점프) · V31 단일 바이너리 + LCD 런타임 브랜드 · `MODEL_TYPE(0x18)` E-STOP 가드. 버전 `V3.1.1R!_261115` / CTRL `V3.0.0_261115`. 벤치(V31): 브랜드 B-1~B-3·B-5 PASS, 가드 CTRL/REMOTE PASS.
+
+### 2026-11-15 b — feat/build/refactor: V31 런타임 브랜드(LCD VP 0x1500) — 빌드 축·보관 파일명·출하 흐름 — 벤치 PASS
 
 - 모델명 규칙을 순수 모듈 `app_brand` 로 분리. V30 `.bin` 바이트 상이(거동 동일 — host 골든 90조합). FLASH: V30 gdsonic CTRL 67592 B(51.57%) · V31 REMOTE 68724 B(52.43%).
 - V31 은 BRAND 빌드 축이 없다: 빌드 폴더 `fw/build-v31-<model>/`, BRAND 지정 시 경고 후 무시, 수동 cmake 는 `-DBRAND=NONE`. 브랜드는 부팅·패널 재기동 때 LCD VP `0x1500` 번호(1~5, 그 외 → GDSONIC)로 판별, RAM 만. V30 은 그대로.
