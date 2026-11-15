@@ -41,12 +41,12 @@ set(MODEL "CTRL" CACHE STRING "제품 모델 — CTRL | REMOTE")
 add_compile_definitions(MODEL_${MODEL})
 
 # 보드 리비전 — 부저 핀·mon UART·부트로더 점프가 갈린다 (define.h 표). 값 검증 = define.h #error.
-#   cmake -B build-v31-gdsonic-ctrl -DHW_REV=V31 -G Ninja   또는   HW_REV=v31 ./fw.sh
+#   cmake -B build-v31-ctrl -DHW_REV=V31 -DBRAND=NONE -G Ninja   또는   HW_REV=v31 ./fw.sh
 set(HW_REV "V30" CACHE STRING "보드 리비전 — V30 | V31")
 add_compile_definitions(HW_${HW_REV})
 
 # 모델 브랜드(업체) — LCD MODEL_NAME 문자열만 갈린다 (app_lcd.c app_lcd_send_model_str).
-# 값 검증은 define.h의 #error가 한다 (오타 -DBRAND=MOOHN → 컴파일 실패). 업체 추가 = define.h + app_lcd.c.
+# 값 검증은 define.h의 #error가 한다 (오타 -DBRAND=MOOHN → 컴파일 실패). 업체 추가 = app_brand.h/app_brand.c (+ V30 용 define.h 목록).
 #   cmake -B build-v30-moohan-ctrl -DBRAND=MOOHAN -G Ninja   또는   BRAND=moohan ./fw.sh
 # V31 은 런타임 브랜드(LCD VP 0x1500) — fw.sh 가 -DBRAND=NONE 을 넘기면 매크로를 만들지 않는다.
 set(BRAND "GDSONIC" CACHE STRING "모델 브랜드 — GDSONIC | DIAMT | POWERTECH | MOOHAN | MAKETECH | NONE(V31)")

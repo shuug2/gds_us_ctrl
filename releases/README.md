@@ -9,7 +9,7 @@ releases/
 ├── README.md                              ← 이 문서 (버전 무관)
 └── V3.1.0R_260911/                        ← 버전 문자열 = 폴더명 (define.h VERSION_MSG, 공백·! 제거)
     ├── gds_us_ctrl_<brand>_v3.1.0R_260911.bin  ← REMOTE 앱. fw/build-v30-<brand>-remote/gds_us_ctrl.bin 을 이름만 바꿔 복사 (내용 동일)
-    ├── gds_us_ctrl_<brand>_hw31_v3.1.0R_260911.bin ← 같은 앱의 V31 보드용 (HW_REV=v31). V30 보드에 올리지 말 것
+    ├── gds_us_ctrl_hw31_v3.1.0R_260911.bin    ← 같은 앱의 V31 보드용 (HW_REV=v31, 브랜드 없음 — 파일 하나). V30 보드에 올리지 말 것
     ├── gds_us_ctrl_<brand>_v3.0.0_260911.bin   ← CTRL(옛 STD) 앱 (같이 검증됐을 때만)
     ├── gds_us_ctrl_<brand>_v3.1.0R_260911.elf  ← 심볼 (선택, SHA 대상 아님 — 빌드 경로가 박혀 재현 불가)
     ├── stm32f410.cfg                      ← fw/openocd/stm32f410.cfg 복사본 (어댑터 설정)
@@ -19,7 +19,7 @@ releases/
 
 - 폴더명은 **git 태그가 아니라 버전 문자열**이다 — ctrl 의 태그는 `hw-revA_fw-…` 형식이라 버전이 안 담긴다(루트 `CLAUDE.md` 태깅 규칙). 태그↔커밋은 각 버전 README 에 적는다.
 - 파일명에 **브랜드(업체, 소문자)** 를 넣는다(2026-10-05~) — 펌웨어는 브랜드별로 LCD 모델명만 다르고 버전 문자열은 같아서, 한 버전 폴더에 브랜드별 `.bin` 이 나란히 놓인다(`BRAND=moohan MODEL=remote ./fw.sh`). 그 전 보관본 `V3.1.0R_260911/` 은 브랜드 없는 이름이며 GDSONIC 이다.
-- **V31 보드용은 브랜드 뒤에 `_hw31`**(2026-10-27~). 부저·mon 핀이 달라 V30 보드에 올리면 mon 출력이 부저로 나간다. LCD 버전 문자열은 리비전과 무관하게 같으므로 **구분은 파일명·SHA 뿐**이다. V30 은 표식 없는 지금 이름.
+- **V31 보드용은 브랜드 없이 `gds_us_ctrl_hw31_v<버전>.bin` 하나**(2026-11-15~, 설계 `docs/superpowers/specs/2026-11-15-lcd-brand-id-design.md` §6.4 — V31 은 브랜드를 LCD VP `0x1500` 에서 런타임에 읽으므로 빌드 축에 BRAND 가 없다. 업체 전환 = 해당 업체 LCD 세트를 SD 로 굽는 것뿐, UART 재다운로드 없음. ⚠ 벤치 게이트(22_Config 적재) PASS 전제). 그 전 `gds_us_ctrl_<brand>_hw31_v<버전>.bin` 형식은 폐기. 부저·mon 핀이 달라 V30 보드에 올리면 mon 출력이 부저로 나간다. LCD 버전 문자열은 리비전과 무관하게 같으므로 **구분은 파일명·SHA 뿐**이다. V30 은 표식 없는 지금 이름.
 - 파일명에 **`!` 를 넣지 않는다.** 인터록 반전판(= 물리 인터록 없음) 여부·배포 가능 여부는 각 버전 README 의 배포 항목이 정본이다. LCD 에는 `!` 가 그대로 보인다(§5).
 
 🔴 **플래시는 반드시 이 폴더의 보관본으로.** 작업 트리 `fw/build*/` 는 태그 뒤 커밋·수정된 `define.h` 날짜가 섞여 들어가도 파일명이 같아 구분이 안 된다.
@@ -94,7 +94,7 @@ J-Link> q
 
 ## 4-E. UART 부트로더 (V31 보드만, 앱이 살아 있을 때)
 
-V31 보드는 모니터 헤더 **J3**(1 = 3.3 V 레일 — **연결 금지**, 2 = RX, 3 = TX, 4 = GND)로 ST-LINK 없이 굽는다. 파일은 **`_hw31` 이 붙은 것만**. 3.3 V TTL USB-UART 어댑터의 TX→J3.2, RX→J3.3, GND→J3.4.
+V31 보드는 모니터 헤더 **J3**(1 = 3.3 V 레일 — **연결 금지**, 2 = RX, 3 = TX, 4 = GND)로 ST-LINK 없이 굽는다. 파일은 **`_hw31` 이 붙은 것만**(브랜드 없는 한 개). 3.3 V TTL USB-UART 어댑터의 TX→J3.2, RX→J3.3, GND→J3.4.
 
 1. 매직 송신 (mon 설정 115200 8N1) — 앱이 표식을 남기고 리셋 → ROM 부트로더(USART2, **8E1**, 자동 보율)
    ```bash
@@ -106,8 +106,8 @@ V31 보드는 모니터 헤더 **J3**(1 = 3.3 V 레일 — **연결 금지**, 2 
    mon 에 `[boot] magic -> ROM bootloader` 한 줄이 나오고 이후 침묵하면 진입한 것이다.
 2. 굽기 (둘 중 하나)
    ```bash
-   STM32_Programmer_CLI -c port=COM5 br=115200 p=even -w gds_us_ctrl_<brand>_hw31_v<버전>.bin 0x08000000 -v
-   stm32flash -b 115200 -w gds_us_ctrl_<brand>_hw31_v<버전>.bin -v /dev/cu.usbserial-XXXX
+   STM32_Programmer_CLI -c port=COM5 br=115200 p=even -w gds_us_ctrl_hw31_v<버전>.bin 0x08000000 -v
+   stm32flash -b 115200 -w gds_us_ctrl_hw31_v<버전>.bin -v /dev/cu.usbserial-XXXX
    ```
 3. 판정: **전원 재투입** → §5 LCD 버전. (부트로더에서 그냥 리셋해도 표식은 이미 지워져 정상 부팅한다)
 
@@ -153,13 +153,17 @@ git status --porcelain                        # 비어 있어야 함 — 수정 
 grep VERSION_MSG fw/include/define.h          # 날짜가 태그 시점과 같은지 사람이 확인 (git describe 안 씀)
 V=V3.1.0R_260911                              # VERSION_MSG 에서 공백·! 제거
 mkdir -p releases/$V
-# 리비전·브랜드마다 반복. 빌드 폴더 = fw/build-<hw>-<brand>-<model>/ (2026-10-27 이전 태그는 옛 이름 build[-<brand>]-remote/)
-H=v30; B=gdsonic                              # H=v31 이면 파일명에 _hw31
-D=fw/build-$H-$B-remote; rm -rf $D            # 클린 빌드
-HW_REV=$H BRAND=$B MODEL=remote ./fw.sh
-T=; [ $H = v31 ] && T=_hw31
-cp $D/gds_us_ctrl.bin releases/$V/gds_us_ctrl_${B}${T}_v${V#V}.bin
-cp $D/gds_us_ctrl.elf releases/$V/gds_us_ctrl_${B}${T}_v${V#V}.elf   # 선택
+# V30: 브랜드마다 반복. 빌드 폴더 = fw/build-v30-<brand>-<model>/ (2026-10-27 이전 태그는 옛 이름 build[-<brand>]-remote/)
+B=gdsonic
+D=fw/build-v30-$B-remote; rm -rf $D           # 클린 빌드
+HW_REV=v30 BRAND=$B MODEL=remote ./fw.sh
+cp $D/gds_us_ctrl.bin releases/$V/gds_us_ctrl_${B}_v${V#V}.bin
+cp $D/gds_us_ctrl.elf releases/$V/gds_us_ctrl_${B}_v${V#V}.elf   # 선택
+# V31: 브랜드 축 없음 — 폴더 fw/build-v31-<model>/, 파일명 브랜드 없음(한 번만)
+D=fw/build-v31-remote; rm -rf $D
+HW_REV=v31 MODEL=remote ./fw.sh
+cp $D/gds_us_ctrl.bin releases/$V/gds_us_ctrl_hw31_v${V#V}.bin
+cp $D/gds_us_ctrl.elf releases/$V/gds_us_ctrl_hw31_v${V#V}.elf   # 선택
 # CTRL(옛 STD) 도 검증됐을 때만: MODEL=ctrl 로 같은 절차, 파일명 버전 = v3.0.0_<날짜>
 cp fw/openocd/stm32f410.cfg        releases/$V/
 cd releases/$V
@@ -188,7 +192,7 @@ shasum -a 256 *.bin stm32f410.cfg > SHA256SUMS
 | 태그 / 커밋 / 브랜치 | `hw-revA_fw-…` = `abc1234` (`main`) |
 | 툴체인 | arm-none-eabi-gcc 15.2.1 (Arm GNU Toolchain 15.2.Rel1) · cmake 4.3.1 · openocd 0.12.0 |
 | 빌드 | `rm -rf fw/build-v30-gdsonic-remote && MODEL=remote ./fw.sh` — `git status` 깨끗한 태그 트리 |
-| 대상 보드 | V30 (파일명 `_hw31` 이면 V31) · STM32F410RBT (128 KB) · LCD 자산 `hw/lcd/lcd_V30/<업체>/DWIN_SET/` 버전 |
+| 대상 보드 | V30 (파일명 `_hw31` 이면 V31 — 이 경우 빌드 폴더 `build-v31-remote`) · STM32F410RBT (128 KB) · LCD 자산 `hw/lcd/lcd_V30/<업체>/DWIN_SET/` 버전 |
 
 ## 이 폴더에서 바로 플래시
 openocd -f stm32f410.cfg -c "program gds_us_ctrl_v3.1.0R_260911.bin 0x08000000 verify reset exit"

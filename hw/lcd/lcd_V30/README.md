@@ -15,6 +15,8 @@
 
 업체 = BRAND 1:1. 업체가 늘면 폴더 하나 + 이 표 한 줄 + `../tools/brands.json` 한 줄.
 
+**V31 런타임 브랜드**: V31 펌웨어는 BRAND 빌드 없이 `22_Config.bin` 의 **VP `0x1500`**(파일 오프셋 = VP×2 = `0x2A00`)에 든 브랜드 번호를 부팅·패널 재기동 때 읽는다 — 1 GDSONIC · 2 MOOHAN · 3 DIAMT · 4 POWERTECH · 5 MAKETECH (0·미지·읽기 실패 → GDSONIC, 6 SAMA · 7 SONOSYS 는 예약). 정본 `fw/include/app_brand.h`, 설계 `docs/superpowers/specs/2026-11-15-lcd-brand-id-design.md`.
+
 **파생 규칙 (사용자 2026-11-15)**: 같은 색 계열은 기준 세트에서 파생한다. 검은색 = gdsonic + 로고(`32.icl` #0)·레벨 바(`48.icl` #11), 밝은색 = moohan + 로고. 파생 세트는 `../tools/lcdset.py build <업체>` 로 만들고 `check`·`report` 로 확인한다(`../tools/README.md`).
 
 ## 규칙
