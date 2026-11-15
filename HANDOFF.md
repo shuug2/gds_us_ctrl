@@ -18,7 +18,7 @@
 > - **#3 Flasher 슬롯** = V30 생산 종료, 슬롯 1 = gdsonic `_hw31` 하나(2~4 비움). 업체 전환 = downloader UART(J3) + 업체 LCD 세트 SD. 흐름 = `production/README.md` "다음 보관본부터" 절.
 > - **#4 Flasher 파일** = J-Flash **V7.88 단일 뱅크**(PEX 삭제) — 다음 보관본 묶음부터, `mkproduction.sh` JFLASH V7.88 고정 + 슬롯 1 단독 PROG 실기 1회.
 > - **#7 MODEL_TYPE 가드** = E-STOP 활성 중 Modbus `0x18` 쓰기 침묵 거부(가동 중 허용, LCD 경로 레거시). `fw/src/app_modbus.c:585` — ✅ **벤치 PASS 2026-11-15 (V31, PC11 점퍼)**: CTRL 빌드 = E-STOP 중 0x18 거부(read-back 2 유지)·0x17 반영·해제 후 0x18 반영 → 가드 단독 동작 확인. REMOTE 빌드 = E-STOP 중 원격 게이트(REMOTE_EN=4 DIS_ESTOP)가 0x17 포함 쓰기 전부 거부(가드는 그 안쪽 두 번째 층)·해제 후 0x18 반영. remote 통보 완료. 남음 = PLC 문서(`comm_protocol_plc.md`) 갱신 · 다음 보관본에 포함.
-> - **출하**: **V30 보드 = 기존 보관본 `V3.1.0R_260911` 그대로 출하** / **V31 보드 = 출하 보류**(가드 포함 새 보관본 대기) → ✅ 2026-11-15 새 보관본 `releases/V3.1.1R_261115_hw31/`(가드 포함, V31 보드 플래시·LCD 육안 확인) 발행 — 보류 조건 충족. V30 업체별 새 보관본 `releases/V3.1.1R_261115/` 도 발행(V30 보드 미확인). 배포 금지 해제·PC8 반전 최종은 그대로.
+> - **출하 (사용자 결정 2026-11-15)**: **V30 보드 = `releases/V3.1.1R_261115/`** 업체별 4개(`MODEL_TYPE` 가드 포함 — `V3.1.0R_260911` 은 가드가 없어 출하하지 않음. ⚠ V30 보드 실기 미확인, host 골든 근거 → 첫 사용 때 LCD `V3.1.1R!_261115` 육안) / **V31 보드 = `releases/V3.1.1R_261115_hw31/`**(V31 보드 플래시·LCD 육안 확인). 배포 금지 해제·PC8 반전 최종은 그대로.
 >
 > 결정 아님·실행 대기: lcd-echo 벤치 → 태그 `hw-revA_fw-stage-lcd-echo`. 위 `Branch` 줄 "origin 보다 2 앞"은 stale.
 
