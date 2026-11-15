@@ -113,8 +113,8 @@ bool app_modbus_remote_active(void)
            ((uint32_t)(sys_tick_get_ms() - s_remote_ms) < MB_REMOTE_HOLD_MS);
 }
 
-/* 게이트 FSM 1 tick. MODEL_STD 에는 인터록 스위치가 없다 — 게이트를 넣으면 스위치 미장착 유닛에서
- * 유선 Modbus HMI 의 설정 쓰기가 죽는다. 그래서 STD 는 게이트 자체를 두지 않고 상시 개방으로
+/* 게이트 FSM 1 tick. MODEL_CTRL 에는 인터록 스위치가 없다 — 게이트를 넣으면 스위치 미장착 유닛에서
+ * 유선 Modbus HMI 의 설정 쓰기가 죽는다. 그래서 CTRL 는 게이트 자체를 두지 않고 상시 개방으로
  * 고정한다. 이 #if 하나가 apply_writes 쪽 분기를 대신하므로 아래 게이트 검사는 두 모델 공통 코드로
  * 남는다 (분기 확산 방지). */
 static void remote_en_step(void)
@@ -151,7 +151,7 @@ static void remote_en_step(void)
 
     remote_en_fsm_step(&in, &s_ren);
 #else
-    s_ren.state = (uint8_t)REN_ENABLED;   /* STD: 인터록 없음 = 상시 통과 */
+    s_ren.state = (uint8_t)REN_ENABLED;   /* CTRL: 인터록 없음 = 상시 통과 */
 #endif
 }
 
@@ -241,11 +241,11 @@ static inline __attribute__((always_inline)) void mirror_stage_and_gate(const ap
      * read-back" 계약이 staging 에서 깨져 마스터가 자기가 쓴 값을 확인할 수 없다. */
     g_mb.holding[MB_REG_COMM_MODE] = cfg->comm_mode;
     g_mb.holding[MB_REG_CFG_STAT]  = s_stg.stat;
-    /* F-A capability — **모델 무관 무조건**. 게이트 CAP(0x2A)와 달리 STD 에서도
+    /* F-A capability — **모델 무관 무조건**. 게이트 CAP(0x2A)와 달리 CTRL 에서도
      * 실어야 한다: F-A 는 두 모델 모두에 있으므로, 안 실으면 소비 측이 F-A 를
-     * 지원하는 STD 유닛을 구 펌웨어로 오판한다. */
+     * 지원하는 CTRL 유닛을 구 펌웨어로 오판한다. */
     g_mb.holding[MB_REG_CFG_CAP]   = MB_REG_CFG_CAP_MAGIC;
-    /* 기능 비트맵 — **모델 무관 무조건**(spec §0 A: STD 도 hold 워치독을 갖는다).
+    /* 기능 비트맵 — **모델 무관 무조건**(spec §0 A: CTRL 도 hold 워치독을 갖는다).
      * 0x31 매직과 조합해 "신 펌웨어인데 비트 0" 이 확정적 미지원으로 읽힌다. */
     g_mb.holding[MB_REG_FEAT_CAP]  = MB_FEAT_HOLD_WDT;
     /* B-4 조작 미러 — 실제 모드 상태를 되비춘다(0/1 정규화는 접근자가 보장). */
@@ -260,7 +260,7 @@ static inline __attribute__((always_inline)) void mirror_stage_and_gate(const ap
      * 미러가 덮음" — MODEL_FREQ/TYPE 위와 동형). 0x2D는 예약이라 미러하지 않는다. 조건 없이 함수
      * 말미에 두어야 세 호출처(apply_config RTU 획득 / tick RTU / tick TCP)가 전부 커버되고, 링크
      * 전이의 mb_core_init 0-리셋도 같은 tick에 즉시 복원된다.
-     * ⚠ STD 는 미러하지 않는다 — 인터록이 없는데 CAP 매직을 실으면 원격기가 "이 컨트롤러는 게이트를
+     * ⚠ CTRL 는 미러하지 않는다 — 인터록이 없는데 CAP 매직을 실으면 원격기가 "이 컨트롤러는 게이트를
      * 지원한다"고 오판한다(A-7의 판별이 정확히 이것). 미러가 없으면 0x2A 는 원격기가 쓴 probe 값 P
      * 가 그대로 남아 구-펌웨어와 같은 판정을 받는다 = 의도한 동작. */
 #if defined(MODEL_REMOTE)
@@ -721,7 +721,7 @@ void app_modbus_init(void)
     remote_en_fsm_init();
     s_ren.state = (uint8_t)REN_DISABLED;
 #else
-    /* STD 는 FSM 을 아예 호출하지 않는다 — init 까지 빼야 링커가 순수 모듈을
+    /* CTRL 는 FSM 을 아예 호출하지 않는다 — init 까지 빼야 링커가 순수 모듈을
      * 통째로 버린다(호스트 테스트는 모델과 무관하게 계속 돈다). */
     s_ren.state = (uint8_t)REN_ENABLED;
 #endif

@@ -4,6 +4,7 @@
  * PA0(FREQ_IN)은 슬라이스 B에서 TIM5 AF로 설정 — 여기서 건드리지 않음. */
 #include "stm32f4xx_hal.h"
 #include "io.h"
+#include "define.h"   /* HW_V30 / HW_V31 — 부저 핀 */
 
 /* ---- 입력 핀 ---- */
 #define START_PORT      GPIOA
@@ -28,8 +29,13 @@
 #define REMOTE_EN_PIN   GPIO_PIN_8      /* 원격 활성화 물리 인터록 (요구사항 A) */
 
 /* ---- 출력 핀 ---- */
+#if defined(HW_V31)
+#define BUZZER_PORT     GPIOB
+#define BUZZER_PIN      GPIO_PIN_9      /* V31: PA2 는 mon TX(헤더 J3)로 넘어갔다 */
+#else
 #define BUZZER_PORT     GPIOA
 #define BUZZER_PIN      GPIO_PIN_2
+#endif
 #define OVLD_RLY_PORT   GPIOB
 #define OVLD_RLY_PIN    GPIO_PIN_3
 #define USOUT_PORT      GPIOB

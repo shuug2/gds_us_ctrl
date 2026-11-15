@@ -21,6 +21,8 @@
 #include "dgus_lcd.h"
 
 #include "io.h"
+#include "define.h"
+#include "boot_jump.h"
 
 extern void usart6_init(void);   /* drivers/usart.c */
 extern void tim11_init(void);    /* drivers/tim.c */
@@ -48,6 +50,9 @@ _Static_assert(IWDG_RELOAD <= IWDG_RLR_RL, "IWDG reload exceeds 12-bit RLR");
  * 죽었다면 IWDG 도 안 돈다.
  */
 int main(void) {
+#if defined(HW_V31)
+    boot_jump_check(); /* 반드시 첫 줄 — 아무것도 켜기 전, IWDG 기동 전 (boot_jump.h) */
+#endif
     HAL_Init();
     clock_init();      /* 96 MHz */
     usart6_init();     /* PC6/PC7 + 115200 8N1 */
@@ -92,6 +97,9 @@ int main(void) {
 
     while (1) {
         app_loop_iter();
+#if defined(HW_V31)
+        boot_jump_poll();           /* iter 경계 — mon 매직 수신 시 리셋 → 부트로더 */
+#endif
         HAL_IWDG_Refresh(&hiwdg);   /* 단일 kick 지점 — 블로킹 함수 내부 kick 금지 */
     }
 }

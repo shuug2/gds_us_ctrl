@@ -20,17 +20,27 @@
 #error "define.h: 모델 브랜드는 정확히 하나만 정의할 것 (cmake -DBRAND=GDSONIC|DIAMT|POWERTECH|MOOHAN|MAKETECH)"
 #endif
 
-/*--- 제품 모델(기능 티어) — cmake -DMODEL=STD|REMOTE 가 고른다 (CMakeLists.txt:35) ---
+/*--- 제품 모델(기능 티어) — cmake -DMODEL=CTRL|REMOTE 가 고른다 (CMakeLists.txt:40) ---
  * 브랜드와 직교하는 축이다. H/W는 hw-revA로 동일하고 F/W 기능셋으로만 갈린다.
- *   STD      기존 기능셋 — legacy 디바이스와 동일 (기본값)
+ *   CTRL     기존 기능셋 — legacy 디바이스와 동일 (기본값. 2026-10-27 전 이름 STD)
  *   REMOTE   + 원격기 연동 (활성화 게이트·확장 레지스터)
+ *   ⚠ 장비 타입 model_type 의 std(0=hand 1=multi 2=std, LCD STD 페이지)와는 별개다 — 그쪽은 그대로.
  *
  * 🔴 기능 분기 #if defined(MODEL_REMOTE)는 글루 호출부 한 곳에만 둘 것.
  *    순수 모듈(FSM·계산)은 항상 컴파일한다 — 그래야 fw/test host 스위트가
  *    모델과 무관하게 전부 돌고, 테스트 매트릭스가 2배로 늘지 않는다.
  */
-#if (defined(MODEL_STD) + defined(MODEL_REMOTE)) != 1
-#error "define.h: 제품 모델은 정확히 하나만 정의할 것 (cmake -DMODEL=STD|REMOTE)"
+#if (defined(MODEL_CTRL) + defined(MODEL_REMOTE)) != 1
+#error "define.h: 제품 모델은 정확히 하나만 정의할 것 (cmake -DMODEL=CTRL|REMOTE)"
+#endif
+
+/*--- 보드 리비전 — cmake -DHW_REV=V30|V31 이 고른다 (CMakeLists.txt:45, HW_REV=v31 ./fw.sh) ---
+ *   V30  기본. 부저 PA2, mon = USART6(PC6/PC7, RS-485 와 공유)
+ *   V31  부저 PB9, mon = USART2(PA2 TX/PA3 RX, 헤더 J3) + UART 부트로더 점프
+ * 🔴 V31 이미지를 V30 보드에 올리면 mon 출력이 부저 라인(PA2)으로 나간다 — 반대면 부저 무음.
+ *    핀 분기는 io.c(부저)·mon 드라이버·main.c 배선에만 둔다. */
+#if (defined(HW_V30) + defined(HW_V31)) != 1
+#error "define.h: 보드 리비전은 정확히 하나만 정의할 것 (cmake -DHW_REV=V30|V31)"
 #endif
 
 /*--- PC8 원격 인터록 극성 (REMOTE 전용) ---
@@ -49,13 +59,13 @@
  * 20자를 지킬 것. 길이는 app_lcd_render.c의 _Static_assert가 강제한다.
  *
  * 표기 규칙 — **번호 = 기능 티어, 날짜 = 그 빌드**. 같은 번호에 다른 날짜는 정상이다.
- *   3.0.x  STD     레거시-동등 기능셋. 번호를 동결한다(출하 기준점 표기, 사용자 결정).
+ *   3.0.x  CTRL    레거시-동등 기능셋. 번호를 동결한다(출하 기준점 표기, 사용자 결정).
  *   3.1.x  REMOTE  원격기 연동 티어.
  * 접미어 R = REMOTE 모델, ! = 인터록 극성 반전판 = 물리 인터록 없음(위 매크로, 최종). 현장에서 LCD로 구분한다.
  *
  * ⚠ Modbus 소비자의 capability 판별은 이 문자열이 아니다 — 버전 레지스터는 없고
  *   0x31 CFG_CAP / 0x2A REMOTE_CAP이 그 일을 한다(app_modbus_core.h의 판정표).
- *   그래서 STD 번호를 동결해도 소비자를 오도하지 않는다.
+ *   그래서 CTRL 번호를 동결해도 소비자를 오도하지 않는다.
  *
  * 이력:
  *   V2.9.1_250629    samd20 마지막 (define.h:31) — fix ethernet comm, fix error msg clear

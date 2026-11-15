@@ -36,18 +36,23 @@ add_compile_definitions(
 
 # 제품 모델(기능 티어) — H/W는 동일(hw-revA), F/W 기능셋으로만 갈린다.
 # 값 검증은 define.h의 #error가 한다 (오타 -DMODEL=REMOET → 컴파일 실패).
-#   cmake -B build-remote -DMODEL=REMOTE -G Ninja   또는   MODEL=remote ./fw.sh
-set(MODEL "STD" CACHE STRING "제품 모델 — STD | REMOTE")
+#   cmake -B build-v30-gdsonic-remote -DMODEL=REMOTE -G Ninja   또는   MODEL=remote ./fw.sh
+set(MODEL "CTRL" CACHE STRING "제품 모델 — CTRL | REMOTE")
 add_compile_definitions(MODEL_${MODEL})
+
+# 보드 리비전 — 부저 핀·mon UART·부트로더 점프가 갈린다 (define.h 표). 값 검증 = define.h #error.
+#   cmake -B build-v31-gdsonic-ctrl -DHW_REV=V31 -G Ninja   또는   HW_REV=v31 ./fw.sh
+set(HW_REV "V30" CACHE STRING "보드 리비전 — V30 | V31")
+add_compile_definitions(HW_${HW_REV})
 
 # 모델 브랜드(업체) — LCD MODEL_NAME 문자열만 갈린다 (app_lcd.c app_lcd_send_model_str).
 # 값 검증은 define.h의 #error가 한다 (오타 -DBRAND=MOOHN → 컴파일 실패). 업체 추가 = define.h + app_lcd.c.
-#   cmake -B build-moohan -DBRAND=MOOHAN -G Ninja   또는   BRAND=moohan ./fw.sh
+#   cmake -B build-v30-moohan-ctrl -DBRAND=MOOHAN -G Ninja   또는   BRAND=moohan ./fw.sh
 set(BRAND "GDSONIC" CACHE STRING "모델 브랜드 — GDSONIC | DIAMT | POWERTECH | MOOHAN | MAKETECH")
 add_compile_definitions(${BRAND})
 
 # 원격 활성화 게이트 우회 — 벤치 전용 탈출구. MODEL=REMOTE 빌드에서만 의미가 있다
-# (STD 빌드에는 게이트 코드 자체가 안 들어간다).
+# (CTRL 빌드에는 게이트 코드 자체가 안 들어간다).
 # 도입 당시(09-04)에는 PC8 원안 극성이라 REMOTE 빌드로 게이트를 켤 물리적 수단이 없었다.
 # 지금은 PC8 극성 반전이 최종(사용자 결정 2026-11-15, 실장 PCB 안 만듦)이라 게이트가 이미
 # 열려 이 옵션은 사실상 불필요하다 — 벤치 탈출구로만 남긴다.

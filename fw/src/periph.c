@@ -1,5 +1,6 @@
 /* fw/src/periph.c */
 #include "periph.h"
+#include "define.h"
 
 UART_HandleTypeDef huart6;
 UART_HandleTypeDef huart1;   /* USART1 — DGUS LCD (Stage A) */
@@ -10,3 +11,6 @@ TIM_HandleTypeDef  htim5;
 I2C_HandleTypeDef  hi2c1;   /* I2C1 — FM24C16B FRAM (Stage B) */
 ADC_HandleTypeDef  hadc1;   /* ADC1 — PB0/PB1 sense (Stage D regulation) */
 IWDG_HandleTypeDef hiwdg;   /* IWDG — 슈퍼루프 워치독 (main.c 기동/kick) */
+#if defined(HW_V31)
+UART_HandleTypeDef huart2;  /* USART2 — V31 mon 헤더 J3 (drivers/usart2.c) */
+#endif
