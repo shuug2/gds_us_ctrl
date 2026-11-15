@@ -162,7 +162,7 @@ void dgus_write_u32(uint16_t vp, uint32_t value);
 void dgus_write_bytes(uint16_t vp, const uint8_t *buf, uint8_t n);
 void dgus_write_u16_array(uint16_t vp, const uint16_t *buf, uint8_t n);
 void dgus_write_text(uint16_t vp, const char *txt);   /* 10 byte zero-pad */
-void dgus_read_var(uint8_t var);                      /* 0x83 RD len=1 word */
+void dgus_read_var(uint16_t var);                     /* 0x83 RD len=1 word */
 
 /* RX */
 bool dgus_rx_poll(dgus_frame_t *out);
@@ -170,7 +170,8 @@ bool dgus_is_echo(const dgus_frame_t *f);             /* cmd == 0x82 */
 
 /* Boot-time blocking RD helpers — DGUS cold-boot handshake (panel boots
  * slower than the MCU, so a one-shot set_page was lost and the panel stayed
- * on its power-on logo). NOT for the main loop. */
+ * on its power-on logo). NOT for the main loop — sole exception:
+ * app_lcd_brand_refresh() from handle_sys_pic_now (panel re-boot moment). */
 bool dgus_read_word(uint16_t addr, uint16_t *out_val, uint32_t timeout_ms);
 bool dgus_wait_ready(uint32_t timeout_ms);            /* poll SYS_PIC_NOW until panel UART answers */
 

@@ -9,10 +9,12 @@
 #   ./fw.sh reconfig   cmake 강제 재구성 후 빌드
 #
 # 보드 리비전은 HW_REV, 브랜드(업체)는 BRAND, 제품 모델(기능 티어)은 MODEL 환경변수로 고른다.
-# 빌드 디렉토리 = build-<hw_rev>-<brand>-<model>/ (기본값도 항상 이름에 넣는다).
+# 빌드 디렉토리 = V30 build-v30-<brand>-<model>/ · V31 build-v31-<model>/ (기본값도 항상 이름에 넣는다).
+# V31 은 브랜드를 LCD 세트(VP 0x1500)가 런타임에 정한다 — BRAND 를 줘도 무시한다.
 #   ./fw.sh flash                                       V30 GDSONIC CTRL   -> build-v30-gdsonic-ctrl/   (기본)
 #   MODEL=remote ./fw.sh flash                          V30 GDSONIC REMOTE -> build-v30-gdsonic-remote/
-#   HW_REV=v31 BRAND=moohan MODEL=remote ./fw.sh flash  V31 MOOHAN  REMOTE -> build-v31-moohan-remote/
+#   BRAND=moohan MODEL=remote ./fw.sh flash             V30 MOOHAN  REMOTE -> build-v30-moohan-remote/
+#   HW_REV=v31 MODEL=remote ./fw.sh flash               V31 REMOTE         -> build-v31-remote/
 # 리비전·브랜드·모델 목록 = fw/include/define.h (오타는 #error 로 터진다).
 #
 # 실체는 fw/CMakeLists.txt의 커스텀 타깃(:155 flash, :162 reset, :172 gdb).
@@ -31,6 +33,11 @@ hw_lc=$(lc "${HW_REV:-v30}");     hw_uc=$(uc "$hw_lc")
 brand_lc=$(lc "${BRAND:-gdsonic}"); brand_uc=$(uc "$brand_lc")
 model_lc=$(lc "${MODEL:-ctrl}");   model_uc=$(uc "$model_lc")
 build=build-$hw_lc-$brand_lc-$model_lc
+if [ "$hw_lc" = v31 ]; then
+    [ -n "${BRAND:-}" ] && echo "[fw.sh] V31 은 BRAND 를 LCD 세트가 정한다 — BRAND=$BRAND 무시"
+    brand_uc=NONE
+    build=build-v31-$model_lc
+fi
 
 # 함정 2: CMakeLists.txt:123의 file(GLOB src/*.c drivers/*.c)는 configure 타임에 고정된다.
 # .c가 추가/삭제된 브랜치로 전환한 뒤 증분 빌드만 하면 새 파일이 링크되지 않아

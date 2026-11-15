@@ -71,15 +71,15 @@ gds_us_ctrl/
 ./fw.sh test       # host 테스트 (fw/test)
 ./fw.sh gdb        # 빌드 + GDB 접속
 ./fw.sh reconfig   # cmake 강제 재구성 후 빌드
-HW_REV=v31 BRAND=moohan MODEL=remote ./fw.sh flash   # → fw/build-v31-moohan-remote/
+HW_REV=v31 MODEL=remote ./fw.sh flash                 # → fw/build-v31-remote/ (V31 은 BRAND 축 없음)
 ```
 
-빌드 축 3개 = 환경변수(대소문자 무관, 목록·검증 = `fw/include/define.h` `#error`). 빌드 폴더 = **`fw/build-<hw_rev>-<brand>-<model>/`**(기본값도 항상 이름에 들어간다, 2026-10-27~):
+빌드 축 3개 = 환경변수(대소문자 무관, 목록·검증 = `fw/include/define.h` `#error`). 빌드 폴더 = V30 **`fw/build-v30-<brand>-<model>/`**(기본값도 항상 이름에 들어간다, 2026-10-27~), V31 **`fw/build-v31-<model>/`**(브랜드 없음, 2026-11-15~):
 
 | 변수 | 값 (첫째가 기본) | 갈리는 것 |
 |---|---|---|
 | `HW_REV` | `v30` · `v31` | 부저 핀(PA2/PB9) · mon UART(USART6/USART2 헤더 J3) · V31 UART 부트로더 점프. 🔴 V31 이미지를 V30 보드에 올리면 mon 출력이 부저로 나간다 |
-| `BRAND` | `gdsonic` · `moohan` · `diamt` · `powertech` · `maketech` | LCD 모델명 문자열 |
+| `BRAND` | `gdsonic` · `moohan` · `diamt` · `powertech` · `maketech` | LCD 모델명 문자열. **V30 전용** — V31 은 런타임에 LCD VP `0x1500` 의 번호(1~5, 그 외 → GDSONIC)로 판별하고(부팅·패널 재기동 때 읽음, RAM 만) V31 에 BRAND 를 주면 경고 후 무시. 수동 cmake 는 `-DBRAND=NONE`. 번호표 정본 `fw/include/app_brand.h`, 설계 `docs/superpowers/specs/2026-11-15-lcd-brand-id-design.md` |
 | `MODEL` | `ctrl` · `remote` | 기능 티어 (CTRL = 옛 이름 STD, 2026-10-27 개명. 장비 타입 `model_type` 의 std 와는 별개) |
 
 스크립트가 대신 피해주는 함정 2개 — **수동으로 cmake를 부를 땐 직접 챙겨야 한다**:
@@ -132,7 +132,7 @@ env -u STM32_TOOLCHAIN cmake --build $B --target flash     # 플래시
 
 ### 양산 바이너리 보관 (`releases/`, 2026-09-13 — 원격기 `gds_us_remote` 와 공통 규칙)
 
-HW 벤치 PASS 로 태그가 붙는 빌드는 **저장소 안 `releases/<버전문자열>/`** 에 보관한다. 버전문자열 = `define.h` 의 `VERSION_MSG` 에서 공백을 뗀 것(`V3.1.0R_260911`). 파일명 규칙 = **`gds_us_ctrl_<brand>_v<버전>.bin`**(2026-10-05~, 브랜드 소문자 — 같은 버전 폴더에 브랜드별 .bin 을 나란히. 그 전 보관본 `V3.1.0R_260911/` 은 브랜드 없는 이름 = GDSONIC) — 극성 반전 표식 `!` 는 파일명에 넣지 않고(`gds_us_ctrl_gdsonic_v3.1.0R_260911.bin`) **README 에 "인터록 반전판(`REMOTE_EN_INTERLOCK_INVERTED 1`) = 물리 인터록 없음" 을 명기**한다(사용자 결정 ①-b; 배포 금지는 2026-11-15 해제). CTRL 빌드가 함께 검증됐으면 같은 폴더에 `gds_us_ctrl_gdsonic_v3.0.0_260911.bin` 로 나란히. **V31 보드용은 `_hw31` 을 브랜드 뒤에 넣는다**(`gds_us_ctrl_moohan_hw31_v<버전>.bin`, 2026-10-27~) — V30 보드에 올리면 mon 출력이 부저로 나가므로 파일명으로 구분한다. V30 은 표식 없는 지금 이름 그대로. LCD 버전 문자열은 리비전과 무관(같음) — 구분은 파일명·SHA 로만.
+HW 벤치 PASS 로 태그가 붙는 빌드는 **저장소 안 `releases/<버전문자열>/`** 에 보관한다. 버전문자열 = `define.h` 의 `VERSION_MSG` 에서 공백을 뗀 것(`V3.1.0R_260911`). 파일명 규칙 = **`gds_us_ctrl_<brand>_v<버전>.bin`**(2026-10-05~, 브랜드 소문자 — 같은 버전 폴더에 브랜드별 .bin 을 나란히. 그 전 보관본 `V3.1.0R_260911/` 은 브랜드 없는 이름 = GDSONIC) — 극성 반전 표식 `!` 는 파일명에 넣지 않고(`gds_us_ctrl_gdsonic_v3.1.0R_260911.bin`) **README 에 "인터록 반전판(`REMOTE_EN_INTERLOCK_INVERTED 1`) = 물리 인터록 없음" 을 명기**한다(사용자 결정 ①-b; 배포 금지는 2026-11-15 해제). CTRL 빌드가 함께 검증됐으면 같은 폴더에 `gds_us_ctrl_gdsonic_v3.0.0_260911.bin` 로 나란히. **V31 보드용은 브랜드 없이 `gds_us_ctrl_hw31_v<버전>.bin` 하나**(2026-11-15~, 브랜드는 런타임 LCD VP 0x1500 — 업체 전환 = LCD 세트 SD 만; 벤치 게이트 PASS 전제, 이전 `gds_us_ctrl_<brand>_hw31_` 형식 폐기) — V30 보드에 올리면 mon 출력이 부저로 나가므로 파일명으로 구분한다. V30 은 표식 없는 지금 이름 그대로. LCD 버전 문자열은 리비전과 무관(같음) — 구분은 파일명·SHA 로만.
 
 **공통 플래시 가이드·절차 명령·버전 README 템플릿 = `releases/README.md`**(원격기 `gds_us_remote/releases/README.md` 와 같은 목차). 폴더 구성: `.bin`(플래시에 쓰는 것) · `.elf`(심볼, 선택) · `stm32f410.cfg` 복사본 · `SHA256SUMS` · `README.md`(태그 · 커밋 · `arm-none-eabi-gcc --version` · 빌드 명령 `MODEL=remote ./fw.sh` · 플래시 명령 `./fw.sh flash` 또는 openocd 한 줄 · 재현 확인 `shasum -a 256 -c SHA256SUMS` · 이 릴리스에 든 것 · **배포 금지 여부**).
 

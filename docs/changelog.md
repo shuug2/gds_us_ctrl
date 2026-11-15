@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### 2026-11-15 b — feat/build/refactor: V31 런타임 브랜드(LCD VP 0x1500) — 빌드 축·보관 파일명·출하 흐름 — 벤치 대기
+
+- 모델명 규칙을 순수 모듈 `app_brand` 로 분리. V30 `.bin` 바이트 상이(거동 동일 — host 골든 90조합). FLASH: V30 gdsonic CTRL 67592 B(51.57%) · V31 REMOTE 68724 B(52.43%).
+- V31 은 BRAND 빌드 축이 없다: 빌드 폴더 `fw/build-v31-<model>/`, BRAND 지정 시 경고 후 무시, 수동 cmake 는 `-DBRAND=NONE`. 브랜드는 부팅·패널 재기동 때 LCD VP `0x1500` 번호(1~5, 그 외 → GDSONIC)로 판별, RAM 만. V30 은 그대로.
+- V31 보관 파일명 = `gds_us_ctrl_hw31_v<버전>.bin` 하나(브랜드 없음). V30 `gds_us_ctrl_<brand>_v<버전>.bin` 무변경. `production/README.md` 의 업체별 `_hw31` UART 다운로드 흐름은 **벤치 게이트(22_Config 적재) PASS 전제**로 대체(업체 전환 = LCD 세트 SD 만); downloader 계약 변경은 다음 보관본에서 합의.
+- 문서·주석 정정: `releases/README.md` 절차(V31 빌드 폴더·파일명), `fw/CMakeLists.txt`·`define.h` 주석(번호표 정본 = `app_brand.h`). 설계 = `docs/superpowers/specs/2026-11-15-lcd-brand-id-design.md`.
+
 ### 2026-11-15 — decision: PC8 인터록 극성 반전 = 최종 상태, 배포 금지 해제
 
 - **사용자 결정**: PC8 인터록 실장 PCB 는 만들지 않는다. `REMOTE_EN_INTERLOCK_INVERTED 1`(풀업 HIGH=허용)이 최종. 위험(물리 인터록·단선 fail-safe 없음, 원격 START 탭 한 번)을 수용하고 배포 금지를 해제.

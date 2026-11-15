@@ -37,7 +37,7 @@ extern void board_init(void);    /* src/board.c */
  * 초과한다(spec §2.2.2 병리적 케이스 ≈6.3 s. app.c 의 DGUS drain 은 무한 루프라
  * SAVE 연타만으로도 2회 커밋 ≈3.9 s > 3.40 s@47 kHz). FRAM 이 죽은 시점에 이미
  * degraded(전 필드 기본값 폴백) 이므로 **리셋 1회를 수용**한다(spec §5).
- * 기동은 슈퍼루프 진입 직전 — 부팅 체인(최악 12 s)은 감시 밖(전 구간 타임아웃 유계).
+ * 기동은 슈퍼루프 진입 직전 — 부팅 체인(최악 12 s +0.36 s V31 브랜드 읽기(LCD 무응답 시))은 감시 밖(전 구간 타임아웃 유계).
  * spec docs/superpowers/specs/2026-09-04-iwdg-watchdog-design.md §3 */
 #define IWDG_PRESC    IWDG_PRESCALER_256
 #define IWDG_RELOAD   624u

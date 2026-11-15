@@ -442,6 +442,7 @@ static inline __attribute__((always_inline)) void handle_sys_pic_now(lcd_app_sta
         app_lcd_hook_us_command(US_CMD_RUN_RELEASE);
         s_run_key_down = 0u;   /* panel reset: the release edge never arrives */
         app_lcd_var_init();
+        app_lcd_brand_refresh();
         app_lcd_send_model_str(cfg->model_freq, cfg->model_type);
         app_lcd_init_mode(cfg);
     }

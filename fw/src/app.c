@@ -60,6 +60,7 @@ void app_init(void)
 #endif
     bool lcd_up = dgus_wait_ready(DGUS_BOOT_READY_TIMEOUT_MS);
     mon_printf("[lcd] ready=%u\r\n", (unsigned)lcd_up);
+    app_lcd_brand_refresh();
     dgus_set_page(LCD_LOGO);          /* page 0 — logo */
     sys_tick_delay_ms(DGUS_LOGO_DWELL_MS);
 
