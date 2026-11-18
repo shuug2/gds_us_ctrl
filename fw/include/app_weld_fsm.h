@@ -56,6 +56,7 @@ typedef struct {
     uint8_t  cycle_done;   /* 1 = CYL2 completion edge: glue does work_cnt++ */
     uint8_t  weld_fault;   /* 1 = WELD backstop abort 엣지: 글루가 fault hook 호출 */
     uint8_t  amp_change;   /* 1 = stage 0→1 전환 엣지: 글루가 set_amp 재호출 (US_CYCLE 유지) */
+    uint8_t  auto_seek;    /* 1 = HOLD 종료 0.4 s 뒤 (초음파 동작 ≤ 0.10 s 사이클): 글루가 SEEK 1회 (std 모드만) */
 } weld_out_t;
 
 void weld_fsm_init(void);                                 /* reset to READY (boot) */

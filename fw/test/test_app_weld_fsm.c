@@ -708,6 +708,100 @@ static void test_run_mode_latched_at_cycle_start(void)
     CHECK_EQ(done, 1);                        /* dn_edge 없이 완주 = DELAY 래치 유지 */
 }
 
+/* 자동 SEEK: 한 사이클(+지연 여유) 동안 auto_seek 횟수, *at = SEEK 가 HOLD→CYL2 전이
+ * step 의 정확히 40 step(0.4 s) 뒤인지. dn_edge 매 step 공급(TRIGGER CYL1 통과용).
+ * energy_step>0 이면 WELD 중 curr_energy 누산. abort_mode 1 = HOLD 중 abort,
+ * 2 = HOLD 종료 5 step 뒤(지연 대기 중) abort. */
+static int auto_seek_cycle(weld_in_t in, uint32_t energy_step, int abort_mode, int *at)
+{
+    weld_fsm_init();
+    int seeks = 0, cyl2_step = -1;
+    *at = 0;
+    in.start = 1u;
+    for (int i = 0; i < 2000; i++) {
+        weld_out_t out;
+        in.dn_edge = 1u;
+        weld_fsm_step(&in, &out);
+        in.start = 0u;
+        in.abort = 0u;
+        if (out.run_status == WELD_CYL2 && cyl2_step < 0) { cyl2_step = i; }
+        if (out.auto_seek) { seeks++; *at = (cyl2_step >= 0 && i - cyl2_step == 40); }
+        if (out.run_status == WELD_WELD) { in.curr_energy += energy_step; }
+        if (abort_mode == 1 && out.run_status == WELD_HOLD) { in.abort = 1u; }
+        if (abort_mode == 2 && cyl2_step >= 0 && i - cyl2_step == 5) { in.abort = 1u; }
+    }
+    return seeks;
+}
+
+static void test_auto_seek_delay_boundary(void)
+{
+    weld_in_t in = { .limit_delay_time1=2u, .limit_delay_time2=10u,
+                     .limit_delay_time3=3u, .output_power=100u };
+    int at;
+    CHECK_EQ(auto_seek_cycle(in, 0u, 0, &at), 1);   /* 0.10 s -> SEEK 1회 */
+    CHECK_EQ(at, 1);                                /* HOLD 종료(CYL2 진입) step */
+    in.limit_delay_time2 = 11u;
+    CHECK_EQ(auto_seek_cycle(in, 0u, 0, &at), 0);   /* 0.11 s -> 없음 */
+    in.limit_delay_time2 = 1u;
+    CHECK_EQ(auto_seek_cycle(in, 0u, 0, &at), 1);   /* comp quirk(7 tick 점유)여도 설정값 기준 */
+}
+
+static void test_auto_seek_trigger_uses_trigger_time(void)
+{
+    weld_in_t in = { .run_mode=1u, .limit_delay_time1=2u, .limit_delay_time2=50u,
+                     .limit_trigger_time2=10u, .limit_trigger_time3=3u, .output_power=100u };
+    int at;
+    CHECK_EQ(auto_seek_cycle(in, 0u, 0, &at), 1);
+    in.limit_trigger_time2 = 11u; in.limit_delay_time2 = 5u;   /* DELAY 값은 무관 */
+    CHECK_EQ(auto_seek_cycle(in, 0u, 0, &at), 0);
+}
+
+static void test_auto_seek_multi_uses_time2(void)
+{
+    weld_in_t in = { .limit_delay_time1=2u, .limit_delay_time2=5u, .limit_delay_time3=3u,
+                     .output_power=100u, .multi_ctrl=1u, .limit_mo_out1=60u, .limit_mo_out2=80u,
+                     .limit_mo_time1=5u, .limit_mo_time2=10u };
+    int at;
+    CHECK_EQ(auto_seek_cycle(in, 0u, 0, &at), 1);
+    in.limit_mo_time2 = 11u;                                    /* ldt2=5 는 무관 */
+    CHECK_EQ(auto_seek_cycle(in, 0u, 0, &at), 0);
+}
+
+static void test_auto_seek_energy_uses_measured(void)
+{
+    weld_in_t in = { .limit_delay_time1=2u, .limit_delay_time2=5u, .limit_delay_time3=3u,
+                     .output_power=100u, .energy_ctrl=1u, .limit_energy=50u,
+                     .limit_out_time=10u };
+    int at;
+    CHECK_EQ(auto_seek_cycle(in, 10u, 0, &at), 1);   /* 수 tick 만에 에너지 도달 */
+    CHECK_EQ(auto_seek_cycle(in, 2u, 0, &at), 0);    /* ~26 tick -> 0.10 s 초과 */
+}
+
+static void test_auto_seek_not_on_abort(void)
+{
+    weld_in_t in = { .limit_delay_time1=2u, .limit_delay_time2=5u,
+                     .limit_delay_time3=20u, .output_power=100u };
+    int at;
+    CHECK_EQ(auto_seek_cycle(in, 0u, 1, &at), 0);    /* HOLD 중 abort -> SEEK 없음 */
+}
+
+static void test_auto_seek_cancelled_by_abort_in_delay(void)
+{
+    weld_in_t in = { .limit_delay_time1=50u, .limit_delay_time2=5u,
+                     .limit_delay_time3=3u, .output_power=100u };
+    int at;
+    CHECK_EQ(auto_seek_cycle(in, 0u, 2, &at), 0);    /* 0.4 s 대기 중 abort -> 취소 */
+}
+
+static void test_auto_seek_survives_short_cyl2(void)
+{
+    weld_in_t in = { .limit_delay_time1=2u, .limit_delay_time2=5u,
+                     .limit_delay_time3=3u, .output_power=100u };
+    int at;
+    CHECK_EQ(auto_seek_cycle(in, 0u, 0, &at), 1);    /* CYL2(0.02 s)가 먼저 끝나 READY 여도 */
+    CHECK_EQ(at, 1);                                 /* 여전히 HOLD 종료 0.4 s 뒤 */
+}
+
 int main(void)
 {
     test_init_ready();
@@ -740,6 +834,13 @@ int main(void)
     test_trigger_full_cycle();
     test_trigger_stale_dn_cleared_at_start();
     test_run_mode_latched_at_cycle_start();
+    test_auto_seek_delay_boundary();
+    test_auto_seek_trigger_uses_trigger_time();
+    test_auto_seek_multi_uses_time2();
+    test_auto_seek_energy_uses_measured();
+    test_auto_seek_not_on_abort();
+    test_auto_seek_cancelled_by_abort_in_delay();
+    test_auto_seek_survives_short_cyl2();
     if (failures) { printf("test_app_weld_fsm: %d FAILED\n", failures); return 1; }
     printf("test_app_weld_fsm: all passed\n");
     return 0;

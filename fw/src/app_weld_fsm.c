@@ -14,6 +14,13 @@ static uint8_t  s_latched_energy;   /* H1: WELD 진입 시 energy_ctrl 스냅샷
 static uint8_t  s_run_mode;         /* 사이클 시작 시 래치 (모드 혼합 방지, slice4) */
 static uint8_t  s_dn_pressed;       /* legacy re_dn_pressed 재현 (내부 래치) */
 static uint8_t  s_up_pressed;       /* legacy re_up_pressed 재현 */
+static uint16_t s_weld_set_time;    /* WELD 진입 시 설정 시간 스냅샷 (자동 SEEK 판정) */
+static uint16_t s_weld_ticks;       /* WELD 점유 tick 실측 (energy 모드 자동 SEEK 판정) */
+static uint16_t s_seek_delay;       /* HOLD 종료 후 자동 SEEK 까지 남은 tick (0 = 대기 없음) */
+
+/* 초음파 동작 ≤ 0.10 s 사이클은 HOLD 종료 즉시 SEEK 1회 (사용자 2026-11-18, legacy 없음) */
+#define WELD_AUTO_SEEK_MAX_TICKS  10u
+#define WELD_AUTO_SEEK_DELAY_TICKS 40u   /* HOLD 종료 → SEEK 0.4 s (사용자 2026-11-18) */
 
 /* weld FSM 초기화 */
 void weld_fsm_init(void)
@@ -30,6 +37,9 @@ void weld_fsm_init(void)
     s_run_mode       = 0u;
     s_dn_pressed     = 0u;
     s_up_pressed     = 0u;
+    s_weld_set_time  = 0u;
+    s_weld_ticks     = 0u;
+    s_seek_delay     = 0u;
 }
 
 /* 현재 weld 상태 반환 */
@@ -96,6 +106,8 @@ static void enter_weld(const weld_in_t *in, uint16_t weld_time)
     s_latched_energy = in->energy_ctrl;
     s_multi_stage    = 0u;               /* H1 카운터 리셋 */
     s_multi_elapsed  = 0u;
+    s_weld_set_time  = in->multi_ctrl ? in->limit_mo_time2 : weld_time;  /* multi = 총 길이 */
+    s_weld_ticks     = 0u;
     /* comp_time은 항상 weld_time에서 유도 (진폭 보정; energy 모드에서도 적용 —
      * samd20 main.c:1546-1547은 energy_ctrl 무관). slice2 §3.2. */
     s_comp_time = (weld_time > 6u) ? WELD_COMP_FULL : weld_time;
@@ -244,6 +256,17 @@ void weld_fsm_step(const weld_in_t *in, weld_out_t *out)
 {
     memset(out, 0, sizeof(*out));
 
+    /* 자동 SEEK 지연: abort(E-stop/overload/에러)면 취소, 아니면 만료 step 에 1회 발행.
+     * 상태와 무관하게 센다 — CYL2 가 지연 전에 끝나 READY 로 돌아가도 유지. */
+    if (in->abort != 0u) {
+        s_seek_delay = 0u;
+    } else if (s_seek_delay > 0u) {
+        s_seek_delay--;
+        if (s_seek_delay == 0u) {
+            out->auto_seek = 1u;
+        }
+    }
+
     /* abort (slice4 §3.4): 임의 상태 -> SOL OFF + READY. WELD 중이면 US 정지 엣지
      * (글루 US_CYCLE RUN_RELEASE — slice-c/d force-stop과 이중 안전). work_cnt 미발행.
      * legacy: E-stop main.c:1415 / SYS_ERROR 1664-1665. */
@@ -278,6 +301,9 @@ void weld_fsm_step(const weld_in_t *in, weld_out_t *out)
         break;
 
     case WELD_WELD:
+        if (s_weld_ticks < 0xFFFFu) {
+            s_weld_ticks++;
+        }
         weld_step_weld(in, out);
         break;
 
@@ -285,6 +311,12 @@ void weld_fsm_step(const weld_in_t *in, weld_out_t *out)
         if (s_f_status_start == 0u) {
             s_f_status_start = 1u;
         } else if (s_temp_time == 0u) {
+            /* energy 모드는 설정 시간이 없어 실측, 그 외(DELAY/TRIGGER/multi)는 설정 시간 */
+            uint16_t us_time = (s_latched_energy && !s_latched_multi) ? s_weld_ticks
+                                                                     : s_weld_set_time;
+            if (us_time <= WELD_AUTO_SEEK_MAX_TICKS) {
+                s_seek_delay = WELD_AUTO_SEEK_DELAY_TICKS;
+            }
             s_f_status_start = 0u;
             s_run_status     = WELD_CYL2;
             s_temp_time      = in->limit_delay_time1;  /* DELAY용; TRIGGER는 미사용 */

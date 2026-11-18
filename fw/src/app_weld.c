@@ -11,12 +11,14 @@
 #include "app_input.h"    /* app_estop_active (slice4 abort 합성) */
 #include "app_overload.h" /* app_overload_active (slice4 abort 합성) */
 #include "app_horn.h"     /* app_horn_mode_active (SYS_HORN 동결 게이트) */
+#include "app_seek_reset.h" /* app_seek_reset_request (짧은 용접 자동 SEEK) */
 #include "i2c_pot.h"      /* i2c_pot_set_dac (U4 진폭, raw DAC) */
 #include "sys_tick.h"
 #include "mon.h"
 #include "io.h"
 
 #define WELD_TICK_MS  10u   /* samd20 temp_time-- cadence */
+#define WELD_MODEL_TYPE_STD  2u   /* model_type: 0=hand 1=multi 2=std */
 
 static uint32_t s_prev_ms;
 static uint8_t  s_start_pending;   /* one-shot latch (slice4: 트리거 FSM start_pulse가 채움) */
@@ -218,6 +220,9 @@ void app_weld_tick(void)
     }
     if (out.weld_fault) {
         app_weld_hook_fault();
+    }
+    if ((out.auto_seek != 0u) && (cfg->model_type == WELD_MODEL_TYPE_STD)) {
+        app_seek_reset_request(US_CMD_SEEK, (uint8_t)US_CYCLE);
     }
     if (out.cycle_done) {
         cfg->work_cnt++;
