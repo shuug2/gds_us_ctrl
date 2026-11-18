@@ -9,7 +9,7 @@
 | `gdsonic/` | `GDSONIC` | 검은색 | 정본 기준 세트 |
 | `dongin/` | `DIAMT` | 검은색 | 작업 중 (bin = gdsonic, 32.icl·48.icl 다름 — 빨간 레벨 바) |
 | `moohan/` | `MOOHAN` | 밝은색 | p3·p9 `LV_TIME` 바(0x1184~0x1197) 없음 — 의도 |
-| — (작업 원본 `powertech/` 만) | `POWERTECH` | 검은색 ← gdsonic | 미반입 — 로고·레벨 바 그림 대기 |
+| `powertech/` | `POWERTECH` | 검은색 ← gdsonic | 2026-11-18 반입 — 로고 = 기존 파워텍 SD `32.icl` #0(POWER TECH), 빨간 레벨 바(dongin 과 같음), 업체 번호 4. ⚠ 패널 실기 미확인 |
 | — (작업 원본 `maketech/` 만) | `MAKETECH` | 검은색 ← gdsonic | 미반입 — 2026-11-15 build(로고·빨간 바), 실기 대기 |
 | — (작업 원본 `sama/`·`sonosys/` 만) | (펌웨어에 없음) | 밝은색 ← moohan | 미반입 — 2026-11-15 build(로고), 실기 대기, 모델명 규칙 미정 |
 

@@ -5,4 +5,4 @@
 1 gdsonic   releases/V3.1.2R_261115_hw31/gds_us_ctrl_hw31_v3.1.2R_261115.bin hw/lcd/lcd_V30/gdsonic
 - moohan    -                                                                hw/lcd/lcd_V30/moohan
 - diamt     -                                                                hw/lcd/lcd_V30/dongin
-- powertech -                                                                -
+- powertech -                                                                hw/lcd/lcd_V30/powertech
