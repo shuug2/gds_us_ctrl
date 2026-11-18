@@ -68,8 +68,8 @@ static void model_str_powertech(uint8_t freq, uint8_t type, uint8_t s[BRAND_MODE
 
 /* MAKETECH — samd20에 대응 블록 없는 신규 브랜드. "SMT-" + type문자 + freq 2자리 + 'D'.
  *   hand "SMT-H15D" / multi "SMT-A15D" / std "SMT-S15D"
- * 패널 선택지는 15K/20K/35K. 나머지 freq 코드는 GDSONIC과 같이 실제 주파수를
- * 그대로 찍는다 (MOOHAN처럼 30K를 35로 접지 않음 — 접을 근거가 legacy에 없음). */
+ * 패널 선택지는 15K/20K/35K. 30K 는 35 로 접는다(MOOHAN 과 같음, 사용자 2026-11-18).
+ * 40K/50K 는 실제 주파수를 그대로 찍는다. */
 static void model_str_maketech(uint8_t freq, uint8_t type, uint8_t s[BRAND_MODEL_STR_LEN])
 {
     s[0] = 'S'; s[1] = 'M'; s[2] = 'T'; s[3] = '-';
@@ -82,7 +82,7 @@ static void model_str_maketech(uint8_t freq, uint8_t type, uint8_t s[BRAND_MODEL
     switch (freq) {
         case 0:  s[5] = '1'; s[6] = '5'; break;
         case 1:  s[5] = '2'; s[6] = '0'; break;
-        case 2:  s[5] = '3'; s[6] = '0'; break;
+        case 2:  s[5] = '3'; s[6] = '5'; break;                           /* 30K → 35 (사용자 2026-11-18) */
         case 3:  s[5] = '3'; s[6] = '5'; break;
         case 4:  s[5] = '4'; s[6] = '0'; break;
         case 5:  s[5] = '5'; s[6] = '0'; break;
